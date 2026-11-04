@@ -2421,3 +2421,562 @@ double timeWalksParallel(const Tet* tet, const ConvexDomain* dom, const StripCut
     }
     return sec;
 }
+
+// =====================================================================================
+// General crack geometry and the mesh walks (opt-in: --ring-stress)
+// =====================================================================================
+CrackMesh::TriPre CrackMesh::pre(const Tri& t)
+{
+    TriPre r;
+    r.a = t.a;
+    r.b = t.b;
+    r.c = t.c;
+    r.ab = t.b - t.a;
+    r.ac = t.c - t.a;
+    r.abab = r.ab.dot(r.ab);
+    r.abac = r.ab.dot(r.ac);
+    r.acac = r.ac.dot(r.ac);
+    return r;
+}
+
+double CrackMesh::triDist2(const TriPre& t, const Vec3& p, Vec3& q)
+{
+    // Ericson, Real-Time Collision Detection 5.1.5: the closest point by the Voronoi regions of the triangle, with
+    // ab.bp = ab.ap - ab.ab etc. from the precomputed dot products (two dot products per call)
+    const Vec3 ap = p - t.a;
+    const double d1 = t.ab.dot(ap), d2 = t.ac.dot(ap);
+    if (d1 <= 0 && d2 <= 0) {
+        q = t.a;
+        return ap.squaredNorm();
+    }
+    const double d3 = d1 - t.abab, d4 = d2 - t.abac;
+    if (d3 >= 0 && d4 <= d3) {
+        q = t.b;
+        return (p - q).squaredNorm();
+    }
+    const double vc = d1*d4 - d3*d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+        q = t.a + (d1/(d1 - d3))*t.ab;
+        return (p - q).squaredNorm();
+    }
+    const double d5 = d1 - t.abac, d6 = d2 - t.acac;
+    if (d6 >= 0 && d5 <= d6) {
+        q = t.c;
+        return (p - q).squaredNorm();
+    }
+    const double vb = d5*d2 - d1*d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+        q = t.a + (d2/(d2 - d6))*t.ac;
+        return (p - q).squaredNorm();
+    }
+    const double va = d3*d6 - d5*d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+        q = t.b + ((d4 - d3)/((d4 - d3) + (d5 - d6)))*(t.c - t.b);
+        return (p - q).squaredNorm();
+    }
+    const double den = 1.0/(va + vb + vc);
+    q = t.a + (vb*den)*t.ab + (vc*den)*t.ac;
+    return (p - q).squaredNorm();
+}
+
+CrackMesh::CrackMesh(std::vector<Tri> tris) : tris_(std::move(tris))
+{
+    for (Tri& t : tris_)
+        if (t.n.isZero()) {
+            const Vec3 nn = (t.b - t.a).cross(t.c - t.a);
+            t.n = nn/nn.norm();
+        }
+    if (tris_.empty()) return;
+    pre_.resize(tris_.size());
+    for (size_t i = 0; i < tris_.size(); i++) pre_[i] = pre(tris_[i]);
+    std::vector<Vec3> cen(tris_.size());
+    for (size_t i = 0; i < tris_.size(); i++) cen[i] = (tris_[i].a + tris_[i].b + tris_[i].c)/3.0;
+    order_.resize(tris_.size());
+    for (size_t i = 0; i < tris_.size(); i++) order_[i] = int(i);
+    nodes_.reserve(2*tris_.size()/3 + 2);
+    build(order_, 0, int(tris_.size()), cen);
+}
+
+int CrackMesh::build(std::vector<int>& idx, int first, int count, const std::vector<Vec3>& cen)
+{
+    const int id = int(nodes_.size());
+    nodes_.push_back(Node{});
+    Node nd;
+    // the frame: the mean (area-weighted) normal of the node's triangles if they roughly agree, else the coordinate axes
+    Vec3 nsum = Vec3::Zero();
+    double asum = 0;
+    for (int k = first; k < first + count; k++) {
+        const Tri& t = tris_[size_t(idx[size_t(k)])];
+        const Vec3 c = (t.b - t.a).cross(t.c - t.a);
+        nsum += c.norm()*t.n;
+        asum += c.norm();
+    }
+    if (nsum.norm() > 0.7*asum && asum > 0) {
+        nd.e[2] = nsum.normalized();
+        const Vec3 tt = std::fabs(nd.e[2].x()) < 0.6 ? Vec3(1, 0, 0) : Vec3(0, 1, 0);
+        nd.e[0] = (tt - tt.dot(nd.e[2])*nd.e[2]).normalized();
+        nd.e[1] = nd.e[2].cross(nd.e[0]);
+    } else {
+        nd.e[0] = Vec3(1, 0, 0);
+        nd.e[1] = Vec3(0, 1, 0);
+        nd.e[2] = Vec3(0, 0, 1);
+    }
+    for (int a = 0; a < 3; a++) {
+        nd.lo[a] = std::numeric_limits<double>::infinity();
+        nd.hi[a] = -std::numeric_limits<double>::infinity();
+    }
+    Vec3 clo = Vec3::Constant(std::numeric_limits<double>::infinity()), chi = -clo;
+    for (int k = first; k < first + count; k++) {
+        const Tri& t = tris_[size_t(idx[size_t(k)])];
+        for (const Vec3* v : {&t.a, &t.b, &t.c})
+            for (int a = 0; a < 3; a++) {
+                const double c = nd.e[a].dot(*v);
+                nd.lo[a] = std::min(nd.lo[a], c);
+                nd.hi[a] = std::max(nd.hi[a], c);
+            }
+        clo = clo.cwiseMin(cen[size_t(idx[size_t(k)])]);
+        chi = chi.cwiseMax(cen[size_t(idx[size_t(k)])]);
+    }
+    for (int a = 0; a < 3; a++) {   // padding: the box contains its triangles whatever the rounding of the projections
+        nd.lo[a] -= 1e-12;
+        nd.hi[a] += 1e-12;
+    }
+    if (count <= 4) {
+        nd.first = first;
+        nd.count = count;
+        nodes_[size_t(id)] = nd;
+        return id;
+    }
+    int axis = 0;
+    const Vec3 ext = chi - clo;
+    if (ext[1] > ext[axis]) axis = 1;
+    if (ext[2] > ext[axis]) axis = 2;
+    const int mid = first + count/2;
+    std::nth_element(idx.begin() + first, idx.begin() + mid, idx.begin() + first + count, [&](int i, int j) {
+        const double ci = cen[size_t(i)][axis], cj = cen[size_t(j)][axis];
+        return ci < cj || (ci == cj && i < j);
+    });
+    nodes_[size_t(id)] = nd;
+    const int l = build(idx, first, mid - first, cen);
+    const int r = build(idx, mid, first + count - mid, cen);
+    nodes_[size_t(id)].left = l;
+    nodes_[size_t(id)].right = r;
+    return id;
+}
+
+double CrackMesh::nodeDist2(const Node& nd, const Vec3& x)
+{
+    double s = 0;
+    for (int a = 0; a < 3; a++) {
+        const double c = nd.e[a].dot(x);
+        const double v = c < nd.lo[a] ? nd.lo[a] - c : c > nd.hi[a] ? c - nd.hi[a] : 0.0;
+        s += v*v;
+    }
+    return s;
+}
+
+CrackMesh::Hit CrackMesh::closest(const Vec3& x, int hint) const
+{
+    Hit best;
+    if (nodes_.empty()) return best;
+    if (hint >= 0 && hint < int(pre_.size())) {   // the hint's exact distance: an upper bound that prunes from the start
+        best.d2 = triDist2(pre_[size_t(hint)], x, best.q);
+        best.tri = hint;
+    }
+    struct Entry {
+        int node;
+        double d2;
+    };
+    Entry stack[128];
+    int sp = 0;
+    stack[sp++] = {0, nodeDist2(nodes_[0], x)};
+    while (sp > 0) {
+        const Entry e = stack[--sp];
+        if (e.d2 > best.d2*(1.0 + 1e-12)) continue;
+        const Node& nd = nodes_[size_t(e.node)];
+        if (nd.left < 0) {
+            for (int k = nd.first; k < nd.first + nd.count; k++) {
+                const int t = order_[size_t(k)];
+                if (t == best.tri) continue;
+                Vec3 q;
+                const double d2 = triDist2(pre_[size_t(t)], x, q);
+                if (d2 < best.d2 || (d2 == best.d2 && t < best.tri)) {
+                    best.d2 = d2;
+                    best.tri = t;
+                    best.q = q;
+                }
+            }
+            continue;
+        }
+        const Node &L = nodes_[size_t(nd.left)], &R = nodes_[size_t(nd.right)];
+        const double dl = nodeDist2(L, x), dr = nodeDist2(R, x);
+        if (sp + 2 > 128) throw std::logic_error("CrackMesh::closest: tree too deep");
+        if (dl <= dr) {   // the nearer child is popped first
+            stack[sp++] = {nd.right, dr};
+            stack[sp++] = {nd.left, dl};
+        } else {
+            stack[sp++] = {nd.left, dl};
+            stack[sp++] = {nd.right, dr};
+        }
+    }
+    return best;
+}
+
+CrackMesh::Hit CrackMesh::closestBruteForce(const Vec3& x) const
+{
+    Hit best;
+    for (size_t t = 0; t < pre_.size(); t++) {
+        Vec3 q;
+        const double d2 = triDist2(pre_[t], x, q);
+        if (d2 < best.d2) {   // index order: a tie keeps the lower index
+            best.d2 = d2;
+            best.tri = int(t);
+            best.q = q;
+        }
+    }
+    return best;
+}
+
+double CrackMesh::distance(const Vec3& x) const { return std::sqrt(closest(x).d2); }
+
+double CrackMesh::signedDistance(const Vec3& x) const
+{
+    const Hit h = closest(x);
+    if (h.tri < 0) return std::numeric_limits<double>::infinity();
+    return side(h, x)*std::sqrt(h.d2);
+}
+
+double CrackMesh::area() const
+{
+    double s = 0;
+    for (const Tri& t : tris_) s += 0.5*(t.b - t.a).cross(t.c - t.a).norm();
+    return s;
+}
+
+void CrackMesh::clipPolygon(std::vector<Vec3>& p, std::vector<uint8_t>& f, const Vec3& n, double c, uint8_t newFlag)
+{
+    std::vector<Vec3> q;
+    std::vector<uint8_t> g;
+    const size_t m = p.size();
+    for (size_t i = 0; i < m; i++) {
+        const Vec3 &A = p[i], &B = p[(i + 1)%m];
+        const double fa = n.dot(A) - c, fb = n.dot(B) - c;
+        // the crossing point, computed from the lexicographically smaller end so that an edge shared by two polygons
+        // gives the same point from both
+        auto cross = [&]() -> Vec3 {
+            const bool aFirst = A.x() < B.x() || (A.x() == B.x() && (A.y() < B.y() || (A.y() == B.y() && A.z() <= B.z())));
+            return aFirst ? Vec3(A + (fa/(fa - fb))*(B - A)) : Vec3(B + (fb/(fb - fa))*(A - B));
+        };
+        if (fa <= 0) {
+            q.push_back(A);
+            g.push_back(f[i]);
+            if (fb > 0) {
+                q.push_back(cross());
+                g.push_back(newFlag);
+            }
+        } else if (fb <= 0) {
+            q.push_back(cross());
+            g.push_back(f[i]);
+        }
+    }
+    p.swap(q);
+    f.swap(g);
+}
+
+void CrackMesh::fanPolygon(const std::vector<Vec3>& p, const std::vector<uint8_t>& f, int crack, const Vec3& nParent,
+                           double minArea, std::vector<Tri>& out)
+{
+    const size_t m = p.size();
+    if (m < 3) return;
+    for (size_t k = 1; k + 1 < m; k++) {
+        Tri t;
+        t.a = p[0];
+        t.b = p[k];
+        t.c = p[k + 1];
+        if (!(0.5*(t.b - t.a).cross(t.c - t.a).norm() > minArea)) continue;
+        t.n = nParent;
+        t.crack = crack;
+        t.edge[0] = k == 1 ? f[0] : uint8_t(0);
+        t.edge[1] = f[k];
+        t.edge[2] = k + 2 == m ? f[m - 1] : uint8_t(0);
+        out.push_back(t);
+    }
+}
+
+CrackMesh CrackMesh::clipped(const std::vector<Vec3>& n, const std::vector<double>& c, const std::vector<uint8_t>& planeFlag,
+                             double minArea) const
+{
+    std::vector<Tri> out;
+    std::vector<Vec3> p;
+    std::vector<uint8_t> f;
+    for (const Tri& t : tris_) {
+        p = {t.a, t.b, t.c};
+        f = {t.edge[0], t.edge[1], t.edge[2]};
+        for (size_t k = 0; k < n.size() && p.size() >= 3; k++) clipPolygon(p, f, n[k], c[k], planeFlag[k]);
+        fanPolygon(p, f, t.crack, t.n, minArea, out);
+    }
+    return CrackMesh(std::move(out));
+}
+
+CrackMesh CrackMesh::mapped(const Eigen::Matrix3d& A, const Vec3& b) const
+{
+    const Eigen::Matrix3d AinvT = A.inverse().transpose();
+    std::vector<Tri> out = tris_;
+    for (Tri& t : out) {
+        t.a = A*t.a + b;
+        t.b = A*t.b + b;
+        t.c = A*t.c + b;
+        const Vec3 nn = AinvT*t.n;
+        t.n = nn/nn.norm();
+    }
+    return CrackMesh(std::move(out));
+}
+
+namespace {
+
+// The fixed inputs of the mesh step function (WalkCtx's, with a CrackMesh as the crack)
+struct MeshCtx {
+    const CrackMesh* mesh = nullptr;
+    FacePlanes faces;
+    bool dirichletFace[kMaxDomainPlanes] = {false, false, false, false, false, false, false, false};
+    bool anyDirichletFace = false, allAbsorb = false, mirrorGradBall = false, oddMirror = false;
+    double shell = 0, escTol = 0;
+    int maxLen = 0;
+    double dirichletFaceDist(const Vec3& x, int& face) const
+    {
+        face = -1;
+        if (!anyDirichletFace) return std::numeric_limits<double>::infinity();
+        double dmin = std::numeric_limits<double>::max();
+        for (int f = 0; f < faces.nf; f++) {
+            if (!dirichletFace[f]) continue;
+            const double d = faces.c[f] - faces.n[f].dot(x);
+            if (d < dmin) {
+                dmin = d;
+                face = f;
+            }
+        }
+        return dmin;
+    }
+    Vec3 onFacePlane(int f, const Vec3& x) const { return x - (faces.n[f].dot(x) - faces.c[f])*faces.n[f]; }
+};
+
+MeshCtx meshCtx(const MeshJob& b)
+{
+    MeshCtx c;
+    c.mesh = b.mesh;
+    const WalkParams& wp = b.wp;
+    if (b.tet) {
+        c.faces = FacePlanes(*b.tet);
+        for (int f = 0; f < 4; f++) {
+            c.dirichletFace[f] = wp.faceBC[f] == FaceBC::Dirichlet;
+            c.anyDirichletFace = c.anyDirichletFace || c.dirichletFace[f];
+        }
+        c.shell = wp.absorbShellRel*b.tet->L;
+        c.escTol = 1e-12*b.tet->L;
+    } else {
+        if (wp.dirichletFaces || wp.anyDirichletFace() || wp.faceData || wp.oddMirrorDirichlet)
+            throw std::invalid_argument("solveMultiMeshJobs: a ConvexDomain has Neumann faces only");
+        c.faces = FacePlanes(*b.dom);
+        c.shell = wp.absorbShellRel*b.dom->L;
+        c.escTol = 1e-12*b.dom->L;
+    }
+    bool all = c.anyDirichletFace;
+    for (int f = 0; f < c.faces.nf; f++) all = all && c.dirichletFace[f];
+    c.allAbsorb = all;
+    c.mirrorGradBall = wp.mirrorGradBall;
+    c.oddMirror = wp.mirrorGradBall && wp.oddMirrorDirichlet;
+    c.maxLen = wp.maxWalkLength;
+    return c;
+}
+
+// mirrorGradBall with the mesh's distance at the mirror point
+int mirrorGradBallMesh(const MeshCtx& c, const Vec3& x, double dCut, double& R0)
+{
+    int f = -1;
+    double df = std::numeric_limits<double>::infinity();
+    for (int g = 0; g < c.faces.nf; g++) {
+        if (c.dirichletFace[g] && !c.oddMirror) continue;
+        const double dg = c.faces.c[g] - c.faces.n[g].dot(x);
+        if (dg < df) {
+            df = dg;
+            f = g;
+        }
+    }
+    if (f < 0) return -1;
+    const Vec3 xm = x + 2.0*df*c.faces.n[f];
+    double R = std::min(dCut, std::sqrt(c.mesh->closest(xm).d2));
+    for (int g = 0; g < c.faces.nf; g++) {
+        if (g == f) continue;
+        const double a = c.faces.c[g] - c.faces.n[g].dot(x), b = c.faces.c[g] - c.faces.n[g].dot(xm);
+        if (!(b > 0)) return -1;
+        R = std::min(R, std::min(a, b));
+    }
+    R *= kGradFirstBallShrink;
+    if (!(R > R0)) return -1;
+    R0 = R;
+    return f;
+}
+
+// the lean step function with the mesh crack; fills the terminal (status, face or crack data) and returns the step count
+int runWalkMesh(const MeshCtx& c, bool gradPoint, OddMirror* odd, WalkState& st, MeshTerminal& T)
+{
+    int hint = -1;   // the previous step's closest triangle (pruning only: the closest point does not depend on it)
+    for (;;) {
+        if (st.steps >= c.maxLen) {
+            T.status = WalkStatus::Capped;
+            T.xEnd = st.x;
+            return st.steps;
+        }
+        const CrackMesh::Hit q = c.mesh->closest(st.x, hint);
+        hint = q.tri;
+        int fF = -1;
+        const double dF = c.dirichletFaceDist(st.x, fF);
+        const double dCut = std::sqrt(q.d2);
+        const bool faceCloser = dF < dCut;
+        const double d = faceCloser ? dF : dCut;
+        if (d < c.shell) {
+            T.status = WalkStatus::Landed;
+            T.xEnd = st.x;
+            if (faceCloser) {
+                T.face = fF;
+                T.side = 0;
+                T.x = c.onFacePlane(fF, st.x);
+            } else {
+                T.face = -1;
+                T.tri = q.tri;
+                T.crack = c.mesh->tri(q.tri).crack;
+                T.side = c.mesh->side(q, st.x);
+                T.x = q.q;
+            }
+            return st.steps;
+        }
+        const Vec3 dir = sampleSphere(st.rng);
+        if (gradPoint && st.steps == 0) {
+            double R0 = kGradFirstBallShrink*std::min(d, c.faces.distInside(st.x));
+            const int mirror = c.mirrorGradBall ? mirrorGradBallMesh(c, st.x, dCut, R0) : -1;
+            st.w = (3.0/R0)*dir;
+            st.x = st.x + R0*dir;
+            if (mirror >= 0) {
+                const double h = c.faces.n[mirror].dot(st.x) - c.faces.c[mirror];
+                if (h > 0) {
+                    const Vec3 y = st.x;
+                    st.x = st.x - 2.0*h*c.faces.n[mirror];
+                    if (c.dirichletFace[mirror]) {
+                        odd->face = mirror;
+                        odd->y = y;
+                        odd->my = st.x;
+                    }
+                }
+            }
+            st.onFace = -1;
+        } else if (c.allAbsorb) {
+            st.x = st.x + d*dir;
+            st.onFace = -1;
+        } else {
+            starStep(c.faces, d, dir, st);
+        }
+        st.steps++;
+        if (st.onFace < 0 && c.faces.outside(st.x, c.escTol)) {
+            T.status = WalkStatus::Escaped;
+            T.xEnd = st.x;
+            return st.steps;
+        }
+    }
+}
+
+} // namespace
+
+std::vector<MultiSums> solveMultiMeshJobs(const std::vector<MeshJob>& jobs, std::vector<SolveStats>* stats)
+{
+    constexpr int kMaxK = 16;
+    const auto t0 = std::chrono::steady_clock::now();
+    const size_t J = jobs.size();
+    std::vector<MeshCtx> ctx(J);
+    std::vector<MultiSums> out(J);
+    std::vector<char> active(J, 0);
+    std::vector<size_t> first(J + 1, 0);
+    static const CrackMesh emptyMesh;
+    for (size_t j = 0; j < J; j++) {
+        const MeshJob& b = jobs[j];
+        if (!b.pts || (!b.tet == !b.dom)) throw std::invalid_argument("solveMultiMeshJobs: a job needs points and one domain");
+        if (b.K < 0 || b.K > kMaxK) throw std::invalid_argument("solveMultiMeshJobs: K out of range");
+        if (b.wp.mirrorGradBall && b.wp.oddMirrorDirichlet && !(b.ext && *b.ext))
+            throw std::invalid_argument("solveMultiMeshJobs: the odd mirror ball needs the data's harmonic extensions");
+        ctx[j] = meshCtx(b);
+        if (!ctx[j].mesh) ctx[j].mesh = &emptyMesh;
+        MultiSums& ms = out[j];
+        ms.K = b.K;
+        ms.nBatches = std::max(1, b.nBatches);
+        ms.nPoints = b.pts->size();
+        if (b.nWalks%ms.nBatches) throw std::invalid_argument("solveMultiMeshJobs: nWalks must be a multiple of nBatches");
+        ms.walksPerBatch = b.nWalks/ms.nBatches;
+        ms.batch.assign(ms.nPoints*size_t(ms.nBatches)*ms.stride(), 0.0);
+        ms.uu.assign(ms.nPoints*size_t(b.K)*size_t(b.K), 0.0);
+        active[j] = !(ctx[j].mesh->empty() && !ctx[j].anyDirichletFace);
+        first[j + 1] = first[j] + (active[j] ? ms.nPoints : 0);
+    }
+    const size_t total = first[J];
+    std::vector<long long> counted(total, 0), capped(total, 0), steps(total, 0);
+    tbb::parallel_for(size_t(0), total, [&](size_t gi) {
+        const size_t j = size_t(std::upper_bound(first.begin(), first.end(), gi) - first.begin()) - 1;
+        const size_t i = gi - first[j];
+        const MeshJob& job = jobs[j];
+        const MeshCtx& c = ctx[j];
+        MultiSums& ms = out[j];
+        const QueryPoints& pts = *job.pts;
+        const int K = job.K;
+        const size_t N = size_t(job.nWalks), B = size_t(ms.nBatches), NB = size_t(ms.walksPerBatch);
+        const bool grad = pts.grad[i] != 0;
+        double u[kMaxK] = {}, phiY[kMaxK] = {}, phiMy[kMaxK] = {};
+        double* uu = &ms.uu[i*size_t(K)*size_t(K)];
+        OddMirror odd;
+        for (size_t b = 0; b < B; b++) {
+            double* s = &ms.batch[(i*B + b)*ms.stride()];
+            double *su = s + 1, *sw = s + 1 + K, *swu = s + 4 + K;
+            for (size_t w = b*NB; w < (b + 1)*NB; w++) {
+                WalkState ws = makeInitialState(pts, int(N), i*N + w, 0);
+                MeshTerminal T;
+                odd.face = -1;
+                steps[gi] += runWalkMesh(c, grad, &odd, ws, T);
+                capped[gi] += T.status == WalkStatus::Capped;
+                if (T.status == WalkStatus::Escaped) continue;
+                counted[gi]++;
+                if (T.status == WalkStatus::Landed) job.values(T, u);
+                else std::fill(u, u + K, 0.0);   // capped: value 0, as everywhere else
+                if (odd.face >= 0) {
+                    (*job.ext)(odd.y, phiY);
+                    (*job.ext)(odd.my, phiMy);
+                    for (int k = 0; k < K; k++) u[k] = phiY[k] + phiMy[k] - u[k];
+                }
+                const Vec3 wv = grad ? ws.w : Vec3::Zero();
+                s[0] += 1;
+                for (int a = 0; a < 3; a++) sw[a] += wv[a];
+                for (int k = 0; k < K; k++) {
+                    su[k] += u[k];
+                    for (int a = 0; a < 3; a++) swu[3*k + a] += wv[a]*u[k];
+                    for (int l = 0; l < K; l++) uu[k*K + l] += u[k]*u[l];
+                }
+            }
+        }
+    });
+    const double sec = secondsSince(t0);
+    if (stats) {
+        stats->assign(J, SolveStats{});
+        for (size_t j = 0; j < J; j++) {
+            SolveStats& st = (*stats)[j];
+            st.nPoints = int(out[j].nPoints);
+            st.noCut = !active[j];
+            if (active[j]) {
+                for (size_t g = first[j]; g < first[j + 1]; g++) {
+                    st.walksCounted += counted[g];
+                    st.walksCapped += capped[g];
+                    st.totalSteps += steps[g];
+                }
+                st.walksRequested = (long long)(out[j].nPoints*size_t(jobs[j].nWalks));
+                st.walksEscaped = st.walksRequested - st.walksCounted;
+            }
+            st.seconds = sec;
+        }
+    }
+    return out;
+}

@@ -1,0 +1,30 @@
+D1: gently curved crack surface (sphere radius 2)
+  sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + side outside; h = 0.06 within 1.25 of the origin
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 520 triangles in O, area 0.789575; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 70 0.0612 35 13; T+-+ cut 182 0.1960 71 0; T--+ cut 143 0.1315 71 1; T++- cut 74 0.0607 38 12; T-+- cut 26 0.0193 17 5; T+-- cut 271 0.3201 95 3; T--- cut 7 0.0008 9 0;
+  sum of the tets' areas 0.789575173160 vs the walk crack's 0.789575173160 (rel. diff 7.0e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.50e-05 over 2000 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.10e-05 over 767 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side triangles within 1.25 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_D1_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 848.9 s, 0 capped, 0 escaped walks, mean length 46.1
+  checks: GT re-run N = 2560: H: pooled z +1.84, |z| < 3 at 99.65% (16394 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z -0.56 / +0.97 / -1.21 -> agree; H0 (g = 1, J 'theta'): plain N = 2560 vs control variate Q32/R256: value pooled z +1.29 (|z| < 3 at 99.60%, mean z^2 1.020), grad pooled z -0.48 / -0.85 / +0.63 -> agree; 
+
+D2: strongly curved crack surface (bowl, sphere radius 0.6)
+  sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; h = 0.04
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1094 triangles in O, area 0.773893; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 90 0.0231 59 4; T-++ cut 651 0.3916 152 9; T+-+ - 0 0.0000 0 0; T--+ cut 45 0.0160 25 12; T++- cut 278 0.1563 83 12; T-+- cut 322 0.1869 86 8; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.773893057674 vs the walk crack's 0.773893057674 (rel. diff 5.7e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.54e-06 over 2430 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.04e-05 over 1386 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = (x - y)/sqrt(2); control variate Omega_xi/(2 pi) of the crack-side triangles within 1.2 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_D2_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 1288.5 s, 0 capped, 0 escaped walks, mean length 49.0
+  checks: Zombie agrees (H pooled z +0.21, |z| < 3 at 99.34%; grad pooled z +2.03/-1.04/-1.13); 
+
+D3: kinked crack (two flat pieces at 40 degrees)
+  facet 1 = K1's plane behind the kink line u1.X = -0.12026 (t = 0.4); facet 2 turned 40 degrees towards +n1, front 0.3 beyond the kink
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 28 triangles in O, area 0.957788; cracks: kink (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 8 0.1442 7 2; T-++ cut 11 0.0728 12 0; T+-+ cut 15 0.2203 13 0; T--+ cut 13 0.0728 12 0; T++- cut 18 0.1882 14 3; T-+- cut 3 0.0008 5 0; T+-- cut 23 0.2584 20 0; T--- cut 1 0.0003 3 0;
+  sum of the tets' areas 0.957788399780 vs the walk crack's 0.957788399780 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 2.51e-06 over 516 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 4.09e-06 over 92 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the kinked surface (facet 2 continued), psi = u2.X - s_front; control variate H1 + Hf - Hl: three half-plane theta/pi terms in xi (exact, jump 2)
+  GT: solved gate_cache\ref_stress_D3_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 359.0 s, 0 capped, 0 escaped walks, mean length 43.5
+  checks: H0 (g = 1, J 'theta'): plain N = 2560 vs control variate Q32/R256: value pooled z -1.80 (|z| < 3 at 99.71%, mean z^2 1.019), grad pooled z +2.82 / -0.70 / +0.36 -> agree; 
+

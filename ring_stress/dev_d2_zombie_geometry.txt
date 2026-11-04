@@ -1,0 +1,10 @@
+D2: strongly curved crack surface (bowl, sphere radius 0.6)
+  sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; h = 0.04
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1094 triangles in O, area 0.773893; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 90 0.0231 59 4; T-++ cut 651 0.3916 152 9; T+-+ - 0 0.0000 0 0; T--+ cut 45 0.0160 25 12; T++- cut 278 0.1563 83 12; T-+- cut 322 0.1869 86 8; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.773893057674 vs the walk crack's 0.773893057674 (rel. diff 5.7e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.54e-06 over 2430 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.04e-05 over 1386 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = (x - y)/sqrt(2); control variate Omega_xi/(2 pi) of the crack-side triangles within 1.2 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_D2_p512_N2560.bin (N = 2560, 512 points per tet asked); GT solve 38.7 s, 0 capped, 0 escaped walks, mean length 46.7
+  checks: Zombie agrees (H pooled z -0.16, |z| < 3 at 99.51%; grad pooled z +1.35/+0.13/-1.44); 
+

@@ -1,0 +1,6 @@
+stress_BC exit 0 elapsed 2219 s
+stress_D exit 0 elapsed 3196 s
+stress_E exit 0 elapsed 1610 s
+stress_F exit 0 elapsed 2161 s
+stress_G exit 0 elapsed 1209 s
+ALLDONE

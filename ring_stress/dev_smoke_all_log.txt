@@ -1,0 +1,462 @@
+QUICK --ring-stress: 2026-11-03 21:47:35; 16 hardware threads (TBB default arena)
+QUICK cases: A1 A1s A2 A3 B1 B2 C1 C2 D1 D2 D3 E1 E2 E3 F1 F2 F3 F4 G1a G1b
+QUICK output: ring_stress/dev_smoke_all_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin (QUICK: none read or written)
+QUICK settings: ours (Q/R/B) 8/8/4 (seed sets 1 for the first, timing repeats 1: median); direct N 16,64; points per tet 512 (A1, A2, A3: check 4's 4096); GT N = 1024 in 16 batches, walk cap 65536; Zombie on none; validation on
+QUICK 
+QUICK === A1 (priority 1) ===
+QUICK A1: baseline K1 (one flat crack, straight front)
+QUICK   half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.0910 6 1; T+-+ cut 1 0.2203 2 0; T--+ cut 3 0.0750 4 0; T++- cut 5 0.0778 5 1; T-+- cut 6 0.0181 7 1; T+-- cut 3 0.2605 5 0; T--- cut 1 0.0003 3 0;
+QUICK   sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 3.0e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.75e-06, ramp 3.45e-07 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 7.84e-06 over 48 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   J 'levelC/cvSolid': Level C with a solid-angle control variate (a 12 x 12 flat rectangle behind the front, in xi): a code check, same answer within noise
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT: check 4's cached GT gate_cache\ref_check4_ring2_K1.bin (read-only; N = 25600, 4096 points per tet); original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+QUICK   32453 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.2 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.2500% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 15.30%; GT RMS 0.3000; energy 1.51176 +- 0.00746
+QUICK   GT noise floor (ramp): H s.e. RMS 0.0860% (max 0.1014%) of 2g; grad s.e. RMS / grad RMS 14.11%; GT RMS 0.1285; energy 0.21399 +- 0.00058
+QUICK   flat reproduction: the mesh GT code (N = 256, new seeds, 3.7 s) vs check 4's cached GT:
+QUICK     g = 1 H: pooled z -0.48, |z| < 3 at 98.68% (32453 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.02 / -0.49 / -0.92 -> DISAGREE
+QUICK     ramp  H: pooled z -0.53, |z| < 3 at 99.51% (32453 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z -0.23 / -0.34 / +0.07 -> agree
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.49    0.106    0.157 |   1.503   1.437   14.46 |   54.54   19.29 |   +0.99   1.57 | 0.1256 0.0194
+QUICK     ours Q8/R8/B4                  levelC         ramp    0.49    0.106    0.157 |   1.218   1.206    6.75 |   82.28   34.06 |  +14.19   0.64 | 0.0858 0.0063
+QUICK     ours Q8/R8/B4                  levelC/cvSolid g=1     0.49    0.106    0.157 |   1.495   1.432   14.42 |   51.27   19.43 |   +1.04   1.42 | 0.1253 0.0208
+QUICK     direct N16/B8                  -              g=1     0.52    0.240    0.252 |  10.068   1.085   45.70 |  892.70   61.64 |  +94.77 1764.75 | 0.3442 0.0000
+QUICK     direct N16/B8                  -              ramp    0.52    0.240    0.252 |   3.453   0.323   15.90 |  798.74   98.76 |  +85.16 730.27 | 0.1243 0.0000
+QUICK     direct N64/B16                 -              g=1     2.08    0.990    0.981 |   4.989   0.000   23.82 |  325.38    0.00 | -213.71 151.35 | 0.3825 0.0000
+QUICK     direct N64/B16                 -              ramp    2.08    0.990    0.981 |   1.720   0.000    7.01 |  306.54    0.00 |  -82.86  96.19 | 0.1365 0.0000
+QUICK   case A1 done in 7.7 s
+QUICK 
+QUICK === A1s (priority 1) ===
+QUICK A1s: baseline K1 (one flat crack, straight front)
+QUICK   half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.0910 6 1; T+-+ cut 1 0.2203 2 0; T--+ cut 3 0.0750 4 0; T++- cut 5 0.0778 5 1; T-+- cut 6 0.0181 7 1; T+-- cut 3 0.2605 5 0; T--- cut 1 0.0003 3 0;
+QUICK   sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 3.0e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.75e-06, ramp 3.45e-07 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 7.84e-06 over 48 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   J 'levelC/cvSolid': Level C with a solid-angle control variate (a 12 x 12 flat rectangle behind the front, in xi): a code check, same answer within noise
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 4975 points, 79600 walks counted of 79600, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.4, 0.039 s -> extrapolated to N = 1024: 3 s
+QUICK   GT run: 4975 points, 5094400 walks counted of 5094400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.5, 2.179 s
+QUICK   4968 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 2.2 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2499% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 57.90%; GT RMS 0.3003; energy 1.50638 +- 0.18668
+QUICK   GT noise floor (ramp): H s.e. RMS 0.4301% (max 0.5280%) of 2g; grad s.e. RMS / grad RMS 55.45%; GT RMS 0.1286; energy 0.23481 +- 0.03335
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.08    0.018    0.030 |   2.148   1.531   15.31 |   75.19   21.95 |   +1.03  12.49 | 0.1272 0.0475
+QUICK     ours Q8/R8/B4                  levelC         ramp    0.08    0.018    0.030 |   1.366   1.237    5.35 |  106.62   38.13 |   +2.53  14.23 | 0.0859 0.0211
+QUICK     ours Q8/R8/B4                  levelC/cvSolid g=1     0.08    0.018    0.030 |   2.161   1.556   15.27 |   72.65   21.53 |   +0.43  12.47 | 0.1267 0.0488
+QUICK     direct N16/B8                  -              g=1     0.08    0.036    0.036 |  10.429   2.476   42.48 |  793.21  343.56 | +1842.91 2943.92 | 0.1758 0.0000
+QUICK     direct N16/B8                  -              ramp    0.08    0.036    0.036 |   3.484   0.269   13.48 |  932.56  615.80 | +5217.28 6196.88 | 0.0721 0.0000
+QUICK     direct N64/B16                 -              g=1     0.32    0.135    0.137 |   5.230   0.790   23.24 |  295.89  132.53 | +294.44 329.35 | 0.2070 0.0000
+QUICK     direct N64/B16                 -              ramp    0.32    0.135    0.137 |   1.845   0.520    6.72 |  253.35   59.73 |  +32.82 176.12 | 0.0666 0.0000
+QUICK   case A1s done in 2.8 s
+QUICK 
+QUICK === A2 (priority 1) ===
+QUICK A2: baseline K2 (another flat crack, straight front)
+QUICK   half-plane n = normalize(0.3, -1, 0.6), d = -0.05, front direction (1, 0.4, 0), front at t = 0.3
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.276983; cracks: K2 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 2 0.0761 3 0; T+-+ - 0 0.0000 0 0; T--+ cut 2 0.0584 3 0; T++- - 0 0.0000 0 0; T-+- cut 1 0.0021 2 1; T+-- - 0 0.0000 0 0; T--- cut 3 0.1404 3 1;
+QUICK   sum of the tets' areas 0.276982727810 vs the walk crack's 0.276982727810 (rel. diff 2.0e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.57e-06, ramp 1.42e-07 over 66 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.85e-06 over 8 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT: check 4's cached GT gate_cache\ref_check4_ring2_K2.bin (read-only; N = 25600, 4096 points per tet); original run: 32270 points, 826112000 walks counted of 826112000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 60.0, 685.593 s
+QUICK   32263 points in the 8 tets + 7 probes; 4 tets cut; GT ready in 0.3 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.3010% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 21.98%; GT RMS 0.1342; energy 0.89436 +- 0.00525
+QUICK   GT noise floor (ramp): H s.e. RMS 0.0780% (max 0.0829%) of 2g; grad s.e. RMS / grad RMS 18.76%; GT RMS 0.0464; energy 0.08599 +- 0.00036
+QUICK   flat reproduction: the mesh GT code (N = 256, new seeds, 4.5 s) vs check 4's cached GT:
+QUICK     g = 1 H: pooled z -1.18, |z| < 3 at 99.47% (32263 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.44 / -1.32 / +0.04 -> agree
+QUICK     ramp  H: pooled z -0.53, |z| < 3 at 99.66% (32263 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.63 / -0.60 / +0.04 -> agree
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.39    0.100    0.129 |   1.845   0.987   11.40 |   69.37   29.49 |  +10.54   1.04 | 0.0613 0.0475
+QUICK     ours Q8/R8/B4                  levelC         ramp    0.39    0.100    0.129 |   1.568   1.518    6.96 |  139.15   61.13 |  +43.94   2.30 | 0.1411 0.0091
+QUICK     direct N16/B8                  -              g=1     0.52    0.273    0.282 |  12.160   1.706   46.34 | 1218.70  168.09 | +282.71 1462.61 | 0.3190 0.0000
+QUICK     direct N16/B8                  -              ramp    0.52    0.273    0.282 |   3.123   0.188   11.93 | 1025.68    0.00 | -209.28 1112.24 | 0.1107 0.0000
+QUICK     direct N64/B16                 -              g=1     2.07    1.117    1.114 |   6.046   0.446   28.50 |  509.25    0.00 |  -12.07 265.29 | 0.1810 0.0000
+QUICK     direct N64/B16                 -              ramp    2.07    1.117    1.114 |   1.567   0.127    6.69 |  424.73    0.00 |  -98.65 246.43 | 0.0652 0.0000
+QUICK   case A2 done in 9.2 s
+QUICK 
+QUICK === A3 (priority 1) ===
+QUICK A3: flat complete cut (K3)
+QUICK   K1's plane cut all the way through O
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 6 triangles in O, area 1.427378; cracks: K3 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 3 0.3754 5 0; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 6 0.2021 7 0; T-+- cut 6 0.2938 7 0; T+-- cut 7 0.2605 8 0; T--- cut 1 0.0003 3 0;
+QUICK   sum of the tets' areas 1.427378288679 vs the walk crack's 1.427378288679 (rel. diff 0.0e+00)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.12e-08 over 234 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.30e-07 over 60 samples
+QUICK   J 'levelC': Level C with its front line 0.3 beyond O's section (the realistic J, check 4's K3); control variate J_xi
+QUICK   J 'indicator': the side indicator J = sign(n.X - d) (the exact answer); control variate: the same indicator in xi (R = 0)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT: check 4's cached GT gate_cache\ref_check4_ring2_K3.bin (read-only; N = 25600, 4096 points per tet); original run: 31980 points, 818688000 walks counted of 818688000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 459.217 s
+QUICK   31973 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.2 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.0000% (max 0.0000%) of 2g; grad s.e. RMS / grad RMS 100.61%; GT RMS 0.5000; energy -0.00000 +- 0.00000
+QUICK   flat reproduction: the mesh GT code (N = 256, new seeds, 3.7 s) vs check 4's cached GT:
+QUICK     g = 1 H: pooled z +0.00, |z| < 3 at 0.00% (0 points; 31973 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.00 / +0.00 / +0.00 -> agree
+QUICK   exact check: GT solver at N = 64: 0 of 31980 points differ from the exact +-1 (max |dH| 0.0e+00), 0 capped, 0 escaped walks
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.48    0.112    0.141 |   1.112   1.109   10.69 |     nan     nan | -173769436086260273868134218748395520.00 18060984606333934637316448142229504.00 | 0.2278 0.0036
+QUICK     ours Q8/R8/B4                  indicator      g=1     0.48    0.112    0.141 |   0.000   0.000    0.00 |     nan     nan | -100.00 1090.10 | 0.0000 0.0000
+QUICK     direct N16/B8                  -              g=1     0.51    0.232    0.239 |   0.000   0.000    0.00 |     nan     nan | -100.00 1090.10 | 0.0000 0.0000
+QUICK     direct N64/B16                 -              g=1     2.05    0.927    0.934 |   0.000   0.000    0.00 |     nan     nan | +104783.99 222510.69 | 0.0000 0.0000
+QUICK   case A3 done in 8.5 s
+QUICK 
+QUICK === B1 (priority 1) ===
+QUICK B1: curved complete cut (cylinder)
+QUICK   cylinder radius 1.3, axis direction normalize(0.2, 0.3, 1) through c + 1.42 e (the axis misses O); + side outside; tube tessellated with h = 0.06
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1110 triangles in O, area 1.621812; cracks: cylinder (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 310 0.3106 137 0; T-++ cut 113 0.0787 69 0; T+-+ cut 37 0.0132 30 0; T--+ cut 266 0.3023 99 0; T++- cut 216 0.2449 80 0; T-+- cut 285 0.3233 107 0; T+-- - 0 0.0000 0 0; T--- cut 321 0.3488 121 0;
+QUICK   sum of the tets' areas 1.621812356703 vs the walk crack's 1.621812356703 (rel. diff 4.0e-15)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 9.01e-08 over 3858 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 0.00e+00 over 3096 samples
+QUICK   J 'theta': realistic theta-type J = atan2(phi, psi)/pi, phi = signed distance to the tube, psi = a.X - 1.2407 (a virtual front 0.3 beyond O); control variate: the side indicator sign(phi) in xi
+QUICK   J 'indicator': the side indicator J = sign(phi) (the exact answer); control variate the same (R = 0)
+QUICK   geometry built and checked in 0.01 s
+QUICK   5659 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.0 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.0000% (max 0.0000%) of 2g; grad s.e. RMS / grad RMS 0.00%; GT RMS 0.5000; energy 0.00000 +- 0.00000
+QUICK   exact check: GT solver at N = 64: 0 of 5666 points differ from the exact +-1 (max |dH| 0.0e+00), 0 capped, 0 escaped walks
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.09    0.098    0.116 |   1.197   0.785    3.94 |     nan     nan |    +nan    nan | 0.0675 0.0504
+QUICK     ours Q8/R8/B4                  indicator      g=1     0.09    0.098    0.116 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK     direct N16/B8                  -              g=1     0.09    0.184    0.185 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK     direct N64/B16                 -              g=1     0.36    0.776    0.733 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK   case B1 done in 3.7 s
+QUICK 
+QUICK === B2 (priority 2) ===
+QUICK B2: flat complete cut passing 0.001 from the node
+QUICK   plane n1.X = n1.c - 0.001 (K1's normal), through O; the node 0.001 on its + side
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 6 triangles in O, area 1.424641; cracks: B2 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 3 0.3810 5 0; T+-+ cut 4 0.2263 6 0; T--+ cut 3 0.0650 4 0; T++- cut 6 0.2134 7 0; T-+- cut 6 0.2828 7 0; T+-- cut 7 0.2562 8 0; T--- cut 1 0.0000 3 0;
+QUICK   sum of the tets' areas 1.424641354727 vs the walk crack's 1.424641354727 (rel. diff 1.6e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.12e-08 over 240 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.31e-07 over 60 samples
+QUICK   J 'levelC': Level C with its front line 0.3 beyond O's section (the realistic J, check 4's K3); control variate J_xi
+QUICK   J 'indicator': the side indicator J = sign(n.X - d) (the exact answer); control variate: the same indicator in xi (R = 0)
+QUICK   geometry built and checked in 0.00 s
+QUICK   5577 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.0 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.0000% (max 0.0000%) of 2g; grad s.e. RMS / grad RMS 0.00%; GT RMS 0.5000; energy 0.00000 +- 0.00000
+QUICK   exact check: GT solver at N = 64: 0 of 5584 points differ from the exact +-1 (max |dH| 0.0e+00), 0 capped, 0 escaped walks
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.09    0.023    0.031 |   1.167   1.160   10.37 |     nan     nan |    +nan    nan | 0.2293 0.0082
+QUICK     ours Q8/R8/B4                  indicator      g=1     0.09    0.023    0.031 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK     direct N16/B8                  -              g=1     0.09    0.047    0.044 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK     direct N64/B16                 -              g=1     0.36    0.166    0.173 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+QUICK   case B2 done in 0.9 s
+QUICK 
+QUICK === C1 (priority 1) ===
+QUICK C1: flat crack, gently curved front
+QUICK   K1's plane, crack = the disk of radius 1.5 tangent to K1's front (front curvature 0.67), 256 front vertices
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 336 triangles in O, area 0.618230; cracks: disk (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 50 0.0434 31 15; T+-+ cut 194 0.2203 93 1; T--+ cut 94 0.0462 71 9; T++- cut 63 0.0411 43 12; T-+- cut 28 0.0178 20 6; T+-- cut 176 0.2491 70 6; T--- cut 5 0.0003 7 0;
+QUICK   sum of the tets' areas 0.618229820995 vs the walk crack's 0.618229820995 (rel. diff 7.2e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.17e-05 over 1998 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.32e-05 over 1216 samples
+QUICK   J 'solid': solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk
+QUICK   J 'theta': theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon; control variate Omega_xi of the disk
+QUICK   geometry built and checked in 0.03 s
+QUICK   GT timing pilot, N = 16: 5083 points, 81328 walks counted of 81328, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.1, 0.185 s -> extrapolated to N = 1024: 12 s
+QUICK   GT run: 5083 points, 5204992 walks counted of 5204992, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.3, 11.504 s
+QUICK   5076 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 11.7 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.3177% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 59.99%; GT RMS 0.2690; energy 1.48698 +- 0.14447
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  solid          g=1     0.08    0.114    0.151 |   1.863   1.047    7.47 |   71.73    0.00 |   +7.37   9.96 | 0.0779 0.0450
+QUICK     ours Q8/R8/B4                  theta          g=1     0.08    0.114    0.151 |   1.928   0.958    7.37 |   96.50    0.00 |   +6.60   9.93 | 0.0950 0.0505
+QUICK     direct N16/B8                  -              g=1     0.08    0.174    0.175 |  10.691   1.141   40.33 |  637.29    0.00 | -2644.53 3343.03 | 0.3281 0.0000
+QUICK     direct N64/B16                 -              g=1     0.33    0.742    0.725 |   5.506   0.809   25.78 |  317.38  100.33 | +143.04 275.63 | 0.1719 0.0000
+QUICK   case C1 done in 14.6 s
+QUICK 
+QUICK === C2 (priority 1) ===
+QUICK C2: flat crack, strongly curved front
+QUICK   K1's plane, crack = the disk of radius 0.45 centred 0.35 behind O's centre (front curvature 2.2), 128 front vertices
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1312 triangles in O, area 0.502856; cracks: disk (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 133 0.0418 34 17; T+-+ cut 530 0.1721 119 13; T--+ cut 88 0.0153 53 5; T++- cut 141 0.0369 54 13; T-+- cut 114 0.0327 36 12; T+-- cut 617 0.2038 121 14; T--- cut 13 0.0003 13 0;
+QUICK   sum of the tets' areas 0.502856053572 vs the walk crack's 0.502856053572 (rel. diff 2.9e-15)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.38e-05 over 2568 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.06e-05 over 3268 samples
+QUICK   J 'solid': solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk
+QUICK   J 'theta': theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon; control variate Omega_xi of the disk
+QUICK   geometry built and checked in 0.03 s
+QUICK   GT timing pilot, N = 16: 4947 points, 79152 walks counted of 79152, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 48.9, 0.330 s -> extrapolated to N = 1024: 21 s
+QUICK   GT run: 4947 points, 5065728 walks counted of 5065728, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 48.8, 20.463 s
+QUICK   4940 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 20.8 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.3763% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 60.69%; GT RMS 0.2371; energy 1.46237 +- 0.09168
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  solid          g=1     0.07    0.127    0.154 |   3.447   2.854   14.77 |   73.77   22.52 |   +4.09   6.41 | 0.2393 0.0496
+QUICK     ours Q8/R8/B4                  theta          g=1     0.07    0.127    0.154 |   3.921   0.000   21.11 |  162.69    0.00 |   +3.08  30.27 | 0.4647 0.2737
+QUICK     plain Q256/R256/B16            solid          g=1     2.53    3.413    3.427 |   3.428   2.970   15.12 |   92.57   20.36 |   +2.53   9.59 | 0.2502 0.0464
+QUICK     plain Q256/R256/B16            theta          g=1     2.53    3.413    3.427 |   2.742   2.216   14.64 |   88.63   22.06 |   +5.24   8.31 | 0.3264 0.0374
+QUICK   control-variate check: H0 (g = 1, J 'solid'): plain N = 256 vs control variate Q32/R64: value pooled z -1.16 (|z| < 3 at 99.58%, mean z^2 1.026), grad pooled z +0.72 / -1.69 / -1.06 -> agree
+QUICK     direct N16/B8                  -              g=1     0.08    0.329    0.339 |  11.306   2.167   44.92 |  653.30    0.00 | -1150.05 834.19 | 0.3848 0.0000
+QUICK     direct N64/B16                 -              g=1     0.32    1.225    1.276 |   5.712   0.717   21.78 |  306.20   78.58 | +122.93 216.75 | 0.1836 0.0000
+QUICK   case C2 done in 30.1 s
+QUICK 
+QUICK === D1 (priority 1) ===
+QUICK D1: gently curved crack surface (sphere radius 2)
+QUICK   sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + side outside; h = 0.06 within 1.25 of the origin
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 520 triangles in O, area 0.789575; cracks: sphere (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 70 0.0612 35 13; T+-+ cut 182 0.1960 71 0; T--+ cut 143 0.1315 71 1; T++- cut 74 0.0607 38 12; T-+- cut 26 0.0193 17 5; T+-- cut 271 0.3201 95 3; T--- cut 7 0.0008 9 0;
+QUICK   sum of the tets' areas 0.789575173160 vs the walk crack's 0.789575173160 (rel. diff 7.0e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.50e-05 over 2000 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.10e-05 over 767 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side triangles within 1.25 of the origin (curved: not exact on the crack, evaluated at the walk end)
+QUICK   geometry built and checked in 0.05 s
+QUICK   GT timing pilot, N = 16: 5384 points, 86144 walks counted of 86144, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.0, 0.189 s -> extrapolated to N = 1024: 12 s
+QUICK   GT run: 5384 points, 5513216 walks counted of 5513216, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.1, 11.552 s
+QUICK   5377 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 11.8 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2540% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 56.05%; GT RMS 0.2986; energy 2.33992 +- 0.78338
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.08    0.162    0.295 |   3.584   1.844   13.29 |  321.25   40.88 |  -41.44  35.16 | 0.3211 0.1905
+QUICK     plain Q256/R256/B16            theta          g=1     2.75    2.335    2.343 |   2.067   1.470   11.77 |   88.96   46.71 |  -30.13  33.63 | 0.3087 0.0303
+QUICK   control-variate check: H0 (g = 1, J 'theta'): plain N = 256 vs control variate Q32/R64: value pooled z +0.30 (|z| < 3 at 99.50%, mean z^2 1.078), grad pooled z -0.07 / +0.22 / -1.28 -> agree
+QUICK     direct N16/B8                  -              g=1     0.09    0.183    0.184 |  10.146   0.000   38.18 |  896.69  591.32 | +3958.63 3034.31 | 0.2676 0.0000
+QUICK     direct N64/B16                 -              g=1     0.34    0.706    0.718 |   5.225   0.852   25.78 |  229.33    0.00 | -288.19 345.01 | 0.2480 0.0000
+QUICK   case D1 done in 18.5 s
+QUICK 
+QUICK === D2 (priority 1) ===
+QUICK D2: strongly curved crack surface (bowl, sphere radius 0.6)
+QUICK   sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; h = 0.04
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1094 triangles in O, area 0.773893; cracks: sphere (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 90 0.0231 59 4; T-++ cut 651 0.3916 152 9; T+-+ - 0 0.0000 0 0; T--+ cut 45 0.0160 25 12; T++- cut 278 0.1563 83 12; T-+- cut 322 0.1869 86 8; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.773893057674 vs the walk crack's 0.773893057674 (rel. diff 5.7e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.54e-06 over 2430 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.04e-05 over 1386 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = (x - y)/sqrt(2); control variate Omega_xi/(2 pi) of the crack-side triangles within 1.2 of the origin (curved: not exact on the crack, evaluated at the walk end)
+QUICK   geometry built and checked in 0.18 s
+QUICK   GT timing pilot, N = 16: 5157 points, 82512 walks counted of 82512, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.8, 0.241 s -> extrapolated to N = 1024: 15 s
+QUICK   GT run: 5157 points, 5280768 walks counted of 5280768, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.7, 16.216 s
+QUICK   5150 points in the 8 tets + 7 probes; 5 tets cut; GT ready in 16.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2826% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 54.40%; GT RMS 0.2858; energy 1.47866 +- 0.09369
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.07    0.233    0.674 |   2.453   1.108   11.84 |  106.96    6.75 |   -6.85   8.29 | 0.1975 0.0742
+QUICK     direct N16/B8                  -              g=1     0.08    0.258    0.259 |  10.497   1.749   43.26 |  614.13   34.05 |  +26.14 541.47 | 0.3047 0.0000
+QUICK     direct N64/B16                 -              g=1     0.33    0.979    0.981 |   5.153   0.000   23.63 |  256.48   21.09 |   +5.85  88.50 | 0.2012 0.0000
+QUICK   case D2 done in 21.1 s
+QUICK 
+QUICK === D3 (priority 1) ===
+QUICK D3: kinked crack (two flat pieces at 40 degrees)
+QUICK   facet 1 = K1's plane behind the kink line u1.X = -0.12026 (t = 0.4); facet 2 turned 40 degrees towards +n1, front 0.3 beyond the kink
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 28 triangles in O, area 0.957788; cracks: kink (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 8 0.1442 7 2; T-++ cut 11 0.0728 12 0; T+-+ cut 15 0.2203 13 0; T--+ cut 13 0.0728 12 0; T++- cut 18 0.1882 14 3; T-+- cut 3 0.0008 5 0; T+-- cut 23 0.2584 20 0; T--- cut 1 0.0003 3 0;
+QUICK   sum of the tets' areas 0.957788399780 vs the walk crack's 0.957788399780 (rel. diff 0.0e+00)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 2.51e-06 over 516 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 4.09e-06 over 92 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the kinked surface (facet 2 continued), psi = u2.X - s_front; control variate H1 + Hf - Hl: three half-plane theta/pi terms in xi (exact, jump 2)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 5725 points, 91600 walks counted of 91600, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.2, 0.059 s -> extrapolated to N = 1024: 4 s
+QUICK   GT run: 5725 points, 5862400 walks counted of 5862400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.1, 3.972 s
+QUICK   5718 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 4.0 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.9418% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 64.71%; GT RMS 0.3991; energy 1.10376 +- 0.45456
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.09    0.036    0.041 |   2.895   2.183   19.48 |   96.60   19.40 |   -1.60  42.58 | 0.0571 0.1061
+QUICK     plain Q256/R256/B16            theta          g=1     2.93    0.995    1.003 |   2.379   2.107   18.70 |   87.80   29.65 |   -0.55  41.48 | 0.0564 0.0234
+QUICK   control-variate check: H0 (g = 1, J 'theta'): plain N = 256 vs control variate Q32/R64: value pooled z +1.23 (|z| < 3 at 99.55%, mean z^2 1.052), grad pooled z -0.15 / +0.72 / -0.95 -> agree
+QUICK     direct N16/B8                  -              g=1     0.09    0.063    0.064 |   7.953   2.242   45.41 |  756.21  155.44 | -123.76 3467.10 | 0.1426 0.0000
+QUICK     direct N64/B16                 -              g=1     0.37    0.249    0.244 |   4.069   1.256   20.51 |  314.64   65.85 | -148.85 608.28 | 0.0801 0.0000
+QUICK   case D3 done in 6.2 s
+QUICK 
+QUICK === E1 (priority 1) ===
+QUICK E1: two parallel cracks with opposite fronts (strengths 1 and 0.5)
+QUICK   crack a: n1.X = -0.14, front direction (0, 1, 0), t = 0.65, g = 1; crack b: n1.X = 0.30, front direction (0, -1, 0), t = 0.6, g = 0.5; errors / (2 max g) = / 2
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 8 triangles in O, area 1.714556; cracks: a (g = 1) b (g = 0.5)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 4 0.2806 5 1; T-++ cut 7 0.1718 9 1; T+-+ cut 1 0.0734 3 0; T--+ cut 3 0.2765 5 0; T++- cut 4 0.2952 6 1; T-+- cut 9 0.1857 10 1; T+-- cut 3 0.2122 5 0; T--- cut 5 0.2193 7 0;
+QUICK   sum of the tets' areas 1.714555936638 vs the walk crack's 1.714555936638 (rel. diff 2.6e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.02e-06, ramp 1.35e-07 over 300 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.61e-06 over 36 samples
+QUICK   J 'blend': Shepard blend (weights 1/d_j^2) of the cracks' Level C functions (x g_j), and of their ramps; control variate J_xi,a + 0.5 J_xi,b
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 7158 points, 114528 walks counted of 114528, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.6, 0.054 s -> extrapolated to N = 1024: 3 s
+QUICK   GT run: 7158 points, 7329792 walks counted of 7329792, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.6, 3.518 s
+QUICK   7151 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 3.6 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.8804% (max 1.5374%) of 2g; grad s.e. RMS / grad RMS 36.87%; GT RMS 0.3136; energy 2.44517 +- 0.07584
+QUICK   GT noise floor (ramp): H s.e. RMS 0.3507% (max 0.4904%) of 2g; grad s.e. RMS / grad RMS 35.77%; GT RMS 0.1604; energy 0.41443 +- 0.01982
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  blend          g=1     0.11    0.030    0.041 |   4.489   2.372   25.06 |  241.71    0.00 |  -18.70  83.43 | 0.2949 0.1861
+QUICK     ours Q8/R8/B4                  blend          ramp    0.11    0.030    0.041 |   3.200   1.952   11.72 |  443.52    0.00 | -108.36 274.62 | 0.1870 0.1273
+QUICK     direct N16/B8                  -              g=1     0.11    0.057    0.058 |   7.089   0.000   36.28 |  371.44    0.00 | -311.31 195.59 | 0.2344 0.0000
+QUICK     direct N16/B8                  -              ramp    0.11    0.057    0.058 |   2.769   0.000   10.14 |  386.84   53.68 |  +68.42 220.26 | 0.1027 0.0000
+QUICK     direct N64/B16                 -              g=1     0.46    0.222    0.225 |   3.603   0.000   20.58 |  166.55    0.00 |  -22.13  30.66 | 0.1484 0.0000
+QUICK     direct N64/B16                 -              ramp    0.46    0.222    0.225 |   1.417   0.000    6.01 |  159.04    0.00 |  -34.42  51.41 | 0.0283 0.0000
+QUICK   case E1 done in 4.5 s
+QUICK 
+QUICK === E2 (priority 2) ===
+QUICK E2: two cracks inside the same tet
+QUICK   two parallel disks of radius 0.18, normal n1, centres g0 +- 0.05 n1 (g0 = centroid of T+++), 64 front vertices
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 779 triangles in O, area 0.201180; cracks: disk a (g = 1) disk b (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 779 0.2012 20 119; T-++ - 0 0.0000 0 0; T+-+ - 0 0.0000 0 0; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.201179662648 vs the walk crack's 0.201179662648 (rel. diff 5.5e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.44e-05 over 112 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 8.00e-06 over 779 samples
+QUICK   J 'blend': Shepard blend of the two disks' Omega/(2 pi); control variate Omega_a,xi/(2 pi) + Omega_b,xi/(2 pi)
+QUICK   geometry built and checked in 0.01 s
+QUICK   GT timing pilot, N = 16: 4929 points, 78864 walks counted of 78864, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 66.1, 0.342 s -> extrapolated to N = 1024: 22 s
+QUICK   GT run: 4929 points, 5047296 walks counted of 5047296, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 66.2, 22.765 s
+QUICK   4922 points in the 8 tets + 7 probes; 1 tets cut; GT ready in 23.1 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.5204% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 60.36%; GT RMS 0.1162; energy 1.65286 +- 0.08028
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  blend          g=1     0.05    0.056    0.082 |   4.694   0.000   16.61 |  120.15    0.00 |   +9.09  12.50 | 0.1650 0.1566
+QUICK     direct N16/B8                  -              g=1     0.08    0.370    0.366 |  12.048   0.000   46.88 |  664.44    0.00 |  -72.01 536.00 | 0.3047 0.0000
+QUICK     direct N64/B16                 -              g=1     0.32    1.400    1.401 |   6.293   0.613   22.27 |  284.85    7.38 |  +27.10 105.25 | 0.1934 0.0000
+QUICK   case E2 done in 28.5 s
+QUICK 
+QUICK === E3 (priority 1) ===
+QUICK E3: two crossing cracks (X junction)
+QUICK   A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 9 triangles in O, area 2.247635; cracks: A (through) (g = 1) B (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 2 0.1787 3 1; T-++ cut 4 0.3935 7 1; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 8 0.2608 10 0; T-+- cut 12 0.7447 13 1; T+-- cut 7 0.2605 8 0; T--- cut 4 0.1142 6 1;
+QUICK   sum of the tets' areas 2.247635167842 vs the walk crack's 2.247635167842 (rel. diff 0.0e+00)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.20e-07 over 336 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.11e-06 over 43 samples
+QUICK   J 'blend': Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 6731 points, 107696 walks counted of 107696, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.4, 0.050 s -> extrapolated to N = 1024: 3 s
+QUICK   GT run: 6731 points, 6892544 walks counted of 6892544, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.5, 3.429 s
+QUICK   6724 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 3.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.9735% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 32.05%; GT RMS 0.3912; energy 5.22806 +- 0.10338
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  blend          g=1     0.11    0.033    0.037 |   6.823   0.000   35.89 |  288.54    0.00 |  +23.91 140.96 | 0.3834 0.4644
+QUICK     plain Q256/R256/B16            blend          g=1     3.44    0.924    0.933 |   4.817   4.641   21.36 |   85.11   41.16 |  +33.87  11.51 | 0.3428 0.0269
+QUICK   control-variate check: H0 (g = 1, J 'blend'): plain N = 256 vs control variate Q32/R64: value pooled z +0.80 (|z| < 3 at 99.19%, mean z^2 1.143), grad pooled z +0.19 / -0.11 / -0.27 -> agree
+QUICK     direct N16/B8                  -              g=1     0.11    0.058    0.059 |   8.017   1.706   36.52 |  343.10    0.00 | -144.17 203.82 | 0.1777 0.0000
+QUICK     direct N64/B16                 -              g=1     0.43    0.217    0.219 |   4.343   1.723   22.75 |  152.88   29.35 |  +25.65  53.68 | 0.1328 0.0000
+QUICK   case E3 done in 5.5 s
+QUICK 
+QUICK === F1 (priority 2) ===
+QUICK F1: front passing exactly through the node
+QUICK   K1's normal and front direction moved through c: plane n1.X = n1.c, front u1.X = u1.c (t = 0.3900)
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.476596; cracks: F1 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ - 0 0.0000 0 0; T+-+ cut 2 0.2272 2 0; T--+ cut 1 0.0280 1 1; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- cut 2 0.2215 3 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.476595622316 vs the walk crack's 0.476595622316 (rel. diff 1.6e-15)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.59e-06 over 36 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 4.66e-06 over 5 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 4484 points, 71744 walks counted of 71744, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 50.4, 0.032 s -> extrapolated to N = 1024: 2 s
+QUICK   GT run: 4484 points, 4591616 walks counted of 4591616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 50.4, 1.943 s
+QUICK   4477 points in the 8 tets + 7 probes; 3 tets cut; GT ready in 2.0 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.4023% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 60.42%; GT RMS 0.2210; energy 1.32936 +- 0.09633
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.05    0.009    0.012 |   4.883   4.538   20.59 |  105.92   16.75 |   +8.28   7.36 | 0.2514 0.0551
+QUICK     direct N16/B8                  -              g=1     0.07    0.033    0.033 |  11.452   2.006   42.29 |  677.99    0.00 | -229.92 630.81 | 0.4590 0.0000
+QUICK     direct N64/B16                 -              g=1     0.29    0.158    0.144 |   5.843   0.902   22.75 |  261.47    0.00 | -154.28  95.25 | 0.1914 0.0000
+QUICK   case F1 done in 2.5 s
+QUICK 
+QUICK === F2 (priority 2) ===
+QUICK F2: crack 0.001 away from an interior face
+QUICK   plane m.X = m.c + 0.001, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid (t = 0.2460), crack on the side of the edge e_x-e_y
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.327618; cracks: F2 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2590 3 1; T-++ cut 2 0.0649 3 1; T+-+ cut 1 0.0037 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.327618357447 vs the walk crack's 0.327618357447 (rel. diff 8.5e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 5.95e-06 over 48 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 9.19e-06 over 6 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 4293 points, 68688 walks counted of 68688, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 57.7, 0.037 s -> extrapolated to N = 1024: 2 s
+QUICK   GT run: 4293 points, 4396032 walks counted of 4396032, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 57.7, 2.185 s
+QUICK   4286 points in the 8 tets + 7 probes; 3 tets cut; GT ready in 2.2 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.5173% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 63.33%; GT RMS 0.1204; energy 1.22931 +- 0.14930
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.05    0.009    0.012 |  13.358  11.730   22.49 |   87.65    3.85 |  -18.00  12.72 | 0.3489 0.2354
+QUICK     direct N16/B8                  -              g=1     0.07    0.036    0.036 |  12.053   0.000   45.51 |  712.45    0.00 | -830.10 1355.91 | 0.4570 0.0000
+QUICK     direct N64/B16                 -              g=1     0.27    0.139    0.140 |   6.270   0.483   22.46 |  307.29   77.30 | +107.78 140.53 | 0.1270 0.0000
+QUICK   case F2 done in 2.8 s
+QUICK 
+QUICK === F3 (priority 2) ===
+QUICK F3: tiny crack inside one tet
+QUICK   a disk of radius 0.06, normal n1, centre g0 = centroid of T+++ (inside T+++, no face contact), 64 front vertices
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 384 triangles in O, area 0.011292; cracks: disk (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 384 0.0113 0 64; T-++ - 0 0.0000 0 0; T+-+ - 0 0.0000 0 0; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.011291574566 vs the walk crack's 0.011291574566 (rel. diff 4.6e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 0.00e+00 over 0 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.29e-05 over 768 samples
+QUICK   J 'solid': solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk
+QUICK   J 'theta': theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon (fails far away); control variate Omega_xi
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 4102 points, 65632 walks counted of 65632, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 125.0, 0.538 s -> extrapolated to N = 1024: 34 s
+QUICK   GT run: 4102 points, 4200448 walks counted of 4200448, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 124.6, 35.924 s
+QUICK   4095 points in the 8 tets + 7 probes; 1 tets cut; GT ready in 36.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.5618% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 95.00%; GT RMS 0.0219; energy 0.09287 +- 0.07423
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  solid          g=1     0.04    0.034    0.047 |  19.677  17.564   29.15 |  105.57    0.00 |  -16.40  81.23 | 0.4242 0.1854
+QUICK     ours Q8/R8/B4                  theta          g=1     0.04    0.034    0.047 |   6.794   0.000   23.71 |  248.37    0.00 | +173.34 217.99 | 0.2070 0.6613
+QUICK     direct N16/B8                  -              g=1     0.07    0.764    0.665 |  12.590   0.000   41.02 | 1068.62  191.53 | +4268.42 8783.67 | 0.2520 0.0000
+QUICK     direct N64/B16                 -              g=1     0.26    3.373    3.374 |   6.544   1.178   22.17 |  440.84    0.00 | -786.79 2092.48 | 0.2207 0.0000
+QUICK   case F3 done in 41.9 s
+QUICK 
+QUICK === F4 (priority 3) ===
+QUICK F4: front 0.03 from the outer boundary
+QUICK   K1's plane, front direction = the outward in-plane normal (-0.2826, 0.7854, -0.5507) of a section edge, front 0.03 inside that edge (t = 0.9757)
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 4 triangles in O, area 1.405122; cracks: F4 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.3751 6 0; T+-+ cut 1 0.2203 3 0; T--+ cut 3 0.0750 4 0; T++- cut 5 0.2013 5 1; T-+- cut 6 0.2727 7 1; T+-- cut 3 0.2605 5 0; T--- cut 1 0.0003 3 0;
+QUICK   sum of the tets' areas 1.405121905915 vs the walk crack's 1.405121905915 (rel. diff 3.2e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.21e-07 over 198 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.90e-06 over 24 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 5864 points, 93824 walks counted of 93824, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.9, 0.052 s -> extrapolated to N = 1024: 3 s
+QUICK   GT run: 5864 points, 6004736 walks counted of 6004736, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.9, 3.632 s
+QUICK   5857 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 3.7 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.2402% (max 1.5587%) of 2g; grad s.e. RMS / grad RMS 39.82%; GT RMS 0.4941; energy 0.23655 +- 0.01361
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.09    0.041    0.056 |   3.538   3.482   20.96 |  126.26   78.40 |  +84.93  10.61 | 0.3405 0.0325
+QUICK     direct N16/B8                  -              g=1     0.09    0.062    0.070 |   2.007   0.000   27.93 |  524.52    0.00 | -817.24 810.81 | 0.1582 0.0000
+QUICK     direct N64/B16                 -              g=1     0.38    0.226    0.227 |   1.004   0.000   16.50 |  176.69    0.00 |   -7.52  56.36 | 0.0312 0.0000
+QUICK   case F4 done in 4.6 s
+QUICK 
+QUICK === G1a (priority 3) ===
+QUICK G1a: flat crack K1 on the distorted ring 3
+QUICK   half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+QUICK   ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.1462 6 1; T+-+ cut 1 0.0494 2 0; T--+ cut 3 0.1349 4 0; T++- cut 5 0.0636 5 1; T-+- cut 6 0.1259 7 1; T+-- cut 3 0.1734 5 0; T--- cut 1 0.0497 3 0;
+QUICK   sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 4.5e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.82e-06 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.76e-05 over 24 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 5982 points, 95712 walks counted of 95712, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.4, 0.065 s -> extrapolated to N = 1024: 4 s
+QUICK   GT run: 5982 points, 6125568 walks counted of 6125568, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.4, 4.401 s
+QUICK   5975 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 4.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2524% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 57.44%; GT RMS 0.2993; energy 1.42388 +- 0.13676
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.09    0.032    0.038 |   2.467   1.277   13.50 |  132.32    0.00 |  -11.17  35.24 | 0.1340 0.1027
+QUICK     direct N16/B8                  -              g=1     0.10    0.060    0.062 |  10.692   3.551   37.99 |  617.82    0.00 | -405.85 1155.40 | 0.3262 0.0000
+QUICK     direct N64/B16                 -              g=1     0.38    0.212    0.248 |   5.511   1.927   21.39 |  259.35    0.00 |  +28.08 114.88 | 0.1113 0.0000
+QUICK   case G1a done in 5.4 s
+QUICK 
+QUICK === G1b (priority 3) ===
+QUICK G1b: gently curved crack (sphere radius 2) on the distorted ring 3
+QUICK   sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + side outside; h = 0.06 within 1.25 of the origin
+QUICK   ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 520 triangles in O, area 0.789575; cracks: sphere (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 97 0.1071 39 12; T+-+ cut 76 0.0392 57 0; T--+ cut 181 0.1844 77 1; T++- cut 38 0.0283 22 6; T-+- cut 120 0.1494 37 13; T+-- cut 214 0.2047 96 2; T--- cut 101 0.0766 63 0;
+QUICK   sum of the tets' areas 0.789575173160 vs the walk crack's 0.789575173160 (rel. diff 8.4e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.14e-05 over 2346 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.53e-05 over 827 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side triangles within 1.25 of the origin (curved: not exact on the crack, evaluated at the walk end)
+QUICK   geometry built and checked in 0.06 s
+QUICK   GT timing pilot, N = 16: 5935 points, 94960 walks counted of 94960, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.7, 0.220 s -> extrapolated to N = 1024: 14 s
+QUICK   GT run: 5935 points, 6077440 walks counted of 6077440, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 42.7, 13.243 s
+QUICK   5928 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 13.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2549% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 56.58%; GT RMS 0.2982; energy 1.64127 +- 0.21993
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.09    0.220    0.345 |   2.612   0.000   13.02 |  209.03   45.79 |  +18.29  18.46 | 0.2160 0.1281
+QUICK     direct N16/B8                  -              g=1     0.09    0.204    0.211 |   9.902   0.000   42.38 |  563.10    0.00 | -419.42 817.30 | 0.3711 0.0000
+QUICK     direct N64/B16                 -              g=1     0.38    0.820    0.822 |   5.167   0.265   21.58 |  272.10   48.62 |   -4.10 328.87 | 0.2461 0.0000
+QUICK   case G1b done in 17.0 s
+QUICK 
+QUICK === summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+QUICK   case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+QUICK   A1   baseline K1 (one flat crack, straight front)         levelC            1.503    14.46   0.1256    54.54    0.157    1.503    12.768 works
+QUICK   A1   baseline K1 (one flat crack, straight front)         levelC/cvSolid    1.495    14.42   0.1253    51.27    0.157    1.495    12.768 works
+QUICK   A1s  baseline K1 (one flat crack, straight front)         levelC            2.148    15.31   0.1272    75.19    0.030    2.148    11.459 degrades
+QUICK   A1s  baseline K1 (one flat crack, straight front)         levelC/cvSolid    2.161    15.27   0.1267    72.65    0.030    2.161    11.459 degrades
+QUICK   A2   baseline K2 (another flat crack, straight front)     levelC            1.845    11.40   0.0613    69.37    0.129    1.845    17.969 works
+QUICK   A3   flat complete cut (K3)                               levelC            1.112    10.69   0.2278      nan    0.141    1.112     0.000 works
+QUICK   A3   flat complete cut (K3)                               indicator         0.000     0.00   0.0000      nan    0.141    0.000     0.000 works (exact to round-off)
+QUICK   B1   curved complete cut (cylinder)                       theta             1.197     3.94   0.0675      nan    0.116    1.197     0.000 works
+QUICK   B1   curved complete cut (cylinder)                       indicator         0.000     0.00   0.0000      nan    0.116    0.000     0.000 works (exact to round-off)
+QUICK   B2   flat complete cut passing 0.001 from the node        levelC            1.167    10.37   0.2293      nan    0.031    1.167     0.000 works
+QUICK   B2   flat complete cut passing 0.001 from the node        indicator         0.000     0.00   0.0000      nan    0.031    0.000     0.000 works (exact to round-off)
+QUICK   C1   flat crack, gently curved front                      solid             1.863     7.47   0.0779    71.73    0.151    1.863    11.512 works
+QUICK   C1   flat crack, gently curved front                      theta             1.928     7.37   0.0950    96.50    0.151    1.928    11.512 works
+QUICK   C2   flat crack, strongly curved front                    solid             3.447    14.77   0.2393    73.77    0.154    3.447    16.776 degrades
+QUICK   C2   flat crack, strongly curved front                    theta             3.921    21.11   0.4647   162.69    0.154    3.921    16.776 degrades
+QUICK   D1   gently curved crack surface (sphere radius 2)        theta             3.584    13.29   0.3211   321.25    0.295    3.584     8.061 degrades
+QUICK   D2   strongly curved crack surface (bowl, sphere radius 0 theta             2.453    11.84   0.1975   106.96    0.674    2.453     6.297 degrades
+QUICK   D3   kinked crack (two flat pieces at 40 degrees)         theta             2.895    19.48   0.0571    96.60    0.041    2.895     9.914 degrades
+QUICK   E1   two parallel cracks with opposite fronts (strengths  blend             4.489    25.06   0.2949   241.71    0.041    4.489     8.389 degrades
+QUICK   E2   two cracks inside the same tet                       blend             4.694    16.61   0.1650   120.15    0.082    4.694    25.507 degrades
+QUICK   E3   two crossing cracks (X junction)                     blend             6.823    35.89   0.3834   288.54    0.037    6.823    10.032 fails
+QUICK   F1   front passing exactly through the node               levelC            4.883    20.59   0.2514   105.92    0.012    4.883    18.730 degrades
+QUICK   F2   crack 0.001 away from an interior face               levelC           13.358    22.49   0.3489    87.65    0.012   13.358    21.046 fails
+QUICK   F3   tiny crack inside one tet                            solid            19.677    29.15   0.4242   105.57    0.047   19.677    47.302 fails
+QUICK   F3   tiny crack inside one tet                            theta             6.794    23.71   0.2070   248.37    0.047    6.794    47.302 fails
+QUICK   F4   front 0.03 from the outer boundary                   levelC            3.538    20.96   0.3405   126.26    0.056    3.538     2.242 degrades
+QUICK   G1a  flat crack K1 on the distorted ring 3                levelC            2.467    13.50   0.1340   132.32    0.038    2.467    13.580 degrades
+QUICK   G1b  gently curved crack (sphere radius 2) on the distort theta             2.612    13.02   0.2160   209.03    0.345    2.612     7.824 degrades
+QUICK 
+QUICK --ring-stress total 237.9 s; 85 rows in ring_stress/dev_smoke_all_rows.csv

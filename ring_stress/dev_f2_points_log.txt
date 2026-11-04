@@ -1,0 +1,47 @@
+--ring-stress: 2026-11-03 22:08:37; 16 hardware threads (TBB default arena)
+cases: F2 F2b
+output: ring_stress/dev_f2_points_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8,256/256/16 (seed sets 1 for the first, timing repeats 1: median); direct N none; points per tet 4096 (A1, A2, A3: check 4's 4096); GT N = 2560 in 64 batches, walk cap 65536; Zombie on D2,E3; validation off
+
+=== F2 (priority 2) ===
+F2: crack 0.001 away from an interior face
+  plane m.X = m.c + 0.001, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid projected (t = 0.2460), crack on the side of the edge e_x-e_y
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.327618; cracks: F2 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2590 3 1; T-++ cut 2 0.0649 3 1; T+-+ cut 1 0.0037 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.327618357447 vs the walk crack's 0.327618357447 (rel. diff 8.5e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 5.95e-06 over 48 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 9.19e-06 over 6 samples
+  J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 64: 32264 points, 2064896 walks counted of 2064896, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 58.9, 1.002 s -> extrapolated to N = 2560: 40 s
+  GT run: 32264 points, 82595840 walks counted of 82595840, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 58.9, 41.635 s
+  32257 points in the 8 tets + 7 probes; 3 tets cut; GT ready in 42.7 s
+  GT noise floor (g = 1): H s.e. RMS 0.9598% (max 0.9884%) of 2g; grad s.e. RMS / grad RMS 53.57%; GT RMS 0.1193; energy 1.12683 +- 0.04160
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     0.90    0.150    0.164 |  13.907  13.860   23.84 |   68.66   33.37 |   -5.66   3.77 | 0.3928 0.0163
+    ours Q256/R256/B16             levelC         g=1    11.29    1.717    1.741 |  14.255  14.222   23.87 |   63.55   33.47 |   -5.98   3.70 | 0.3995 0.0034
+  case F2 done in 44.7 s
+
+=== F2b (priority 3) ===
+F2b: crack 0.03 away from an interior face (F2's control)
+  plane m.X = m.c + 0.03, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid projected (t = 0.2328), crack on the side of the edge e_x-e_y
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.280231; cracks: F2b (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2237 4 1; T-++ cut 2 0.0544 3 1; T+-+ cut 1 0.0021 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.280231156591 vs the walk crack's 0.280231156591 (rel. diff 1.2e-15)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.26e-06 over 54 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.28e-05 over 6 samples
+  J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 64: 32143 points, 2057152 walks counted of 2057152, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 59.5, 1.151 s -> extrapolated to N = 2560: 46 s
+  GT run: 32143 points, 82286080 walks counted of 82286080, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 59.5, 44.740 s
+  32136 points in the 8 tets + 7 probes; 3 tets cut; GT ready in 46.0 s
+  GT noise floor (g = 1): H s.e. RMS 0.9526% (max 0.9884%) of 2g; grad s.e. RMS / grad RMS 57.17%; GT RMS 0.1334; energy 1.10865 +- 0.13734
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     0.89    0.168    0.184 |   4.500   4.392   13.96 |   66.75   26.89 |   -0.74  12.41 | 0.1651 0.0084
+    ours Q256/R256/B16             levelC         g=1    11.21    1.748    1.773 |   4.471   4.367   13.82 |   63.41   27.00 |   -0.69  12.39 | 0.1634 0.0022
+  case F2b done in 47.9 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  F2   crack 0.001 away from an interior face               levelC           13.907    23.84   0.3928    68.66    0.164   14.255       nan fails
+  F2b  crack 0.03 away from an interior face (F2's control) levelC            4.500    13.96   0.1651    66.75    0.184    4.471       nan degrades
+
+--ring-stress total 92.6 s; 4 rows in ring_stress/dev_f2_points_rows.csv

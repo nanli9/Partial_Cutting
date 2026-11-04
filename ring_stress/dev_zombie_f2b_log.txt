@@ -1,0 +1,83 @@
+QUICK --ring-stress: 2026-11-03 22:06:18; 16 hardware threads (TBB default arena)
+QUICK cases: E3 F2b E1
+QUICK output: ring_stress/dev_zombie_f2b_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin (QUICK: none read or written)
+QUICK settings: ours (Q/R/B) 8/8/4 (seed sets 1 for the first, timing repeats 1: median); direct N 16,64; points per tet 512 (A1, A2, A3: check 4's 4096); GT N = 1024 in 16 batches, walk cap 65536; Zombie on E3,E1; validation on
+QUICK 
+QUICK === E3 (priority 1) ===
+QUICK E3: two crossing cracks (X junction)
+QUICK   A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 9 triangles in O, area 2.247635; cracks: A (through) (g = 1) B (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 2 0.1787 3 1; T-++ cut 4 0.3935 7 1; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 8 0.2608 10 0; T-+- cut 12 0.7447 13 1; T+-- cut 7 0.2605 8 0; T--- cut 4 0.1142 6 1;
+QUICK   sum of the tets' areas 2.247635167842 vs the walk crack's 2.247635167842 (rel. diff 0.0e+00)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.20e-07 over 336 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.11e-06 over 43 samples
+QUICK   J 'blend': Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 6731 points, 107696 walks counted of 107696, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.4, 0.052 s -> extrapolated to N = 1024: 3 s
+QUICK   GT run: 6731 points, 6892544 walks counted of 6892544, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.5, 3.237 s
+QUICK   6724 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 3.3 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.9735% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 32.05%; GT RMS 0.3912; energy 5.22806 +- 0.10338
+QUICK   Zombie cross-check (float; 47411 points, 1512448 walks counted of 1512448, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 41.2, 2.705 s; 2.7 s): H at 6409 points, N = 128: |z| < 3 at 95.71%, pooled z -0.28; grad at 5085 points (8 x 16 walks, 0 not finite): pooled z -1.06 / +1.65 / -1.19 -> DISAGREE
+QUICK     near a crack (0.1)             4794 points: pooled z +0.17, mean z^2 1.876 (0.050), RMS discrepancy beyond noise 0.0e+00 (bound 5.8e-03)
+QUICK     near a front (0.1)              633 points: pooled z -0.62, mean z^2 1.054 (0.069), RMS discrepancy beyond noise 0.0e+00 (bound 1.3e-02)
+QUICK     near interior faces (0.1)      4663 points: pooled z -1.19, mean z^2 1.760 (0.049), RMS discrepancy beyond noise 0.0e+00 (bound 6.1e-03)
+QUICK     near the junction (0.1)         408 points: pooled z -1.06, mean z^2 1.726 (0.178), RMS discrepancy beyond noise 0.0e+00 (bound 1.2e-02)
+QUICK     vertex probes                     6 points: pooled z -0.03, mean z^2 1.060 (0.568), RMS discrepancy beyond noise 0.0e+00 (bound 2.0e-02)
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  blend          g=1     0.11    0.031    0.035 |   6.823   0.000   35.89 |  288.54    0.00 |  +23.91 140.96 | 0.3834 0.4644
+QUICK     plain Q256/R256/B16            blend          g=1     3.44    0.881    0.888 |   4.817   4.641   21.36 |   85.11   41.16 |  +33.87  11.51 | 0.3428 0.0269
+QUICK   control-variate check: H0 (g = 1, J 'blend'): plain N = 256 vs control variate Q32/R64: value pooled z +0.80 (|z| < 3 at 99.19%, mean z^2 1.143), grad pooled z +0.19 / -0.11 / -0.27 -> agree
+QUICK     direct N64/B16                 -              g=1     0.43    0.211    0.215 |   4.034   0.427   27.34 |  149.20    0.00 |   +7.09  78.49 | 0.1465 0.0000
+QUICK   case E3 done in 7.8 s
+QUICK 
+QUICK === F2b (priority 3) ===
+QUICK F2b: crack 0.03 away from an interior face (F2's control)
+QUICK   plane m.X = m.c + 0.03, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid projected (t = 0.2328), crack on the side of the edge e_x-e_y
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.280231; cracks: F2b (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2237 4 1; T-++ cut 2 0.0544 3 1; T+-+ cut 1 0.0021 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+QUICK   sum of the tets' areas 0.280231156591 vs the walk crack's 0.280231156591 (rel. diff 1.2e-15)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.26e-06 over 54 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.28e-05 over 6 samples
+QUICK   J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 4356 points, 69696 walks counted of 69696, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 58.0, 0.036 s -> extrapolated to N = 1024: 2 s
+QUICK   GT run: 4356 points, 4460544 walks counted of 4460544, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 58.0, 2.120 s
+QUICK   4349 points in the 8 tets + 7 probes; 3 tets cut; GT ready in 2.2 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.5060% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 77.83%; GT RMS 0.1340; energy 0.75727 +- 0.18842
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  levelC         g=1     0.05    0.009    0.011 |   5.102   4.829   13.12 |   76.45    0.00 |  +39.25  25.13 | 0.2092 0.0337
+QUICK     direct N64/B16                 -              g=1     0.28    0.133    0.136 |   6.084   0.000   22.27 |  357.80    0.00 | -105.06 792.59 | 0.1152 0.0000
+QUICK   case F2b done in 2.6 s
+QUICK 
+QUICK === E1 (priority 1) ===
+QUICK E1: two parallel cracks with opposite fronts (strengths 1 and 0.5)
+QUICK   crack a: n1.X = -0.14, front direction (0, 1, 0), t = 0.65, g = 1; crack b: n1.X = 0.30, front direction (0, -1, 0), t = 0.6, g = 0.5; errors / (2 max g) = / 2
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 8 triangles in O, area 1.714556; cracks: a (g = 1) b (g = 0.5)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 4 0.2806 5 1; T-++ cut 7 0.1718 9 1; T+-+ cut 1 0.0734 3 0; T--+ cut 3 0.2765 5 0; T++- cut 4 0.2952 6 1; T-+- cut 9 0.1857 10 1; T+-- cut 3 0.2122 5 0; T--- cut 5 0.2193 7 0;
+QUICK   sum of the tets' areas 1.714555936638 vs the walk crack's 1.714555936638 (rel. diff 2.6e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.02e-06, ramp 1.35e-07 over 300 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.61e-06 over 36 samples
+QUICK   J 'blend': Shepard blend (weights 1/d_j^2) of the cracks' Level C functions (x g_j), and of their ramps; control variate J_xi,a + 0.5 J_xi,b
+QUICK   geometry built and checked in 0.00 s
+QUICK   GT timing pilot, N = 16: 7158 points, 114528 walks counted of 114528, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.6, 0.059 s -> extrapolated to N = 1024: 4 s
+QUICK   GT run: 7158 points, 7329792 walks counted of 7329792, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.6, 3.756 s
+QUICK   7151 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 3.8 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 0.8804% (max 1.5374%) of 2g; grad s.e. RMS / grad RMS 36.87%; GT RMS 0.3136; energy 2.44517 +- 0.07584
+QUICK   GT noise floor (ramp): H s.e. RMS 0.3507% (max 0.4904%) of 2g; grad s.e. RMS / grad RMS 35.77%; GT RMS 0.1604; energy 0.41443 +- 0.01982
+QUICK   Zombie cross-check (float; 52358 points, 1639424 walks counted of 1639424, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.7, 2.974 s; 3.0 s): H at 7097 points, N = 128: |z| < 3 at 97.86%, pooled z -0.88; grad at 5650 points (8 x 16 walks, 0 not finite): pooled z +2.22 / +0.63 / +0.40 -> DISAGREE
+QUICK     near a crack (0.1)             5135 points: pooled z -0.41, mean z^2 1.494 (0.038), RMS discrepancy beyond noise 3.7e-03 (bound 6.4e-03)
+QUICK     near a front (0.1)             1457 points: pooled z -1.40, mean z^2 1.103 (0.045), RMS discrepancy beyond noise 7.0e-03 (bound 1.2e-02)
+QUICK     near interior faces (0.1)      5212 points: pooled z -0.30, mean z^2 1.465 (0.036), RMS discrepancy beyond noise 3.2e-03 (bound 6.0e-03)
+QUICK     near the junction (0.1)           0 points: pooled z +0.00, mean z^2 0.000 (0.000), RMS discrepancy beyond noise 0.0e+00 (bound 0.0e+00)
+QUICK     vertex probes                     7 points: pooled z -0.36, mean z^2 1.662 (0.496), RMS discrepancy beyond noise 1.6e-02 (bound 3.1e-02)
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  blend          g=1     0.11    0.032    0.043 |   4.489   2.372   25.06 |  241.71    0.00 |  -18.70  83.43 | 0.2949 0.1861
+QUICK     ours Q8/R8/B4                  blend          ramp    0.11    0.032    0.043 |   3.200   1.952   11.72 |  443.52    0.00 | -108.36 274.62 | 0.1870 0.1273
+QUICK     direct N64/B16                 -              g=1     0.46    0.242    0.243 |   3.708   0.654   23.02 |  157.65    0.00 |  -60.75  55.55 | 0.1274 0.0000
+QUICK     direct N64/B16                 -              ramp    0.46    0.242    0.243 |   1.456   0.183    5.54 |  160.38    0.00 |  -20.07  68.21 | 0.0421 0.0000
+QUICK   case E1 done in 7.6 s
+QUICK 
+QUICK === summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+QUICK   case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+QUICK   E3   two crossing cracks (X junction)                     blend             6.823    35.89   0.3834   288.54    0.035    6.823     9.941 fails
+QUICK   F2b  crack 0.03 away from an interior face (F2's control) levelC            5.102    13.12   0.2092    76.45    0.011    5.102    21.026 fails
+QUICK   E1   two parallel cracks with opposite fronts (strengths  blend             4.489    25.06   0.2949   241.71    0.043    4.489     8.808 degrades
+QUICK 
+QUICK --ring-stress total 18.0 s; 9 rows in ring_stress/dev_zombie_f2b_rows.csv

@@ -238,6 +238,11 @@ public:
     // The coupling gate's ring reference only (check 4): the convex polyhedron dom, every face Neumann (throws if
     // params sets any coupling-gate flag), the cut ±g as above. Escape test: exact containment in dom's planes.
     CutSolver(const ConvexDomain& dom, const Cut& cut, GType g, const WalkParams& params);
+    // The ring stress test only (--ring-stress): the convex polyhedron dom, every face Neumann (as above), and the crack(s)
+    // as one triangle mesh (V, F; every triangle wound towards its + side) with the Dirichlet data dirichlet(x,
+    // normalAligned), x = the walk's end projected onto the mesh, normalAligned = it ended on the nearest triangle's + side.
+    CutSolver(const ConvexDomain& dom, const std::vector<Vec3>& V, const std::vector<std::array<int, 3>>& F,
+              std::function<float(const Vec3&, bool)> dirichlet, const WalkParams& params);
     ~CutSolver();
     CutSolver(const CutSolver&) = delete;
     CutSolver& operator=(const CutSolver&) = delete;

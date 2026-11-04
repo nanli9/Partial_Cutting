@@ -1,0 +1,49 @@
+QUICK --ring-stress: 2026-11-04 09:40:34; 16 hardware threads (TBB default arena)
+QUICK cases: D4 D5
+QUICK output: ring_stress/dev_wave_quick_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin (QUICK: none read or written)
+QUICK settings: ours (Q/R/B) 8/8/4 (seed sets 1 for the first, timing repeats 1: median); direct N 16,64; points per tet 512 (A1, A2, A3: check 4's 4096); GT N = 1024 in 16 batches, walk cap 65536; Zombie on none; validation on; points within 0.01 sqrt(2) of a crack left out
+QUICK 
+QUICK === D4 (priority 1) ===
+QUICK D4: wavy crack (sine wave, amplitude 0.1, wavelength 1)
+QUICK   K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/1 + phase) (smallest radius of curvature 0.253, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.025 along w1
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 217 triangles in O, area 0.806484; cracks: wave (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 78 0.0306 80 0; T-++ cut 137 0.0737 107 31; T+-+ cut 186 0.2308 175 0; T--+ cut 126 0.0653 126 0; T++- cut 128 0.0874 102 28; T-+- cut 42 0.0254 33 11; T+-- cut 193 0.2676 189 0; T--- cut 49 0.0258 51 0;
+QUICK   sum of the tets' areas 0.806484064124 vs the walk crack's 0.806484064124 (rel. diff 1.4e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.52e-06 over 5178 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.72e-05 over 939 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+QUICK   geometry built and checked in 0.01 s
+QUICK   GT timing pilot, N = 16: 5413 points, 86608 walks counted of 86608, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.6, 0.142 s -> extrapolated to N = 1024: 9 s
+QUICK   GT run: 5413 points, 5542912 walks counted of 5542912, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.7, 9.383 s
+QUICK   5406 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 9.5 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2390% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 54.04%; GT RMS 0.3049; energy 1.56062 +- 0.08823
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.09    0.106    0.127 |   2.355   1.419   17.40 |  138.93   22.50 |  +10.83   6.28 | 0.2220 0.0705
+QUICK     direct N16/B8                  -              g=1     0.09    0.152    0.152 |   9.747   0.000   42.29 |  648.23    0.00 | -432.44 1512.09 | 0.2832 0.0000
+QUICK     direct N64/B16                 -              g=1     0.35    0.602    0.602 |   5.146   0.646   20.51 |  246.29    0.00 | -115.94 165.59 | 0.1582 0.0000
+QUICK   case D4 done in 11.9 s
+QUICK 
+QUICK === D5 (priority 1) ===
+QUICK D5: strongly wavy crack (sine wave, amplitude 0.1, wavelength 0.6)
+QUICK   K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/0.6 + phase) (smallest radius of curvature 0.091, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.015 along w1
+QUICK   ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 362 triangles in O, area 0.926848; cracks: wave (g = 1)
+QUICK   per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 106 0.0318 103 7; T-++ cut 238 0.0772 195 47; T+-+ cut 321 0.2377 294 0; T--+ cut 267 0.1292 269 0; T++- cut 194 0.0896 151 43; T-+- cut 48 0.0215 38 12; T+-- cut 282 0.3204 266 0; T--- cut 57 0.0195 59 0;
+QUICK   sum of the tets' areas 0.926848230171 vs the walk crack's 0.926848230171 (rel. diff 2.4e-16)
+QUICK   J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.38e-05 over 8230 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.37e-05 over 1511 samples
+QUICK   J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+QUICK   geometry built and checked in 0.04 s
+QUICK   GT timing pilot, N = 16: 5816 points, 93056 walks counted of 93056, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.8, 0.226 s -> extrapolated to N = 1024: 14 s
+QUICK   GT run: 5816 points, 5955584 walks counted of 5955584, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.8, 14.876 s
+QUICK   5809 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 15.1 s
+QUICK   GT noise floor (g = 1): H s.e. RMS 1.2272% (max 1.5633%) of 2g; grad s.e. RMS / grad RMS 63.81%; GT RMS 0.3097; energy 1.28963 +- 0.13620
+QUICK     method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+QUICK     ours Q8/R8/B4                  theta          g=1     0.09    0.166    0.204 |   3.125   2.483   23.48 |  180.95    0.00 |  +24.70  27.49 | 0.1364 0.0692
+QUICK     direct N16/B8                  -              g=1     0.09    0.239    0.237 |   9.819   0.000   44.92 |  717.20  259.44 | +1366.71 1964.03 | 0.1504 0.0000
+QUICK     direct N64/B16                 -              g=1     0.37    0.974    0.948 |   5.158   0.874   25.68 |  317.88  115.44 | +337.82 398.94 | 0.1152 0.0000
+QUICK   case D5 done in 18.9 s
+QUICK 
+QUICK === summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+QUICK   case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+QUICK   D4   wavy crack (sine wave, amplitude 0.1, wavelength 1)  theta             2.355    17.40   0.2220   138.93    0.127    2.355    10.660 degrades
+QUICK   D5   strongly wavy crack (sine wave, amplitude 0.1, wavel theta             3.125    23.48   0.1364   180.95    0.204    3.125    10.577 degrades
+QUICK 
+QUICK --ring-stress total 30.9 s; 6 rows in ring_stress/dev_wave_quick_rows.csv

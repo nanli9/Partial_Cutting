@@ -1,0 +1,34 @@
+case,J,g,S0_H_rms_pct,S0_H_rms_sd_pct,S0_H_max_pct,S2_H_rms_pct,S1_H_rms_pct,vert_maxerr,grad_rel_pct,grad_rel_nc_pct,grad_abs,E_relerr_pct,S2_E_relerr_pct,ours_time_s,direct_at_ours_time_pct,direct_how,gt_seconds,H_err_over_gt_rms_pct,verdict,tag
+A1,levelC,g1,1.39,0.024,14.0,1.38,1.37,0.117719,51,20,0.391661,1.2,1.9,0.400763,8.05,interpolated,569.8,4.6,works,stress_A
+A1,levelC,ramp,1.22,0.008,6.7,1.23,1.22,0.0833284,70,36,0.202903,14.8,15.2,0.400763,2.76,interpolated,569.8,9.5,works,stress_A
+A1,levelC/cvSolid,g1,1.41,0.024,14.0,1.38,1.37,0.118128,48,20,0.372442,1.1,1.9,0.400763,8.05,interpolated,569.8,4.7,works,stress_A
+A1s,levelC,g1,1.41,0.022,12.8,1.39,1.43,0.113206,45,21,0.345059,3.6,3.8,0.231509,7.51,interpolated,204.0,4.7,works,stress_A
+A1s,levelC,ramp,1.23,0.015,6.4,1.21,1.21,0.0889208,67,35,0.194344,15.5,15.4,0.231509,2.59,interpolated,204.0,9.6,works,stress_A
+A1s,levelC/cvSolid,g1,1.40,0.023,12.8,1.39,1.43,0.113171,42,20,0.32187,3.4,3.8,0.231509,7.51,interpolated,204.0,4.7,works,stress_A
+A2,levelC,g1,1.82,0.007,11.4,1.80,1.86,0.0700084,58,30,0.343549,9.0,9.0,0.217352,14.26,extrapolated,685.6,13.6,works,stress_A
+A2,levelC,ramp,1.56,0.008,7.2,1.55,1.57,0.145871,114,57,0.208194,39.5,40.0,0.217352,3.66,extrapolated,685.6,33.6,works,stress_A
+A3,levelC,g1,1.11,0.002,10.6,1.11,1.11,0.226802,-,-,0.111412,-,-,0.398017,-,interpolated,459.2,2.2,works,stress_A
+A3,indicator,g1,0.00,0.000,0.0,0.00,0.00,0,-,-,1.35601e-17,-,-,0.398017,-,interpolated,459.2,0.0,works (exact to round-off),stress_A
+B1,theta,g1,0.95,0.014,4.2,0.91,0.91,0.0398929,-,-,0.519267,-,-,0.771797,-,interpolated,0.0,1.9,works,stress_BC
+B1,indicator,g1,0.00,0.000,0.0,0.00,0.00,0,-,-,0,-,-,0.771797,-,interpolated,0.0,0.0,works (exact to round-off),stress_BC
+B2,levelC,g1,1.10,0.004,9.1,1.10,1.10,0.226373,-,-,0.106566,-,-,0.204114,-,interpolated,0.0,2.2,works,stress_BC
+B2,indicator,g1,0.00,0.000,0.0,0.00,0.00,0,-,-,0,-,-,0.204114,-,interpolated,0.0,0.0,works (exact to round-off),stress_BC
+C1,solid,g1,1.28,0.043,7.7,1.24,1.28,0.092123,43,17,0.330004,2.4,2.6,0.884545,7.64,interpolated,735.0,4.8,works,stress_BC
+C1,theta,g1,1.32,0.031,7.7,1.20,1.21,0.101696,74,16,0.55857,2.9,3.4,0.884545,7.64,interpolated,735.0,4.9,works,stress_BC
+C2,solid,g1,3.49,0.109,16.8,3.47,3.56,0.26806,54,30,0.395596,6.8,6.4,0.827076,9.70,interpolated,1025.0,14.8,degrades,stress_BC
+C2,theta,g1,2.60,0.137,15.4,2.48,2.58,0.339196,170,36,1.25327,14.8,9.0,0.827076,9.70,interpolated,1025.0,11.0,degrades,stress_BC
+D1,theta,g1,1.52,0.126,15.3,1.26,1.21,0.235659,94,18,0.744981,1.4,2.7,1.29711,6.35,interpolated,848.9,5.1,works,stress_D
+D2,theta,g1,1.91,0.502,8.7,1.59,1.62,0.101804,94,20,0.719361,4.3,3.4,2.09367,6.33,interpolated,1288.5,6.7,works,stress_D
+D3,theta,g1,2.20,0.041,17.7,2.20,2.21,0.0636196,78,32,0.50469,5.9,6.3,0.364286,6.09,interpolated,359.0,5.5,degrades,stress_D
+E1,blend,g1,3.81,0.182,22.3,3.51,3.60,0.287802,230,50,2.2343,28.5,17.3,0.285679,5.37,interpolated,269.2,12.2,degrades,stress_E
+E1,blend,ramp,3.28,0.064,10.8,2.99,3.07,0.213102,421,92,1.67582,83.9,52.3,0.285679,2.15,interpolated,269.2,20.5,degrades,stress_E
+E2,blend,g1,6.97,1.505,14.8,5.81,5.43,0.244053,109,27,0.905205,5.0,0.4,0.199726,18.86,extrapolated,780.4,60.4,fails,stress_E
+E3,blend,g1,5.42,0.209,30.2,4.71,4.78,0.31188,321,0,4.73501,-1.7,13.7,0.252291,6.18,interpolated,247.9,13.8,fails,stress_E
+F1,levelC,g1,1.61,0.246,13.6,1.64,1.50,0.0696924,47,22,0.356895,7.1,7.2,0.0919142,12.98,extrapolated,190.6,7.3,works,stress_F
+F2,levelC,g1,13.21,1.011,21.3,12.87,13.04,0.386019,50,36,0.324107,-1.7,-2.1,0.0851741,15.58,extrapolated,216.2,110.9,fails,stress_F
+F3,solid,g1,2.19,1.563,5.3,4.14,8.39,0.0558948,51,19,0.121781,-6.2,-6.6,0.133392,29.69,extrapolated,1154.2,141.9,degrades,stress_F
+F3,theta,g1,3.26,1.994,18.8,2.49,2.65,0.170598,554,76,1.32654,66.4,88.6,0.133392,29.69,extrapolated,1154.2,210.6,degrades,stress_F
+F4,levelC,g1,3.61,0.010,20.8,3.61,3.64,0.325623,111,83,0.383311,59.1,57.6,0.209681,1.41,interpolated,182.4,7.3,degrades,stress_F
+F2b,levelC,g1,4.27,0.229,12.0,4.16,3.99,0.175606,40,25,0.255415,5.2,5.2,0.0987364,14.48,extrapolated,223.4,32.1,degrades,stress_F
+G1a,levelC,g1,1.83,0.108,13.9,1.79,1.85,0.123399,115,34,0.874648,11.1,11.6,0.220113,7.56,interpolated,198.5,6.1,works,stress_G
+G1b,theta,g1,1.72,0.118,15.1,1.84,1.74,0.24497,137,40,1.09077,12.8,10.1,1.30815,6.36,interpolated,836.8,5.8,works,stress_G

@@ -1,0 +1,31 @@
+A1: baseline K1 (one flat crack, straight front)
+  half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.0910 6 1; T+-+ cut 1 0.2203 2 0; T--+ cut 3 0.0750 4 0; T++- cut 5 0.0778 5 1; T-+- cut 6 0.0181 7 1; T+-- cut 3 0.2605 5 0; T--- cut 1 0.0003 3 0;
+  sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 3.0e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.75e-06, ramp 3.45e-07 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 7.84e-06 over 48 samples
+  J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+  J 'levelC/cvSolid': Level C with a solid-angle control variate (a 12 x 12 flat rectangle behind the front, in xi): a code check, same answer within noise
+  GT: check 4's cached GT gate_cache\ref_check4_ring2_K1.bin (read-only; N = 25600, 4096 points per tet); GT solve 569.8 s, 0 capped, 0 escaped walks, mean length 46.2
+  checks: -
+
+E3: two crossing cracks (X junction)
+  A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 9 triangles in O, area 2.247635; cracks: A (through) (g = 1) B (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 2 0.1787 3 1; T-++ cut 4 0.3935 7 1; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 8 0.2608 10 0; T-+- cut 12 0.7447 13 1; T+-- cut 7 0.2605 8 0; T--- cut 4 0.1142 6 1;
+  sum of the tets' areas 2.247635167842 vs the walk crack's 2.247635167842 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.20e-07 over 336 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.11e-06 over 43 samples
+  J 'blend': Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B
+  GT: cached gate_cache\ref_stress_E3_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 247.9 s, 0 capped, 0 escaped walks, mean length 39.6
+  checks: -
+
+F2: crack 0.001 away from an interior face
+  plane m.X = m.c + 0.001, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid projected (t = 0.2460), crack on the side of the edge e_x-e_y
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.327618; cracks: F2 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2590 3 1; T-++ cut 2 0.0649 3 1; T+-+ cut 1 0.0037 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.327618357447 vs the walk crack's 0.327618357447 (rel. diff 8.5e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 5.95e-06 over 48 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 9.19e-06 over 6 samples
+  J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+  GT: cached gate_cache\ref_stress_F2_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 216.2 s, 0 capped, 0 escaped walks, mean length 58.7
+  checks: -
+

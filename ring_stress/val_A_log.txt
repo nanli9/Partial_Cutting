@@ -1,0 +1,112 @@
+--ring-stress: 2026-11-03 21:59:10; 16 hardware threads (TBB default arena)
+cases: A1 A2 A3
+output: ring_stress/val_A_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8,32/64/8,1024/256/16 (seed sets 3 for the first, timing repeats 3: median); direct N 256; points per tet 2048 (A1, A2, A3: check 4's 4096); GT N = 25600 in 64 batches, walk cap 65536; Zombie on none; validation on
+
+=== A1 (priority 1) ===
+A1: baseline K1 (one flat crack, straight front)
+  half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.0910 6 1; T+-+ cut 1 0.2203 2 0; T--+ cut 3 0.0750 4 0; T++- cut 5 0.0778 5 1; T-+- cut 6 0.0181 7 1; T+-- cut 3 0.2605 5 0; T--- cut 1 0.0003 3 0;
+  sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 3.0e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.75e-06, ramp 3.45e-07 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 7.84e-06 over 48 samples
+  J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+  J 'levelC/cvSolid': Level C with a solid-angle control variate (a 12 x 12 flat rectangle behind the front, in xi): a code check, same answer within noise
+  geometry built and checked in 0.00 s
+  GT: check 4's cached GT gate_cache\ref_check4_ring2_K1.bin (read-only; N = 25600, 4096 points per tet); original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  32453 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.2 s
+  GT noise floor (g = 1): H s.e. RMS 0.2500% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 15.30%; GT RMS 0.3000; energy 1.51176 +- 0.00746
+  GT noise floor (ramp): H s.e. RMS 0.0860% (max 0.1014%) of 2g; grad s.e. RMS / grad RMS 14.11%; GT RMS 0.1285; energy 0.21399 +- 0.00058
+  flat reproduction: the mesh GT code (N = 2560, new seeds, 37.7 s) vs check 4's cached GT:
+    g = 1 H: pooled z -1.50, |z| < 3 at 99.68% (32453 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +1.54 / +0.11 / -0.48 -> agree
+    ramp  H: pooled z -0.64, |z| < 3 at 99.68% (32453 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +1.84 / -0.19 / +0.26 -> agree
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     1.43    0.378    0.430 |   1.379   1.338   13.93 |   45.11   20.44 |   +1.02   0.71 | 0.1177 0.0063
+    ours Q32/R16/B8                levelC         ramp    1.43    0.378    0.430 |   1.224   1.217    6.65 |   65.51   34.46 |  +13.55   0.53 | 0.0833 0.0018
+    ours Q32/R16/B8                levelC/cvSolid g=1     1.43    0.378    0.430 |   1.380   1.342   13.91 |   42.27   20.26 |   +1.02   0.69 | 0.1181 0.0065
+    ours Q32/R16/B8 s1             levelC         g=1     1.43    0.382    0.430 |   1.388   1.351   14.14 |   51.07   19.44 |   +1.16   1.52 | 0.1132 0.0056
+    ours Q32/R16/B8 s1             levelC         ramp    1.43    0.382    0.430 |   1.209   1.202    6.72 |   70.35   35.87 |  +14.85   0.93 | 0.0846 0.0024
+    ours Q32/R16/B8 s1             levelC/cvSolid g=1     1.43    0.382    0.430 |   1.407   1.373   14.14 |   48.52   19.11 |   +1.12   1.72 | 0.1136 0.0055
+    ours Q32/R16/B8 s2             levelC         g=1     1.43    0.356    0.405 |   1.425   1.386   14.04 |   51.00   24.65 |   +2.86   2.05 | 0.1209 0.0083
+    ours Q32/R16/B8 s2             levelC         ramp    1.43    0.356    0.405 |   1.220   1.211    6.65 |   82.52   39.61 |  +17.79   4.55 | 0.0822 0.0031
+    ours Q32/R16/B8 s2             levelC/cvSolid g=1     1.43    0.356    0.405 |   1.428   1.392   14.04 |   48.49   24.00 |   +2.59   1.72 | 0.1215 0.0079
+    ours Q32/R64/B8                levelC         g=1     2.98    0.753    0.789 |   1.372   1.340   13.80 |   30.34   21.13 |   +1.96   0.53 | 0.1184 0.0061
+    ours Q32/R64/B8                levelC         ramp    2.98    0.753    0.789 |   1.218   1.213    6.74 |   43.32   35.26 |  +14.86   0.38 | 0.0841 0.0018
+    ours Q32/R64/B8                levelC/cvSolid g=1     2.98    0.753    0.789 |   1.367   1.335   13.78 |   30.08   21.21 |   +2.03   0.54 | 0.1180 0.0061
+    ours Q1024/R256/B16            levelC         g=1    37.35    9.119    9.209 |   1.382   1.359   13.87 |   27.18   21.28 |   +1.94   0.50 | 0.1232 0.0011
+    ours Q1024/R256/B16            levelC         ramp   37.35    9.119    9.209 |   1.230   1.227    6.75 |   39.62   35.55 |  +15.18   0.29 | 0.0848 0.0003
+    ours Q1024/R256/B16            levelC/cvSolid g=1    37.35    9.119    9.209 |   1.382   1.359   13.87 |   27.03   21.30 |   +1.93   0.50 | 0.1231 0.0011
+    direct N256/B16                -              g=1     8.31    3.973    3.980 |   2.507   0.000   10.98 |  159.29    0.00 |   +2.26  51.27 | 0.0698 0.0000
+    direct N256/B16                -              ramp    8.31    3.973    3.980 |   0.865   0.032    3.84 |  148.49   27.70 |   +5.97  33.27 | 0.0390 0.0000
+  case A1 done in 74.1 s
+
+=== A2 (priority 1) ===
+A2: baseline K2 (another flat crack, straight front)
+  half-plane n = normalize(0.3, -1, 0.6), d = -0.05, front direction (1, 0.4, 0), front at t = 0.3
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.276983; cracks: K2 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 2 0.0761 3 0; T+-+ - 0 0.0000 0 0; T--+ cut 2 0.0584 3 0; T++- - 0 0.0000 0 0; T-+- cut 1 0.0021 2 1; T+-- - 0 0.0000 0 0; T--- cut 3 0.1404 3 1;
+  sum of the tets' areas 0.276982727810 vs the walk crack's 0.276982727810 (rel. diff 2.0e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.57e-06, ramp 1.42e-07 over 66 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.85e-06 over 8 samples
+  J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+  geometry built and checked in 0.00 s
+  GT: check 4's cached GT gate_cache\ref_check4_ring2_K2.bin (read-only; N = 25600, 4096 points per tet); original run: 32270 points, 826112000 walks counted of 826112000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 60.0, 685.593 s
+  32263 points in the 8 tets + 7 probes; 4 tets cut; GT ready in 0.2 s
+  GT noise floor (g = 1): H s.e. RMS 0.3010% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 21.98%; GT RMS 0.1342; energy 0.89436 +- 0.00525
+  GT noise floor (ramp): H s.e. RMS 0.0780% (max 0.0829%) of 2g; grad s.e. RMS / grad RMS 18.76%; GT RMS 0.0464; energy 0.08599 +- 0.00036
+  flat reproduction: the mesh GT code (N = 2560, new seeds, 44.4 s) vs check 4's cached GT:
+    g = 1 H: pooled z +0.99, |z| < 3 at 99.70% (32263 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z -0.25 / -0.45 / +0.14 -> agree
+    ramp  H: pooled z +0.56, |z| < 3 at 99.73% (32263 points; 0 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.17 / -0.43 / +0.46 -> agree
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     1.02    0.192    0.224 |   1.827   1.763   11.75 |   54.60   28.59 |   +9.01   1.09 | 0.0577 0.0102
+    ours Q32/R16/B8                levelC         ramp    1.02    0.192    0.224 |   1.562   1.552    7.29 |  107.92   55.32 |  +36.53   4.43 | 0.1476 0.0032
+    ours Q32/R16/B8 s1             levelC         g=1     1.02    0.196    0.225 |   1.814   1.751   11.42 |   57.70   29.51 |   +8.93   1.31 | 0.0703 0.0103
+    ours Q32/R16/B8 s1             levelC         ramp    1.02    0.196    0.225 |   1.552   1.542    7.21 |  113.54   57.29 |  +39.48   2.83 | 0.1459 0.0037
+    ours Q32/R16/B8 s2             levelC         g=1     1.02    0.185    0.215 |   1.821   1.717   11.38 |   58.88   30.79 |   +9.81   1.58 | 0.0700 0.0164
+    ours Q32/R16/B8 s2             levelC         ramp    1.02    0.185    0.215 |   1.567   1.558    7.21 |  117.32   63.96 |  +47.22  15.03 | 0.1458 0.0037
+    ours Q32/R64/B8                levelC         g=1     2.57    0.424    0.451 |   1.857   1.799   11.09 |   40.41   29.73 |   +8.98   0.63 | 0.0732 0.0089
+    ours Q32/R64/B8                levelC         ramp    2.57    0.424    0.451 |   1.568   1.564    7.27 |   71.39   58.73 |  +40.37   0.67 | 0.1472 0.0022
+    ours Q1024/R256/B16            levelC         g=1    24.52    4.552    4.428 |   1.805   1.778   11.50 |   38.18   29.81 |   +9.00   0.60 | 0.0647 0.0023
+    ours Q1024/R256/B16            levelC         ramp   24.52    4.552    4.428 |   1.551   1.549    7.24 |   64.79   58.80 |  +39.99   0.48 | 0.1467 0.0006
+    direct N256/B16                -              g=1     8.26    4.375    4.381 |   3.022   0.000   12.23 |  229.66    0.00 |   -4.12  67.97 | 0.1417 0.0000
+    direct N256/B16                -              ramp    8.26    4.375    4.381 |   0.786   0.063    3.54 |  202.83   53.12 |  +23.38  59.19 | 0.0383 0.0000
+  case A2 done in 65.0 s
+
+=== A3 (priority 1) ===
+A3: flat complete cut (K3)
+  K1's plane cut all the way through O
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 6 triangles in O, area 1.427378; cracks: K3 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 3 0.3754 5 0; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 6 0.2021 7 0; T-+- cut 6 0.2938 7 0; T+-- cut 7 0.2605 8 0; T--- cut 1 0.0003 3 0;
+  sum of the tets' areas 1.427378288679 vs the walk crack's 1.427378288679 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.12e-08 over 234 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.30e-07 over 60 samples
+  J 'levelC': Level C with its front line 0.3 beyond O's section (the realistic J, check 4's K3); control variate J_xi
+  J 'indicator': the side indicator J = sign(n.X - d) (the exact answer); control variate: the same indicator in xi (R = 0)
+  geometry built and checked in 0.00 s
+  GT: check 4's cached GT gate_cache\ref_check4_ring2_K3.bin (read-only; N = 25600, 4096 points per tet); original run: 31980 points, 818688000 walks counted of 818688000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 459.217 s
+  31973 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 0.2 s
+  GT noise floor (g = 1): H s.e. RMS 0.0000% (max 0.0000%) of 2g; grad s.e. RMS / grad RMS 100.61%; GT RMS 0.5000; energy -0.00000 +- 0.00000
+  flat reproduction: the mesh GT code (N = 2560, new seeds, 39.6 s) vs check 4's cached GT:
+    g = 1 H: pooled z +0.00, |z| < 3 at 0.00% (0 points; 31973 with zero variance in both, max |dH| 0.0e+00); grad pooled z +0.00 / +0.00 / +0.00 -> agree
+  exact check: GT solver at N = 256: 0 of 31980 points differ from the exact +-1 (max |dH| 0.0e+00), 0 capped, 0 escaped walks
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     1.40    0.357    0.392 |   1.112   1.111   10.67 |     nan     nan |    +nan    nan | 0.2271 0.0012
+    ours Q32/R16/B8                indicator      g=1     1.40    0.357    0.392 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+    ours Q32/R16/B8 s1             levelC         g=1     1.40    0.365    0.399 |   1.110   1.109   10.64 |     nan     nan |    +nan    nan | 0.2267 0.0012
+    ours Q32/R16/B8 s1             indicator      g=1     1.40    0.365    0.399 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+    ours Q32/R16/B8 s2             levelC         g=1     1.40    0.382    0.413 |   1.108   1.107   10.65 |     nan     nan |    +nan    nan | 0.2268 0.0014
+    ours Q32/R16/B8 s2             indicator      g=1     1.40    0.382    0.413 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+    ours Q32/R64/B8                levelC         g=1     2.94    0.729    0.762 |   1.113   1.113   10.69 |     nan     nan |    +nan    nan | 0.2278 0.0005
+    ours Q32/R64/B8                indicator      g=1     2.94    0.729    0.762 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+    ours Q1024/R256/B16            levelC         g=1    36.73    9.231    9.203 |   1.111   1.111   10.66 |     nan     nan |    +nan    nan | 0.2271 0.0002
+    ours Q1024/R256/B16            indicator      g=1    36.73    9.231    9.203 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+    direct N256/B16                -              g=1     8.19    4.035    4.039 |   0.000   0.000    0.00 |     nan     nan |    +nan    nan | 0.0000 0.0000
+  case A3 done in 79.7 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  A1   baseline K1 (one flat crack, straight front)         levelC            1.388    14.04   0.1177    51.00    0.430    1.382     7.624 works
+  A1   baseline K1 (one flat crack, straight front)         levelC/cvSolid    1.407    14.04   0.1181    48.49    0.430    1.382     7.624 works
+  A2   baseline K2 (another flat crack, straight front)     levelC            1.821    11.42   0.0700    57.70    0.224    1.805    13.373 works
+  A3   flat complete cut (K3)                               levelC            1.110    10.65   0.2268      nan    0.392    1.111     0.000 works
+  A3   flat complete cut (K3)                               indicator         0.000     0.00   0.0000      nan    0.392    0.000     0.000 works (exact to round-off)
+
+--ring-stress total 218.8 s; 40 rows in ring_stress/val_A_rows.csv

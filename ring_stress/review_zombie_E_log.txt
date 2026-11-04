@@ -1,0 +1,91 @@
+--ring-stress: 2026-11-03 22:50:26; 16 hardware threads (TBB default arena)
+cases: E1 E3 D3
+output: ring_stress/review_zombie_E_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 8/8/4 (seed sets 1 for the first, timing repeats 1: median); direct N 16; points per tet 256 (A1, A2, A3: check 4's 4096); GT N = 2560 in 64 batches, walk cap 65536; Zombie on E1,E3,D3; validation on; points within 0.01 sqrt(2) of a crack left out; GT cache off
+
+=== E1 (priority 1) ===
+E1: two parallel cracks with opposite fronts (strengths 1 and 0.5)
+  crack a: n1.X = -0.14, front direction (0, 1, 0), t = 0.65, g = 1; crack b: n1.X = 0.30, front direction (0, -1, 0), t = 0.6, g = 0.5; errors / (2 max g) = / 2
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 8 triangles in O, area 1.714556; cracks: a (g = 1) b (g = 0.5)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 4 0.2806 5 1; T-++ cut 7 0.1718 9 1; T+-+ cut 1 0.0734 3 0; T--+ cut 3 0.2765 5 0; T++- cut 4 0.2952 6 1; T-+- cut 9 0.1857 10 1; T+-- cut 3 0.2122 5 0; T--- cut 5 0.2193 7 0;
+  sum of the tets' areas 1.714555936638 vs the walk crack's 1.714555936638 (rel. diff 2.6e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.02e-06, ramp 1.35e-07 over 300 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.61e-06 over 36 samples
+  J 'blend': Shepard blend (weights 1/d_j^2) of the cracks' Level C functions (x g_j), and of their ramps; control variate J_xi,a + 0.5 J_xi,b
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 64: 7158 points, 458112 walks counted of 458112, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.5, 0.226 s -> extrapolated to N = 2560: 9 s
+  GT run: 7158 points, 18324480 walks counted of 18324480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 40.6, 9.450 s
+  7151 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 9.7 s
+  GT noise floor (g = 1): H s.e. RMS 0.5564% (max 0.9704%) of 2g; grad s.e. RMS / grad RMS 24.41%; GT RMS 0.3136; energy 2.40069 +- 0.02763
+  GT noise floor (ramp): H s.e. RMS 0.2215% (max 0.3089%) of 2g; grad s.e. RMS / grad RMS 23.67%; GT RMS 0.1602; energy 0.40583 +- 0.00449
+  Zombie cross-check (float; 97558 points, 13115388 walks counted of 13115392, 4 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 43.7, 24.296 s; 24.3 s): H at 7150 points, N = 1024: |z| < 3 at 99.68%, pooled z -0.66; grad at 5650 points (16 x 64 walks, 0 not finite): pooled z +1.18 / -1.28 / +0.17 -> agree
+    near a crack (0.1)             5187 points: pooled z -0.75, mean z^2 1.039 (0.021), RMS discrepancy beyond noise 1.1e-03 (bound 2.2e-03)
+    near a front (0.1)             1457 points: pooled z -2.00, mean z^2 1.023 (0.038), RMS discrepancy beyond noise 2.3e-03 (bound 4.2e-03)
+    near interior faces (0.1)      5264 points: pooled z +0.76, mean z^2 1.038 (0.020), RMS discrepancy beyond noise 1.1e-03 (bound 2.2e-03)
+    near the junction (0.1)           0 points: pooled z +0.00, mean z^2 0.000 (0.000), RMS discrepancy beyond noise 0.0e+00 (bound 0.0e+00)
+    vertex probes                     7 points: pooled z -0.69, mean z^2 0.862 (0.289), RMS discrepancy beyond noise 0.0e+00 (bound 5.8e-03)
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q8/R8/B4                  blend          g=1     0.11    0.034    0.047 |   4.420   2.340   24.35 |  252.17    0.00 |  -17.19  84.93 | 0.3086 0.1861
+    ours Q8/R8/B4                  blend          ramp    0.11    0.034    0.047 |   3.200   1.970   11.85 |  465.42    0.00 | -108.54 280.40 | 0.1810 0.1273
+    direct N16/B8                  -              g=1     0.11    0.067    0.070 |   7.061   0.000   34.60 |  390.43    0.00 | -315.23 199.20 | 0.2445 0.0000
+    direct N16/B8                  -              ramp    0.11    0.067    0.070 |   2.757   0.000    9.93 |  407.35   67.48 |  +71.99 224.87 | 0.1097 0.0000
+  case E1 done in 34.3 s
+
+=== E3 (priority 1) ===
+E3: two crossing cracks (X junction)
+  A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 9 triangles in O, area 2.247635; cracks: A (through) (g = 1) B (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 2 0.1787 3 1; T-++ cut 4 0.3935 7 1; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 8 0.2608 10 0; T-+- cut 12 0.7447 13 1; T+-- cut 7 0.2605 8 0; T--- cut 4 0.1142 6 1;
+  sum of the tets' areas 2.247635167842 vs the walk crack's 2.247635167842 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.20e-07 over 336 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.11e-06 over 43 samples
+  J 'blend': Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 64: 6633 points, 424512 walks counted of 424512, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.4, 0.245 s -> extrapolated to N = 2560: 10 s
+  GT run: 6633 points, 16980480 walks counted of 16980480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 38.4, 9.596 s
+  6626 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 9.9 s
+  GT noise floor (g = 1): H s.e. RMS 0.6144% (max 0.9884%) of 2g; grad s.e. RMS / grad RMS 20.67%; GT RMS 0.3917; energy 5.42474 +- 0.07974
+  Zombie cross-check (float; 86841 points, 11925504 walks counted of 11925504, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 41.1, 23.820 s; 23.8 s): H at 6495 points, N = 1024: |z| < 3 at 99.38%, pooled z +2.06; grad at 5013 points (16 x 64 walks, 0 not finite): pooled z +0.54 / -0.00 / +1.09 -> agree
+    near a crack (0.1)             4962 points: pooled z +1.88, mean z^2 1.089 (0.023), RMS discrepancy beyond noise 1.5e-03 (bound 2.8e-03)
+    near a front (0.1)              633 points: pooled z +0.83, mean z^2 1.081 (0.067), RMS discrepancy beyond noise 3.9e-03 (bound 6.8e-03)
+    near interior faces (0.1)      4752 points: pooled z +1.41, mean z^2 1.063 (0.023), RMS discrepancy beyond noise 2.1e-04 (bound 2.4e-03)
+    near the junction (0.1)         187 points: pooled z -1.52, mean z^2 0.926 (0.087), RMS discrepancy beyond noise 0.0e+00 (bound 5.7e-03)
+    vertex probes                     7 points: pooled z +0.54, mean z^2 1.636 (0.956), RMS discrepancy beyond noise 0.0e+00 (bound 8.7e-03)
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q8/R8/B4                  blend          g=1     0.11    0.034    0.039 |   6.987   0.000   34.78 |  296.96    0.00 |  +29.26 136.01 | 0.3913 0.5641
+    plain Q2560/R2560/B64          blend          g=1    33.93   10.075   10.103 |   4.579   4.530   22.14 |   43.02   32.13 |  +14.77   1.86 | 0.2323 0.0084
+  control-variate check: H0 (g = 1, J 'blend'): plain N = 2560 vs control variate Q32/R256: value pooled z +0.16 (|z| < 3 at 99.61%, mean z^2 1.045), grad pooled z +0.68 / +1.21 / -1.13 -> agree
+    direct N16/B8                  -              g=1     0.11    0.062    0.063 |   8.051   1.456   38.63 |  519.31  362.47 | +1306.58 1343.02 | 0.2156 0.0000
+  case E3 done in 44.6 s
+
+=== D3 (priority 1) ===
+D3: kinked crack (two flat pieces at 40 degrees)
+  facet 1 = K1's plane behind the kink line u1.X = -0.12026 (t = 0.4); facet 2 turned 40 degrees towards +n1, front 0.3 beyond the kink
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 28 triangles in O, area 0.957788; cracks: kink (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 8 0.1442 7 2; T-++ cut 11 0.0728 12 0; T+-+ cut 15 0.2203 13 0; T--+ cut 13 0.0728 12 0; T++- cut 18 0.1882 14 3; T-+- cut 3 0.0008 5 0; T+-- cut 23 0.2584 20 0; T--- cut 1 0.0003 3 0;
+  sum of the tets' areas 0.957788399780 vs the walk crack's 0.957788399780 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 2.51e-06 over 516 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 4.09e-06 over 92 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the kinked surface (facet 2 continued), psi = u2.X - s_front; control variate H1 + Hf - Hl: three half-plane theta/pi terms in xi (exact, jump 2)
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 64: 5018 points, 321152 walks counted of 321152, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 41.3, 0.248 s -> extrapolated to N = 2560: 10 s
+  GT run: 5018 points, 12846080 walks counted of 12846080, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 41.3, 9.725 s
+  5011 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 10.0 s
+  GT noise floor (g = 1): H s.e. RMS 0.5958% (max 0.9884%) of 2g; grad s.e. RMS / grad RMS 38.93%; GT RMS 0.3990; energy 1.05178 +- 0.04780
+  Zombie cross-check (float; 69034 points, 9235455 walks counted of 9235456, 1 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 45.8, 21.863 s; 21.9 s): H at 5017 points, N = 1024: |z| < 3 at 99.58%, pooled z -2.02; grad at 4001 points (16 x 64 walks, 0 not finite): pooled z -1.06 / +1.88 / +0.25 -> agree
+    near a crack (0.1)             3338 points: pooled z -0.85, mean z^2 1.013 (0.027), RMS discrepancy beyond noise 6.2e-04 (bound 2.4e-03)
+    near a front (0.1)              671 points: pooled z -1.03, mean z^2 1.039 (0.056), RMS discrepancy beyond noise 3.2e-03 (bound 6.0e-03)
+    near interior faces (0.1)      3603 points: pooled z -1.37, mean z^2 0.989 (0.024), RMS discrepancy beyond noise 0.0e+00 (bound 2.2e-03)
+    near the junction (0.1)           0 points: pooled z +0.00, mean z^2 0.000 (0.000), RMS discrepancy beyond noise 0.0e+00 (bound 0.0e+00)
+    vertex probes                     7 points: pooled z -1.72, mean z^2 1.513 (0.952), RMS discrepancy beyond noise 7.5e-03 (bound 1.6e-02)
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q8/R8/B4                  theta          g=1     0.08    0.035    0.040 |   2.901   2.267   18.15 |  102.26   15.14 |   +4.15  11.94 | 0.0792 0.1052
+    plain Q2560/R2560/B64          theta          g=1    25.66   10.431   10.454 |   2.338   2.254   17.82 |   52.58   28.71 |  +10.13   4.71 | 0.0642 0.0065
+  control-variate check: H0 (g = 1, J 'theta'): plain N = 2560 vs control variate Q32/R256: value pooled z -0.25 (|z| < 3 at 99.65%, mean z^2 1.032), grad pooled z -0.11 / +1.99 / -0.67 -> agree
+    direct N16/B8                  -              g=1     0.08    0.060    0.060 |   7.634   1.643   41.84 |  653.25    0.00 |  -22.97 1313.91 | 0.3453 0.0000
+  case D3 done in 43.2 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  E1   two parallel cracks with opposite fronts (strengths  blend             4.420    24.35   0.3086   252.17    0.047    4.420     8.620 degrades
+  E3   two crossing cracks (X junction)                     blend             6.987    34.78   0.3913   296.96    0.039    6.987    10.240 fails
+  D3   kinked crack (two flat pieces at 40 degrees)         theta             2.901    18.15   0.0792   102.26    0.040    2.901     9.413 degrades
+
+--ring-stress total 122.1 s; 10 rows in ring_stress/review_zombie_E_rows.csv

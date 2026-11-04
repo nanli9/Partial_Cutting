@@ -476,3 +476,110 @@ WalkProfile profileWalks(const Tet* tet, const ConvexDomain* dom, const StripCut
 // per point), with runWalk (lean = false) or the lean step function of WalkProfile; *moves: the walks' moves in all.
 double timeWalksParallel(const Tet* tet, const ConvexDomain* dom, const StripCut& cut, const QueryPoints& pts, int nWalks,
                          const WalkParams& wp, bool lean, long long* moves);
+
+// =====================================================================================
+// General crack geometry (opt-in: --ring-stress only; nothing above uses it)
+// =====================================================================================
+// One or several cracks as ONE triangle mesh, the same for every method of the ring stress test (the GT and the direct
+// solve on O in X, our per-tet solves in each tet's xi frame after clipping and the affine pull-back): every triangle is
+// wound so that (b - a) x (c - a) points to its +g side, and carries the id of its crack and a flag per edge (the crack
+// front, an edge on a face of O, an edge on a tet face: the crack-face lines). Closest point: a binary AABB tree (median
+// split of the centroids along the box's longest axis, leaves of <= 4 triangles), Ericson's closest point on a triangle in
+// double, iterative traversal with the nearer child first. A box is skipped only if its squared distance exceeds the best
+// so far by a relative 1e-12, and triangles compare by (d2, index) as StripCut does, so the result is the brute-force
+// result bit for bit whatever the traversal (checked by --ring-stress --selftest).
+class CrackMesh {
+public:
+    struct Tri {
+        Vec3 a = Vec3::Zero(), b = Vec3::Zero(), c = Vec3::Zero();
+        Vec3 n = Vec3::Zero();         // unit normal of (b - a) x (c - a), the +g side (kept through clipping, mapped by A^-T)
+        int crack = 0;                 // the id of the crack the triangle belongs to
+        uint8_t edge[3] = {0, 0, 0};   // flags of the edges a->b, b->c, c->a (kEdge*)
+    };
+    static constexpr uint8_t kEdgeFront = 1, kEdgeDomain = 2, kEdgeTet = 4;   // crack front; on a face of O; on a tet face
+    struct Hit {
+        double d2 = std::numeric_limits<double>::infinity();
+        int tri = -1;
+        Vec3 q = Vec3::Zero();         // the closest point
+    };
+
+    CrackMesh() = default;
+    // the triangles as given (their normals computed when n is zero), and the tree
+    explicit CrackMesh(std::vector<Tri> tris);
+    const std::vector<Tri>& tris() const { return tris_; }
+    const Tri& tri(int t) const { return tris_[size_t(t)]; }
+    size_t size() const { return tris_.size(); }
+    bool empty() const { return tris_.empty(); }
+    // hint (optional): a triangle tried first (the walk's previous closest one); it only tightens the pruning, the result is
+    // the same with any hint
+    Hit closest(const Vec3& x, int hint = -1) const;
+    Hit closestBruteForce(const Vec3& x) const;
+    // +1 if x lies on the + side of the closest triangle (n_t.(x - q) >= 0, a tie counts as +), else -1
+    int side(const Hit& h, const Vec3& x) const { return tris_[size_t(h.tri)].n.dot(x - h.q) >= 0 ? 1 : -1; }
+    double distance(const Vec3& x) const;
+    double signedDistance(const Vec3& x) const;   // + on the closest triangle's + side
+    double area() const;
+    int nodes() const { return int(nodes_.size()); }
+    // Every triangle clipped to the half-spaces n_p.x <= c_p (Sutherland-Hodgman, edge flags inherited, new edges on plane
+    // p flagged planeFlag[p]), each convex piece fanned; pieces of area <= minArea dropped; normals and crack ids kept.
+    CrackMesh clipped(const std::vector<Vec3>& n, const std::vector<double>& c, const std::vector<uint8_t>& planeFlag,
+                      double minArea) const;
+    // x -> A x + b (det A > 0: orientation kept); normals mapped by A^-T
+    CrackMesh mapped(const Eigen::Matrix3d& A, const Vec3& b) const;
+    // one convex polygon (p, flag of the edge from p to the next) clipped to n.x <= c, new edges flagged newFlag
+    static void clipPolygon(std::vector<Vec3>& p, std::vector<uint8_t>& f, const Vec3& n, double c, uint8_t newFlag);
+    // a convex polygon fanned into triangles (edge flags from f, diagonals 0), area <= minArea dropped, appended to out
+    static void fanPolygon(const std::vector<Vec3>& p, const std::vector<uint8_t>& f, int crack, const Vec3& nParent,
+                           double minArea, std::vector<Tri>& out);
+    // Ericson's closest point on a triangle and its squared distance, from the precomputed edges and their dot products
+    struct TriPre {
+        Vec3 a, b, c, ab, ac;
+        double abab = 0, abac = 0, acac = 0;
+    };
+    static TriPre pre(const Tri& t);
+    static double triDist2(const TriPre& t, const Vec3& x, Vec3& q);
+
+private:
+    // a node's box in its own orthonormal frame e[0], e[1], e[2] (e[2] = the mean normal of its triangles when they agree,
+    // else the coordinate axes): tight around flat and gently curved patches, where an axis-aligned box of a slanted patch
+    // is as thick as it is wide; padded by 1e-12 so that it contains its triangles despite rounding
+    struct Node {
+        Vec3 e[3];
+        double lo[3], hi[3];
+        int left = -1, right = -1, first = 0, count = 0;   // inner: children; leaf: order_[first, first + count)
+    };
+    static double nodeDist2(const Node& nd, const Vec3& x);
+    int build(std::vector<int>& idx, int first, int count, const std::vector<Vec3>& cen);
+    std::vector<Tri> tris_;
+    std::vector<TriPre> pre_;
+    std::vector<Node> nodes_;
+    std::vector<int> order_;
+};
+
+// Walks with a CrackMesh as the crack: the lean step function (runWalkLean) with the mesh's closest point and the side of
+// the closest triangle, on a tet (the per-tet solves: faces as WalkParams::faceBC, all Dirichlet in the ring path) or on a
+// convex polyhedron (the ring GT and direct solve: every face Neumann, mirror first ball). Gradient first ball, mirror
+// balls (even across Neumann faces, odd across Dirichlet faces with the data's harmonic extension) and the scoring of K
+// data are solveMultiLeanJobs', so the sums have the MultiSums layout of every other solve.
+struct MeshTerminal {
+    WalkStatus status = WalkStatus::Landed;
+    int face = -1;               // landed on Dirichlet face 'face' (x = the end point projected onto its plane); -1: on the crack
+    int side = 0;                // on the crack: +1 / -1, decided at the walk's last position by the closest triangle's normal
+    int crack = -1, tri = -1;    // on the crack: the closest triangle and its crack id
+    Vec3 x = Vec3::Zero();       // the closest point of the crack, or the end point projected onto the face
+    Vec3 xEnd = Vec3::Zero();    // the walk's last position (within the stop distance of x)
+};
+using MeshTerminalValues = std::function<void(const MeshTerminal&, double* u)>;
+struct MeshJob {
+    const Tet* tet = nullptr;             // the domain: a tet, or
+    const ConvexDomain* dom = nullptr;    // a convex polyhedron with Neumann faces; exactly one of them
+    const CrackMesh* mesh = nullptr;      // the crack (may be empty on a tet with a Dirichlet face)
+    const QueryPoints* pts = nullptr;
+    int nWalks = 0, nBatches = 1, K = 0;  // K <= 16
+    WalkParams wp;                        // faceBC, absorbShellRel (x the domain's L), maxWalkLength, mirror flags
+    MeshTerminalValues values;
+    const HarmonicExtension* ext = nullptr;
+};
+// One parallel loop over the points of all jobs (one task per point, walks in walk order, the same seeds and sums layout as
+// solveMulti). A job whose mesh is empty and that has no Dirichlet face runs no walks (stats noCut, sums 0).
+std::vector<MultiSums> solveMultiMeshJobs(const std::vector<MeshJob>& jobs, std::vector<SolveStats>* stats);

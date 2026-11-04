@@ -1,0 +1,20 @@
+D4: wavy crack (sine wave, amplitude 0.1, wavelength 1)
+  K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/1 + phase) (smallest radius of curvature 0.253, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.025 along w1
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 217 triangles in O, area 0.806484; cracks: wave (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 78 0.0306 80 0; T-++ cut 137 0.0737 107 31; T+-+ cut 186 0.2308 175 0; T--+ cut 126 0.0653 126 0; T++- cut 128 0.0874 102 28; T-+- cut 42 0.0254 33 11; T+-- cut 193 0.2676 189 0; T--- cut 49 0.0258 51 0;
+  sum of the tets' areas 0.806484064124 vs the walk crack's 0.806484064124 (rel. diff 1.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.52e-06 over 5178 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.72e-05 over 939 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_D4_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 835.6 s, 0 capped, 0 escaped walks, mean length 46.1
+  checks: -
+
+D5: strongly wavy crack (sine wave, amplitude 0.1, wavelength 0.6)
+  K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/0.6 + phase) (smallest radius of curvature 0.091, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.015 along w1
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 362 triangles in O, area 0.926848; cracks: wave (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 106 0.0318 103 7; T-++ cut 238 0.0772 195 47; T+-+ cut 321 0.2377 294 0; T--+ cut 267 0.1292 269 0; T++- cut 194 0.0896 151 43; T-+- cut 48 0.0215 38 12; T+-- cut 282 0.3204 266 0; T--- cut 57 0.0195 59 0;
+  sum of the tets' areas 0.926848230171 vs the walk crack's 0.926848230171 (rel. diff 2.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.38e-05 over 8230 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.37e-05 over 1511 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_D5_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 1201.8 s, 0 capped, 0 escaped walks, mean length 46.3
+  checks: Zombie agrees (H pooled z +0.44, |z| < 3 at 99.36%; grad pooled z -0.10/-1.67/+2.64); 
+

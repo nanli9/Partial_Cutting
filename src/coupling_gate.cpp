@@ -6324,9 +6324,11 @@ RingView gateRingViewFast(const RingViewParams& p, std::atomic<int>* progress); 
 // The interactive view of check 4: the configuration's per-tet runs and reference as in runRingConfig (the same seeds,
 // so the check's own setting reproduces gate_report.md), at the sample density and walk counts asked for. Walks per
 // point are rounded to whole batches: 64 batches from 1280 walks up (the check's), else 16, at least 4 walks per batch.
-// p.fast: the fast method instead (gateRingViewFast); everything below is the default path.
+// p.stressCase: that --ring-stress case instead (stressRingView); p.fast: the fast method instead (gateRingViewFast);
+// everything below is the default path.
 RingView gateRingView(const RingViewParams& p, std::atomic<int>* progress)
 {
+    if (!p.stressCase.empty()) return stressRingView(p.stressCase, p.pointsPerTet, p.walksTet, p.walksR, p.walksRef, p.geometryOnly);
     if (p.fast) return gateRingViewFast(p, progress);
     if (p.ring != 1 && p.ring != 2) throw std::invalid_argument("ring view: ring 1 or 2");
     if (p.crack < 0 || p.crack > 2) throw std::invalid_argument("ring view: crack 0, 1 or 2 (K1, K2, K3)");
@@ -9145,4 +9147,3065 @@ bool runRingBench(const RingBenchParams& bp)
         f << out.text;
     }
     return true;
+}
+
+// =====================================================================================
+// --ring-stress: the nodal ring under other crack types (complete, curved, kinked, several cracks), our per-tet method
+// against the GT (one solve on O), with ONE crack representation for both: a triangle mesh (CrackMesh, walk_cache.h)
+// =====================================================================================
+// Opt-in: nothing here is called by any existing mode. It reads check 4's caches in gate_cache/ read-only (A1, A2, A3),
+// writes its own GT caches there under new names (ref_stress_*.bin; never a name starting with ref_check), and its
+// outputs into ring_stress/. Every per-tet solve stays in the tet's own xi frame on the reference tet (Delta_xi H = 0):
+// the crack mesh in X is clipped to O, each tet's part is mapped into xi by xi = J^-1 (X - X0) and clipped to the
+// reference tet; the face data are physical functions evaluated at X = X0 + J xi.
+#include <map>
+#include <memory>
+#include <set>
+
+#include "oneapi/tbb/global_control.h"
+
+namespace {
+
+constexpr double kPi = std::numbers::pi;
+
+// ---- the solid angle of an oriented triangle mesh ----
+// omega(x): Van Oosterom-Strackee per triangle, signed so that it tends to +2 pi on the + side ((b - a) x (c - a)) of a
+// flat triangle; harmonic off the mesh, jump 4 pi across it. grad(x): Biot-Savart over the boundary edges (interior
+// edges cancel), checked against finite differences by the self-test.
+struct SolidAngleMesh {
+    std::vector<Vec3> V;
+    std::vector<std::array<int, 3>> F;
+    std::vector<std::array<int, 2>> E;   // boundary edges, oriented as in their triangle
+    bool flat = false;                   // all triangles in one plane: the one-sided limits are exactly +-2 pi
+    bool empty() const { return F.empty(); }
+    void findBoundary()
+    {
+        std::map<std::pair<int, int>, std::pair<int, std::array<int, 2>>> cnt;
+        for (const auto& f : F)
+            for (int k = 0; k < 3; k++) {
+                const int a = f[size_t(k)], b = f[size_t((k + 1)%3)];
+                auto& e = cnt[{std::min(a, b), std::max(a, b)}];
+                e.first++;
+                e.second = {a, b};
+            }
+        E.clear();
+        for (const auto& kv : cnt)
+            if (kv.second.first == 1) E.push_back(kv.second.second);
+    }
+    SolidAngleMesh mapped(const Eigen::Matrix3d& A, const Vec3& b) const
+    {
+        SolidAngleMesh m = *this;
+        for (Vec3& v : m.V) v = A*v + b;
+        return m;
+    }
+    double omega(const Vec3& x) const
+    {
+        double s = 0;
+        for (const auto& f : F) {
+            const Vec3 r1 = V[size_t(f[0])] - x, r2 = V[size_t(f[1])] - x, r3 = V[size_t(f[2])] - x;
+            const double l1 = r1.norm(), l2 = r2.norm(), l3 = r3.norm();
+            const double N = r1.dot(r2.cross(r3));
+            const double D = l1*l2*l3 + r1.dot(r2)*l3 + r1.dot(r3)*l2 + r2.dot(r3)*l1;
+            s += std::atan2(N, D);
+        }
+        return -2.0*s;
+    }
+    Vec3 grad(const Vec3& x) const
+    {
+        Vec3 g = Vec3::Zero();
+        for (const auto& e : E) {
+            const Vec3 r1 = V[size_t(e[0])] - x, r2 = V[size_t(e[1])] - x;
+            const double l1 = r1.norm(), l2 = r2.norm();
+            g += r1.cross(r2)*((l1 + l2)/(l1*l2*(l1*l2 + r1.dot(r2))));
+        }
+        return -g;
+    }
+};
+
+// ---- an indexed triangle mesh and its conversion to crack triangles ----
+struct IMesh {
+    std::vector<Vec3> V;
+    std::vector<std::array<int, 3>> F;
+    std::set<std::pair<int, int>> front;   // undirected front edges (vertex ids)
+    void orient(const std::function<Vec3(const Vec3& centroid)>& plusDir)   // wind every triangle towards plusDir
+    {
+        for (auto& f : F) {
+            const Vec3 a = V[size_t(f[0])], b = V[size_t(f[1])], c = V[size_t(f[2])];
+            if ((b - a).cross(c - a).dot(plusDir((a + b + c)/3.0)) < 0) std::swap(f[1], f[2]);
+        }
+    }
+    Vec3 centroid(const std::array<int, 3>& f) const { return (V[size_t(f[0])] + V[size_t(f[1])] + V[size_t(f[2])])/3.0; }
+};
+std::vector<CrackMesh::Tri> crackTris(const IMesh& m, const std::vector<int>& faces, int crack)
+{
+    std::vector<CrackMesh::Tri> out;
+    for (int fi : faces) {
+        const auto& f = m.F[size_t(fi)];
+        CrackMesh::Tri t;
+        t.a = m.V[size_t(f[0])];
+        t.b = m.V[size_t(f[1])];
+        t.c = m.V[size_t(f[2])];
+        t.crack = crack;
+        for (int k = 0; k < 3; k++) {
+            const int a = f[size_t(k)], b = f[size_t((k + 1)%3)];
+            if (m.front.count({std::min(a, b), std::max(a, b)})) t.edge[k] = CrackMesh::kEdgeFront;
+        }
+        out.push_back(t);
+    }
+    return out;
+}
+std::vector<int> allFaces(const IMesh& m)
+{
+    std::vector<int> f(m.F.size());
+    for (size_t i = 0; i < f.size(); i++) f[i] = int(i);
+    return f;
+}
+SolidAngleMesh solidOf(const IMesh& m, const std::vector<int>& faces, bool flat)
+{
+    SolidAngleMesh s;
+    std::map<int, int> remap;
+    for (int fi : faces) {
+        std::array<int, 3> g{};
+        for (int k = 0; k < 3; k++) {
+            const int v = m.F[size_t(fi)][size_t(k)];
+            auto it = remap.find(v);
+            if (it == remap.end()) {
+                it = remap.emplace(v, int(s.V.size())).first;
+                s.V.push_back(m.V[size_t(v)]);
+            }
+            g[size_t(k)] = it->second;
+        }
+        s.F.push_back(g);
+    }
+    s.flat = flat;
+    s.findBoundary();
+    return s;
+}
+
+// zipper triangulation between two closed rings (vertex ids and their angles in [0, 2 pi), ascending from 0)
+void zipRings(const std::vector<int>& A, const std::vector<double>& aa, const std::vector<int>& B, const std::vector<double>& ab,
+              std::vector<std::array<int, 3>>& F)
+{
+    const size_t ma = A.size(), mb = B.size();
+    if (ma == 1) {
+        for (size_t j = 0; j < mb; j++) F.push_back({A[0], B[j], B[(j + 1)%mb]});
+        return;
+    }
+    if (mb == 1) {
+        for (size_t i = 0; i < ma; i++) F.push_back({A[i], B[0], A[(i + 1)%ma]});
+        return;
+    }
+    size_t i = 0, j = 0;
+    while (i < ma || j < mb) {
+        const double ta = i + 1 < ma ? aa[i + 1] : 2*kPi + aa[0], tb = j + 1 < mb ? ab[j + 1] : 2*kPi + ab[0];
+        if (i < ma && (j >= mb || ta <= tb)) {
+            F.push_back({A[i%ma], B[j%mb], A[(i + 1)%ma]});
+            i++;
+        } else {
+            F.push_back({A[i%ma], B[j%mb], B[(j + 1)%mb]});
+            j++;
+        }
+    }
+}
+
+// a unit vector orthogonal to a (deterministic)
+Vec3 orthoOf(const Vec3& a)
+{
+    const Vec3 t = std::fabs(a.x()) < 0.6 ? Vec3(1, 0, 0) : Vec3(0, 1, 0);
+    return (t - t.dot(a)*a).normalized();
+}
+
+// Flat disk (centre, unit normal n, radius rho): nRings concentric rings, the outer one (the front) with nFront vertices;
+// every triangle wound towards +n; the front edges flagged
+IMesh diskMesh(const Vec3& centre, const Vec3& n, double rho, int nFront, int nRings)
+{
+    IMesh m;
+    const Vec3 e1 = orthoOf(n), e2 = n.cross(e1);
+    m.V.push_back(centre);
+    std::vector<int> prev = {0};
+    std::vector<double> prevA = {0.0};
+    for (int k = 1; k <= nRings; k++) {
+        const double r = rho*double(k)/double(nRings);
+        const int cnt = k == nRings ? nFront : std::max(6, int(std::lround(double(nFront)*double(k)/double(nRings))));
+        std::vector<int> ring;
+        std::vector<double> ang;
+        for (int j = 0; j < cnt; j++) {
+            const double t = 2*kPi*double(j)/double(cnt);
+            ring.push_back(int(m.V.size()));
+            ang.push_back(t);
+            m.V.push_back(centre + r*(std::cos(t)*e1 + std::sin(t)*e2));
+        }
+        zipRings(prev, prevA, ring, ang, m.F);
+        if (k == nRings)
+            for (int j = 0; j < cnt; j++) {
+                const int a = ring[size_t(j)], b = ring[size_t((j + 1)%cnt)];
+                m.front.insert({std::min(a, b), std::max(a, b)});
+            }
+        prev = ring;
+        prevA = ang;
+    }
+    m.orient([n](const Vec3&) { return n; });
+    return m;
+}
+// the fan of the disk's front polygon (the same flat region as diskMesh's): the solid-angle mesh
+SolidAngleMesh diskFan(const Vec3& centre, const Vec3& n, double rho, int nFront)
+{
+    SolidAngleMesh s;
+    const Vec3 e1 = orthoOf(n), e2 = n.cross(e1);
+    s.V.push_back(centre);
+    for (int j = 0; j < nFront; j++) {
+        const double t = 2*kPi*double(j)/double(nFront);
+        s.V.push_back(centre + rho*(std::cos(t)*e1 + std::sin(t)*e2));   // the same expression as diskMesh's front ring
+    }
+    for (int j = 0; j < nFront; j++) {
+        std::array<int, 3> f = {0, 1 + j, 1 + (j + 1)%nFront};
+        const Vec3 a = s.V[0], b = s.V[size_t(f[1])], c = s.V[size_t(f[2])];
+        if ((b - a).cross(c - a).dot(n) < 0) std::swap(f[1], f[2]);
+        s.F.push_back(f);
+    }
+    s.flat = true;
+    s.findBoundary();
+    return s;
+}
+
+// Sphere (centre cs, radius R) as latitude-longitude rings about 'axis', with one ring exactly at cos(polar) = cosFront
+// (the front ring, its edges flagged); ring spacing h where the ring comes within rFine of the origin, hCoarse elsewhere;
+// wound outwards
+IMesh sphereMesh(const Vec3& cs, double R, const Vec3& axis, double cosFront, double h, double hCoarse, double rFine,
+                 std::vector<double>* ringCos = nullptr)
+{
+    const Vec3 a = axis.normalized(), e1 = orthoOf(a), e2 = a.cross(e1);
+    const double thF = std::acos(std::clamp(cosFront, -1.0, 1.0));
+    const Vec3 p = -cs;   // the origin relative to the centre
+    const double pa = p.dot(a), pp = (p - pa*a).norm();
+    auto ringDist = [&](double t) { return std::hypot(pa - R*std::cos(t), pp - R*std::sin(t)); };
+    std::vector<double> th = {0.0};
+    while (th.back() < kPi) {
+        const double t = th.back();
+        const bool fine = ringDist(t) < rFine + h || ringDist(std::min(kPi, t + hCoarse/R)) < rFine + h;
+        double next = t + (fine ? h : hCoarse)/R;
+        if (t < thF && next > thF - 0.3*h/R) next = thF;   // land exactly on the front ring
+        if (next > kPi - 0.3*h/R) next = kPi;
+        th.push_back(next);
+    }
+    IMesh m;
+    std::vector<int> prev;
+    std::vector<double> prevA;
+    int frontRing = -1;
+    std::vector<std::vector<int>> rings;
+    for (size_t k = 0; k < th.size(); k++) {
+        const double t = th[k];
+        std::vector<int> ring;
+        std::vector<double> ang;
+        if (k == 0 || k + 1 == th.size()) {
+            ring.push_back(int(m.V.size()));
+            ang.push_back(0.0);
+            m.V.push_back(cs + R*(k == 0 ? 1.0 : -1.0)*a);
+        } else {
+            const bool fine = ringDist(t) < rFine + h;
+            const double cosT = t == thF ? cosFront : std::cos(t), sinT = std::sqrt(std::max(0.0, 1.0 - cosT*cosT));
+            const int cnt = std::max(6, int(std::ceil(2*kPi*R*sinT/(fine ? h : hCoarse))));
+            for (int j = 0; j < cnt; j++) {
+                const double phi = 2*kPi*double(j)/double(cnt);
+                ring.push_back(int(m.V.size()));
+                ang.push_back(phi);
+                m.V.push_back(cs + R*(cosT*a + sinT*(std::cos(phi)*e1 + std::sin(phi)*e2)));
+            }
+            if (t == thF) frontRing = int(k);
+        }
+        if (k > 0) zipRings(prev, prevA, ring, ang, m.F);
+        prev = ring;
+        prevA = ang;
+        rings.push_back(ring);
+        if (ringCos) ringCos->push_back(std::cos(t));
+    }
+    if (frontRing >= 0) {
+        const std::vector<int>& r = rings[size_t(frontRing)];
+        for (size_t j = 0; j < r.size(); j++) {
+            const int x = r[j], y = r[(j + 1)%r.size()];
+            m.front.insert({std::min(x, y), std::max(x, y)});
+        }
+    }
+    m.orient([cs](const Vec3& c) { return Vec3(c - cs); });
+    return m;
+}
+
+// A planar rectangle P0 + s ea + t eb, s in [s0, s1], t in [t0, t1]: a grid with the s-values sv (ascending) and nt
+// steps in t, wound towards nPlus; the vertices with s == sFront form the front
+IMesh rectMesh(const Vec3& P0, const Vec3& ea, const Vec3& eb, const std::vector<double>& sv, double t0, double t1, int nt,
+               const Vec3& nPlus)
+{
+    IMesh m;
+    const size_t ns = sv.size(), mt = size_t(nt) + 1;
+    for (double s : sv)
+        for (size_t j = 0; j < mt; j++) {
+            const double t = t0 + (t1 - t0)*double(j)/double(nt);
+            m.V.push_back(P0 + s*ea + t*eb);
+        }
+    for (size_t i = 0; i + 1 < ns; i++)
+        for (size_t j = 0; j + 1 < mt; j++) {
+            const int p = int(i*mt + j), q = int((i + 1)*mt + j), r = int((i + 1)*mt + j + 1), s = int(i*mt + j + 1);
+            m.F.push_back({p, q, r});
+            m.F.push_back({p, r, s});
+        }
+    m.orient([nPlus](const Vec3&) { return nPlus; });
+    return m;
+}
+
+// A plane n.X = d bent into a sine wave along w: X = (d + A sin(2 pi t/lambda + phase)) n + s u + t w, s in sv (ascending),
+// t in [-ext, ext] in steps of about h; straight along u, so every quad is planar and a column may be long; wound towards
+// +n (a graph over the plane); the edges of the column s == sFront flagged as the front
+IMesh waveMesh(const Vec3& n, const Vec3& u, const Vec3& w, double d, double A, double lambda, double phase,
+               const std::vector<double>& sv, double sFront, double ext, double h)
+{
+    IMesh m;
+    const int nt = int(std::ceil(2*ext/h));
+    const size_t ns = sv.size(), mt = size_t(nt) + 1;
+    for (double s : sv)
+        for (size_t j = 0; j < mt; j++) {
+            const double t = -ext + 2*ext*double(j)/double(nt);
+            m.V.push_back((d + A*std::sin(2*kPi*t/lambda + phase))*n + s*u + t*w);
+        }
+    for (size_t i = 0; i + 1 < ns; i++)
+        for (size_t j = 0; j + 1 < mt; j++) {
+            const int p = int(i*mt + j), q = int((i + 1)*mt + j), r = int((i + 1)*mt + j + 1), s = int(i*mt + j + 1);
+            m.F.push_back({p, q, r});
+            m.F.push_back({p, r, s});
+        }
+    for (size_t i = 0; i < ns; i++)
+        if (sv[i] == sFront)
+            for (size_t j = 0; j + 1 < mt; j++) m.front.insert({int(i*mt + j), int(i*mt + j + 1)});
+    m.orient([n](const Vec3&) { return n; });
+    return m;
+}
+
+// ---- the cases ----
+// One term of a control variate: a function exactly harmonic in every tet's xi frame off its crack, with the crack's jump
+// (exactSelf: its one-sided limit on its own crack is exactly side x coef, so the walks score that instead of evaluating it)
+struct CvTerm {
+    enum Kind { HalfPlane, PlaneSign, MeshSign, Solid } kind = HalfPlane;
+    int crack = 0;
+    double coef = 1;
+    bool exactSelf = true;
+    Vec3 n = Vec3::Zero(), u = Vec3::Zero();   // HalfPlane: plane n.X = d, J's front line u.X = sJ; PlaneSign: n.X = d
+    double d = 0, sJ = 0;
+    int surf = -1;                              // MeshSign: the signed-distance surface; Solid: the solid-angle mesh
+};
+// One face function J (g = 1; Jr: the ramp's, empty without it) with its control variate in the fast path
+struct JVariant {
+    std::string name, desc;
+    std::function<double(const Vec3&)> J, Jr;
+    std::vector<CvTerm> cv;
+};
+struct StressCrack {
+    std::string name;
+    double g = 1;
+    bool halfPlane = false;   // straight front: the ramp's r is the distance to the front line (frame)
+    Cut frame;                // half-plane cracks: n, d, u, w, s (front), L = sqrt(2)
+    std::function<double(const Vec3&)> dist;   // distance to the crack (Shepard weights)
+};
+struct StressCase {
+    std::string id, plain, desc;
+    int priority = 1, index = 0;
+    int ringId = 2;
+    Vec3 c = Vec3(0.12, -0.08, 0.10);
+    std::vector<StressCrack> cracks;
+    CrackMesh glob;                     // all cracks' global surfaces (crack ids, front edges), before clipping to O
+    CrackMesh walk;                     // glob clipped to O: THE crack of every method
+    std::vector<CrackMesh> surf;        // signed-distance surfaces (S_full) for J and the curved indicators
+    std::vector<SolidAngleMesh> solid;  // solid-angle meshes (X)
+    std::vector<JVariant> var;          // var[0]: the main face function
+    bool ramp = false;                  // also the ramp g (straight half-plane cracks only)
+    std::function<double(const Vec3&)> exact;   // complete cuts (g = 1): the exact answer, the side indicator
+    int check4 = -1;                    // A1, A2, A3: check 4's point sets (4096 per tet) and its cached GT (crack K1..K3)
+    bool v0Undefined = false;           // F1: the node lies on the front
+    bool junction = false;              // E3: the junction line (regions)
+    Vec3 jP = Vec3::Zero(), jW = Vec3::Zero();
+};
+
+// Level C's face function of a half-plane crack (frame: n, d, u; front line u.X = sJ): theta/pi and the ramp
+double levelC(const Cut& f, double sJ, const Vec3& X) { return std::atan2(f.n.dot(X) - f.d, f.u.dot(X) - sJ)/kPi; }
+double levelCRamp(const Cut& f, double sJ, const Vec3& X)
+{
+    const double a = f.u.dot(X) - sJ, b = f.n.dot(X) - f.d;
+    return std::min(1.0, std::sqrt(std::hypot(a, b)/kSqrt2))*std::sin(0.5*std::atan2(b, a));
+}
+double halfPlaneDist(const Cut& f, const Vec3& X, bool through)
+{
+    const double a = f.u.dot(X) - f.s, b = f.n.dot(X) - f.d;
+    return through || a <= 0 ? std::fabs(b) : std::hypot(a, b);
+}
+
+// a half-plane crack {n.X = d, u.X <= s} (through: the whole plane) as triangles: a square of the plane larger than O
+// cut at the front (front edge flagged), to be clipped to O
+std::vector<CrackMesh::Tri> halfPlaneTris(const Cut& f, bool through, int crack)
+{
+    const double R = 3.0;
+    const Vec3 o = f.d*f.n;
+    std::vector<Vec3> p = {o - R*f.u - R*f.w, o + R*f.u - R*f.w, o + R*f.u + R*f.w, o - R*f.u + R*f.w};
+    std::vector<uint8_t> fl(4, 0);
+    if (!through) CrackMesh::clipPolygon(p, fl, f.u, f.s, CrackMesh::kEdgeFront);
+    std::vector<CrackMesh::Tri> out;
+    CrackMesh::fanPolygon(p, fl, crack, f.n, 0.0, out);
+    return out;
+}
+
+// O's 8 face planes for clipping (flag kEdgeDomain)
+CrackMesh clipToO(const CrackMesh& m)
+{
+    const ConvexDomain O = octahedron();
+    return m.clipped(O.n, O.c, std::vector<uint8_t>(O.n.size(), CrackMesh::kEdgeDomain), 1e-14);
+}
+
+// the crack frame of a plane in O: n, d, f, front at t of the section's extent (L = sqrt(2) for the ramp)
+Cut stressFrame(const Vec3& n, double d, const Vec3& f, double t)
+{
+    return buildCutOnDomain(octahedron(), n.normalized(), d, f, kSqrt2, t);
+}
+Cut frameAtS(const Vec3& n, double d, const Vec3& f, double s)
+{
+    const Cut c1 = stressFrame(n, d, f, 1.0);
+    return stressFrame(n, d, f, (s - c1.sMin)/(c1.sMax - c1.sMin));
+}
+
+const char* const kStressIds[] = {"A1", "A1s", "A2", "A3", "B1", "B2", "C1", "C2", "D1", "D2", "D3", "E1", "E2", "E3",
+                                  "F1", "F2", "F3", "F4", "G1a", "G1b", "F2b", "D4", "D5"};   // new ids last: the seeds use the index
+constexpr int kNStress = int(std::size(kStressIds));
+const Vec3 kRing3C(0.35, -0.25, 0.20);
+
+Ring makeRingAt(const Vec3& c, int id, const std::string& name)
+{
+    Ring R;
+    R.id = id;
+    R.name = name;
+    R.V = {c, Vec3(1, 0, 0), Vec3(-1, 0, 0), Vec3(0, 1, 0), Vec3(0, -1, 0), Vec3(0, 0, 1), Vec3(0, 0, -1)};
+    for (int o = 0; o < kRingNT; o++) {
+        std::array<int, 4> g = {0, o & 1 ? 2 : 1, o & 2 ? 4 : 3, o & 4 ? 6 : 5};
+        TetFrame T = frameOn(kRingTetName[o], g, R.V.data());
+        if (T.detJ < 0) {
+            std::swap(g[2], g[3]);
+            T = frameOn(kRingTetName[o], g, R.V.data());
+        }
+        R.T.push_back(T);
+        for (int k = 1; k < 4; k++) {
+            std::array<int, 3> f{};
+            int m = 0;
+            for (int i = 0; i < 4; i++)
+                if (i != k) f[m++] = g[i];
+            std::sort(f.begin(), f.end());
+            if (std::find(R.innerFaces.begin(), R.innerFaces.end(), f) == R.innerFaces.end()) R.innerFaces.push_back(f);
+        }
+    }
+    return R;
+}
+Ring stressRing(const StressCase& sc)
+{
+    if (sc.ringId == 2) return makeRing(2);
+    return makeRingAt(sc.c, sc.ringId, "ring 3 (distorted, c = " + fmt3(sc.c, 2) + ")");
+}
+
+// Shepard blend of several cracks' face functions: J = sum_j w_j J_j, w_j = d_j^-2 / sum_k d_k^-2 (J_j on crack j)
+std::function<double(const Vec3&)> blendJ(std::vector<std::function<double(const Vec3&)>> dist,
+                                          std::vector<std::function<double(const Vec3&)>> J)
+{
+    return [dist = std::move(dist), J = std::move(J)](const Vec3& X) {
+        double sw = 0, s = 0;
+        for (size_t j = 0; j < J.size(); j++) {
+            const double d = dist[j](X);
+            if (!(d > 1e-150)) return J[j](X);
+            const double w = 1.0/(d*d);
+            sw += w;
+            s += w*J[j](X);
+        }
+        return s/sw;
+    };
+}
+
+// signed in-plane distance to a closed polygon (vertices in order, in the plane of normal n): negative inside
+double polygonSignedDist(const std::vector<Vec3>& P, const Vec3& n, const Vec3& X)
+{
+    const Vec3 e1 = orthoOf(n), e2 = n.cross(e1);
+    const Vec2 x(X.dot(e1), X.dot(e2));
+    double dmin = kInf;
+    bool inside = false;
+    const size_t m = P.size();
+    for (size_t i = 0, j = m - 1; i < m; j = i++) {
+        const Vec2 a(P[i].dot(e1), P[i].dot(e2)), b(P[j].dot(e1), P[j].dot(e2));
+        const Vec2 ab = b - a;
+        const double t = std::clamp((x - a).dot(ab)/ab.squaredNorm(), 0.0, 1.0);
+        dmin = std::min(dmin, (x - (a + t*ab)).norm());
+        if ((a.y() > x.y()) != (b.y() > x.y()) && x.x() < (b.x() - a.x())*(x.y() - a.y())/(b.y() - a.y()) + a.x()) inside = !inside;
+    }
+    return inside ? -dmin : dmin;
+}
+
+StressCase makeStressCase(const std::string& id)
+{
+    StressCase sc;
+    sc.id = id;
+    for (int k = 0; k < kNStress; k++)
+        if (id == kStressIds[k]) sc.index = k;
+    std::vector<CrackMesh::Tri> glob;
+    const Cut K1 = stressFrame(Vec3(1.0, 0.5, 0.2), 0.08, Vec3(0, 1, 0), 0.5);   // K1: front at t = 0.5
+    const Vec3 n1 = K1.n, u1 = K1.u, w1 = K1.w;
+    auto addHalfPlane = [&](const std::string& name, const Cut& f, bool through, double g, double sJ) {
+        StressCrack c;
+        c.name = name;
+        c.g = g;
+        c.halfPlane = !through;
+        c.frame = f;
+        c.dist = [f, through](const Vec3& X) { return halfPlaneDist(f, X, through); };
+        const int j = int(sc.cracks.size());
+        sc.cracks.push_back(c);
+        auto t = halfPlaneTris(f, through, j);
+        glob.insert(glob.end(), t.begin(), t.end());
+        (void)sJ;
+        return j;
+    };
+    auto levelCVariant = [&](const Cut& f, double sJ, bool ramp, int crack, double g) {
+        JVariant v;
+        v.name = "levelC";
+        v.desc = "Level C: J = theta/pi of the straight front" + std::string(ramp ? " (and its ramp)" : "") +
+                 "; control variate J_xi (the half-plane's theta/pi in xi)";
+        v.J = [f, sJ, g](const Vec3& X) { return g*levelC(f, sJ, X); };
+        if (ramp) v.Jr = [f, sJ, g](const Vec3& X) { return g*levelCRamp(f, sJ, X); };
+        CvTerm t;
+        t.kind = CvTerm::HalfPlane;
+        t.crack = crack;
+        t.coef = g;
+        t.n = f.n;
+        t.d = f.d;
+        t.u = f.u;
+        t.sJ = sJ;
+        v.cv.push_back(t);
+        return v;
+    };
+    auto planeSignVariant = [&](const Cut& f, int crack) {
+        JVariant v;
+        v.name = "indicator";
+        v.desc = "the side indicator J = sign(n.X - d) (the exact answer); control variate: the same indicator in xi (R = 0)";
+        v.J = [f](const Vec3& X) { return f.n.dot(X) - f.d >= 0 ? 1.0 : -1.0; };
+        CvTerm t;
+        t.kind = CvTerm::PlaneSign;
+        t.crack = crack;
+        t.n = f.n;
+        t.d = f.d;
+        v.cv.push_back(t);
+        return v;
+    };
+    auto addDisk = [&](const std::string& name, const Vec3& centre, const Vec3& n, double rho, int nFront, int nRings, double g) {
+        StressCrack c;
+        c.name = name;
+        c.g = g;
+        const int j = int(sc.cracks.size());
+        const IMesh m = diskMesh(centre, n, rho, nFront, nRings);
+        auto t = crackTris(m, allFaces(m), j);
+        glob.insert(glob.end(), t.begin(), t.end());
+        sc.solid.push_back(diskFan(centre, n, rho, nFront));
+        const int s = int(sc.solid.size()) - 1;
+        auto cm = std::make_shared<CrackMesh>(crackTris(m, allFaces(m), j));
+        c.dist = [cm](const Vec3& X) { return cm->distance(X); };
+        sc.cracks.push_back(c);
+        return std::pair<int, int>(j, s);
+    };
+    auto solidVariant = [&](int crack, int s, double g) {
+        JVariant v;
+        v.name = "solid";
+        v.desc = "solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk";
+        const SolidAngleMesh* sm = &sc.solid[size_t(s)];
+        (void)sm;
+        v.J = {};   // set below (needs the final address of sc.solid)
+        CvTerm t;
+        t.kind = CvTerm::Solid;
+        t.crack = crack;
+        t.coef = g;
+        t.surf = s;
+        t.exactSelf = true;   // flat: the one-sided limits are exactly +-2 pi
+        v.cv.push_back(t);
+        return v;
+    };
+    const Vec3 g0 = (Vec3(0.12, -0.08, 0.10) + Vec3(1, 0, 0) + Vec3(0, 1, 0) + Vec3(0, 0, 1))/4.0;   // centroid of T+++ (ring 2)
+
+    if (id == "A1" || id == "A1s" || id == "G1a") {
+        sc.plain = id == "G1a" ? "flat crack K1 on the distorted ring 3" : "baseline K1 (one flat crack, straight front)";
+        const RingCrack rc = ringCrack(0);
+        const int j = addHalfPlane("K1", rc.cutO, false, 1.0, rc.sJ);
+        sc.var.push_back(levelCVariant(rc.cutO, rc.sJ, true, j, 1.0));
+        sc.ramp = id != "G1a";
+        if (id == "A1") sc.check4 = 0;
+        if (id == "G1a") {
+            sc.ringId = 3;
+            sc.c = kRing3C;
+            sc.priority = 3;
+        }
+        if (id != "G1a") {   // code check: the same J with a solid-angle control variate (a big flat polygon behind the front)
+            IMesh m;
+            const double R = 6.0;
+            const Vec3 o = rc.cutO.d*rc.cutO.n + rc.sJ*rc.cutO.u;
+            m.V = {o - 2*R*rc.cutO.u - R*rc.cutO.w, o - R*rc.cutO.w, o + R*rc.cutO.w, o - 2*R*rc.cutO.u + R*rc.cutO.w};
+            m.F = {{0, 1, 2}, {0, 2, 3}};
+            m.orient([n = rc.cutO.n](const Vec3&) { return n; });
+            sc.solid.push_back(solidOf(m, allFaces(m), true));
+            JVariant v = levelCVariant(rc.cutO, rc.sJ, false, j, 1.0);
+            v.name = "levelC/cvSolid";
+            v.desc = "Level C with a solid-angle control variate (a 12 x 12 flat rectangle behind the front, in xi): a code "
+                     "check, same answer within noise";
+            v.cv[0].kind = CvTerm::Solid;
+            v.cv[0].surf = int(sc.solid.size()) - 1;
+            sc.var.push_back(v);
+        }
+        sc.desc = "half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5";
+    } else if (id == "A2") {
+        sc.plain = "baseline K2 (another flat crack, straight front)";
+        const RingCrack rc = ringCrack(1);
+        const int j = addHalfPlane("K2", rc.cutO, false, 1.0, rc.sJ);
+        sc.var.push_back(levelCVariant(rc.cutO, rc.sJ, true, j, 1.0));
+        sc.ramp = true;
+        sc.check4 = 1;
+        sc.desc = "half-plane n = normalize(0.3, -1, 0.6), d = -0.05, front direction (1, 0.4, 0), front at t = 0.3";
+    } else if (id == "A3" || id == "B2") {
+        Cut f;
+        if (id == "A3") {
+            sc.plain = "flat complete cut (K3)";
+            const RingCrack rc = ringCrack(2);
+            f = rc.cutO;
+            sc.check4 = 2;
+            sc.desc = "K1's plane cut all the way through O";
+        } else {
+            sc.plain = "flat complete cut passing 0.001 from the node";
+            const Vec3 c2(0.12, -0.08, 0.10);
+            f = stressFrame(n1, n1.dot(c2) - 1e-3, Vec3(0, 1, 0), 1.0);
+            sc.priority = 2;
+            sc.desc = "plane n1.X = n1.c - 0.001 (K1's normal), through O; the node 0.001 on its + side";
+        }
+        const int j = addHalfPlane(id == "A3" ? "K3" : "B2", f, true, 1.0, 0);
+        const double sJ = f.sMax + 0.3;
+        JVariant v = levelCVariant(f, sJ, false, j, 1.0);
+        v.desc = "Level C with its front line 0.3 beyond O's section (the realistic J, check 4's K3); control variate J_xi";
+        sc.var.push_back(v);
+        sc.var.push_back(planeSignVariant(f, j));
+        sc.exact = [f](const Vec3& X) { return f.n.dot(X) - f.d >= 0 ? 1.0 : -1.0; };
+    } else if (id == "B1") {
+        sc.plain = "curved complete cut (cylinder)";
+        const Vec3 a = Vec3(0.2, 0.3, 1.0).normalized(), c2(0.12, -0.08, 0.10);
+        Vec3 e = Vec3(-1, 0.4, 0);
+        e = (e - e.dot(a)*a).normalized();
+        const Vec3 q0 = c2 + 1.42*e;
+        const double rho = 1.3, len = 2.5, h = 0.06;
+        IMesh m;
+        const Vec3 e1 = orthoOf(a), e2 = a.cross(e1);
+        const int nt = int(std::ceil(2*kPi*rho/h)), nz = int(std::ceil(2*len/h));
+        for (int i = 0; i <= nz; i++)
+            for (int j = 0; j < nt; j++) {
+                const double z = -len + 2*len*double(i)/double(nz), t = 2*kPi*double(j)/double(nt);
+                m.V.push_back(q0 + z*a + rho*(std::cos(t)*e1 + std::sin(t)*e2));
+            }
+        for (int i = 0; i < nz; i++)
+            for (int j = 0; j < nt; j++) {
+                const int p = i*nt + j, q = i*nt + (j + 1)%nt, r = (i + 1)*nt + (j + 1)%nt, s = (i + 1)*nt + j;
+                m.F.push_back({p, q, r});
+                m.F.push_back({p, r, s});
+            }
+        m.orient([q0, a](const Vec3& c) { const Vec3 r = c - q0; return Vec3(r - r.dot(a)*a); });   // + = outside
+        StressCrack c;
+        c.name = "cylinder";
+        auto t = crackTris(m, allFaces(m), 0);
+        glob.insert(glob.end(), t.begin(), t.end());
+        sc.surf.push_back(CrackMesh(crackTris(m, allFaces(m), 0)));
+        sc.cracks.push_back(c);
+        double aMax = 0;
+        for (const Vec3& v : octahedron().v) aMax = std::max(aMax, a.dot(v));
+        const double sPsi = aMax + 0.3;
+        const CrackMesh* S = nullptr;   // bound below
+        (void)S;
+        JVariant th;
+        th.name = "theta";
+        th.desc = "realistic theta-type J = atan2(phi, psi)/pi, phi = signed distance to the tube, psi = a.X - " + fmtd("%.4f", sPsi) +
+                  " (a virtual front 0.3 beyond O); control variate: the side indicator sign(phi) in xi";
+        JVariant ind;
+        ind.name = "indicator";
+        ind.desc = "the side indicator J = sign(phi) (the exact answer); control variate the same (R = 0)";
+        CvTerm cv;
+        cv.kind = CvTerm::MeshSign;
+        cv.surf = 0;
+        th.cv.push_back(cv);
+        ind.cv.push_back(cv);
+        sc.var.push_back(th);
+        sc.var.push_back(ind);
+        sc.desc = "cylinder radius 1.3, axis direction normalize(0.2, 0.3, 1) through c + 1.42 e (the axis misses O); + side "
+                  "outside; tube tessellated with h = 0.06";
+        // J and exact are bound after sc is final (they capture sc.surf by pointer): see bindStressCase
+        sc.jP = a;   // stash: the psi direction and offset for bindStressCase
+        sc.jW = Vec3(sPsi, 0, 0);
+    } else if (id == "C1" || id == "C2") {
+        const bool c1 = id == "C1";
+        sc.plain = c1 ? "flat crack, gently curved front" : "flat crack, strongly curved front";
+        const double rho = c1 ? 1.5 : 0.45;
+        const Vec3 centre = c1 ? Vec3(0.08*n1 + (K1.s - 1.5)*u1) : Vec3(0.08*n1 - 0.35*u1);
+        const int nF = c1 ? 256 : 128;
+        const auto js = addDisk("disk", centre, n1, rho, nF, 12, 1.0);
+        sc.var.push_back(solidVariant(js.first, js.second, 1.0));
+        JVariant th = solidVariant(js.first, js.second, 1.0);
+        th.name = "theta";
+        th.desc = "theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon; control variate "
+                  "Omega_xi of the disk";
+        sc.var.push_back(th);
+        sc.desc = c1 ? "K1's plane, crack = the disk of radius 1.5 tangent to K1's front (front curvature 0.67), 256 front vertices"
+                     : "K1's plane, crack = the disk of radius 0.45 centred 0.35 behind O's centre (front curvature 2.2), 128 front "
+                       "vertices";
+        sc.jP = centre;
+        sc.jW = Vec3(rho, double(nF), 0);
+    } else if (id == "D1" || id == "D2" || id == "G1b") {
+        const bool d2 = id == "D2";
+        sc.plain = d2 ? "strongly curved crack surface (bowl, sphere radius 0.6)"
+                      : id == "D1" ? "gently curved crack surface (sphere radius 2)" : "gently curved crack (sphere radius 2) on the distorted ring 3";
+        Vec3 cs, axis;
+        double R, sF, h;
+        if (!d2) {
+            R = 2.0;
+            cs = (0.08 - 2.0)*n1;
+            axis = u1;
+            sF = K1.s;
+            h = 0.06;
+        } else {
+            R = 0.6;
+            cs = 0.6*Vec3(1, 1, 1).normalized();
+            axis = Vec3(1, -1, 0).normalized();
+            sF = 0.0;
+            h = 0.04;
+            sc.priority = 1;
+        }
+        const double cosF = (sF - axis.dot(cs))/R;
+        const IMesh m = sphereMesh(cs, R, axis, cosF, h, 0.25, d2 ? 2.0 : 1.25);
+        std::vector<int> crackF, cvF;
+        for (size_t i = 0; i < m.F.size(); i++) {
+            const Vec3 cen = m.centroid(m.F[i]);
+            if (axis.dot(cen) - sF < 0) {
+                crackF.push_back(int(i));
+                if (cen.norm() < (d2 ? 1.2 + 1e-9 : 1.25)) cvF.push_back(int(i));
+            }
+        }
+        StressCrack c;
+        c.name = "sphere";
+        auto t = crackTris(m, crackF, 0);
+        glob.insert(glob.end(), t.begin(), t.end());
+        sc.surf.push_back(CrackMesh(crackTris(m, allFaces(m), 0)));   // the full sphere: phi of J
+        sc.solid.push_back(solidOf(m, cvF, false));
+        auto cm = std::make_shared<CrackMesh>(crackTris(m, crackF, 0));
+        c.dist = [cm](const Vec3& X) { return cm->distance(X); };
+        sc.cracks.push_back(c);
+        JVariant th;
+        th.name = "theta";
+        th.desc = "theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = " +
+                  std::string(d2 ? "(x - y)/sqrt(2)" : "u1.X - s1") + "; control variate Omega_xi/(2 pi) of the crack-side "
+                  "triangles within " + (d2 ? "1.2" : "1.25") + " of the origin (curved: not exact on the crack, evaluated at "
+                  "the walk end)";
+        CvTerm cv;
+        cv.kind = CvTerm::Solid;
+        cv.surf = 0;
+        cv.exactSelf = false;
+        th.cv.push_back(cv);
+        sc.var.push_back(th);
+        sc.desc = d2 ? "sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; "
+                       "h = 0.04"
+                     : "sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + "
+                       "side outside; h = 0.06 within 1.25 of the origin";
+        if (id == "G1b") {
+            sc.ringId = 3;
+            sc.c = kRing3C;
+            sc.priority = 3;
+        }
+        sc.jP = axis;
+        sc.jW = Vec3(sF, 0, 0);
+    } else if (id == "D4" || id == "D5") {
+        const bool d5 = id == "D5";
+        sc.plain = d5 ? "strongly wavy crack (sine wave, amplitude 0.1, wavelength 0.6)"
+                      : "wavy crack (sine wave, amplitude 0.1, wavelength 1)";
+        // K1's plane bent into a sine wave along its front direction w1, K1's front s1: the front is a sine curve; the phase
+        // puts a trough under the node (the surface 0.1 below K1's plane there, the node 0.108 above it)
+        const double A = 0.1, lam = d5 ? 0.6 : 1.0, h = d5 ? 0.015 : 0.025, ext = 1.6, sF = K1.s;
+        const double ph = -0.5*kPi - 2*kPi*w1.dot(Vec3(0.12, -0.08, 0.10))/lam;
+        const IMesh m = waveMesh(n1, u1, w1, 0.08, A, lam, ph, {-ext, sF, ext}, sF, ext, h);
+        std::vector<int> crackF, cvF;
+        for (size_t i = 0; i < m.F.size(); i++) {
+            const Vec3 cen = m.centroid(m.F[i]);
+            if (u1.dot(cen) - sF < 0) {
+                crackF.push_back(int(i));
+                if (std::fabs(w1.dot(cen)) < 1.1) cvF.push_back(int(i));   // |t| > 1 is outside O (inside the unit ball)
+            }
+        }
+        StressCrack c;
+        c.name = "wave";
+        auto t = crackTris(m, crackF, 0);
+        glob.insert(glob.end(), t.begin(), t.end());
+        sc.surf.push_back(CrackMesh(crackTris(m, allFaces(m), 0)));   // the whole sheet, past the front: phi of J
+        sc.solid.push_back(solidOf(m, cvF, false));
+        auto cm = std::make_shared<CrackMesh>(crackTris(m, crackF, 0));
+        c.dist = [cm](const Vec3& X) { return cm->distance(X); };
+        sc.cracks.push_back(c);
+        JVariant th;
+        th.name = "theta";
+        th.desc = "theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control "
+                  "variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated "
+                  "at the walk end)";
+        CvTerm cv;
+        cv.kind = CvTerm::Solid;
+        cv.surf = 0;
+        cv.exactSelf = false;
+        th.cv.push_back(cv);
+        sc.var.push_back(th);
+        sc.desc = "K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/" + fmtd("%g", lam) + " + phase) (smallest radius of "
+                  "curvature " + fmtd("%.3f", 1.0/(A*std::pow(2*kPi/lam, 2))) + ", a trough under the node), crack = {u1.X < s1} "
+                  "(K1's front, now a sine curve); tessellated with h = " + fmtd("%g", h) + " along w1";
+        sc.jP = u1;
+        sc.jW = Vec3(sF, 0, 0);
+    } else if (id == "D3") {
+        sc.plain = "kinked crack (two flat pieces at 40 degrees)";
+        const double sk = K1.sMin + 0.4*(K1.sMax - K1.sMin), al = 40.0*kPi/180.0, af = 0.3, ext = 4.0;
+        const Vec3 Pl = 0.08*n1 + sk*u1;
+        const Vec3 u2 = std::cos(al)*u1 + std::sin(al)*n1, n2 = std::cos(al)*n1 - std::sin(al)*u1;
+        IMesh m1 = rectMesh(Pl, u1, w1, {-ext, -2.0, -1.0, -0.5, 0.0}, -ext, ext, 16, n1);
+        IMesh m2 = rectMesh(Pl, u2, w1, {0.0, af, 0.6, 1.0, 2.0, ext}, -ext, ext, 16, n2);
+        IMesh m = m1;
+        const int off = int(m.V.size());
+        for (const Vec3& v : m2.V) m.V.push_back(v);
+        for (auto f : m2.F) m.F.push_back({f[0] + off, f[1] + off, f[2] + off});
+        const double s2 = u2.dot(Pl) + af;
+        std::vector<int> crackF;
+        for (size_t i = 0; i < m.F.size(); i++)
+            if (u2.dot(m.centroid(m.F[i])) - s2 < 0) crackF.push_back(int(i));
+        // the front: facet-2 edges on u2.X = s2 (grid column s = af), between crack triangles and the rest
+        for (int j = 0; j < 16; j++) {
+            const int a = off + 1*17 + j, b = a + 1;
+            m.front.insert({a, b});
+        }
+        StressCrack c;
+        c.name = "kink";
+        auto t = crackTris(m, crackF, 0);
+        glob.insert(glob.end(), t.begin(), t.end());
+        sc.surf.push_back(CrackMesh(crackTris(m, allFaces(m), 0)));
+        auto cm = std::make_shared<CrackMesh>(crackTris(m, crackF, 0));
+        c.dist = [cm](const Vec3& X) { return cm->distance(X); };
+        sc.cracks.push_back(c);
+        JVariant th;
+        th.name = "theta";
+        th.desc = "theta-type J = atan2(phi, psi)/pi, phi = signed distance to the kinked surface (facet 2 continued), psi = "
+                  "u2.X - s_front; control variate H1 + Hf - Hl: three half-plane theta/pi terms in xi (exact, jump 2)";
+        auto hp = [&](const Vec3& n, double d, const Vec3& u, double s, double coef) {
+            CvTerm t2;
+            t2.kind = CvTerm::HalfPlane;
+            t2.n = n;
+            t2.d = d;
+            t2.u = u;
+            t2.sJ = s;
+            t2.coef = coef;
+            t2.exactSelf = false;
+            return t2;
+        };
+        th.cv.push_back(hp(n1, 0.08, u1, sk, 1.0));
+        th.cv.push_back(hp(n2, n2.dot(Pl), u2, s2, 1.0));
+        th.cv.push_back(hp(n2, n2.dot(Pl), u2, u2.dot(Pl), -1.0));
+        sc.var.push_back(th);
+        sc.desc = "facet 1 = K1's plane behind the kink line u1.X = " + fmtd("%.5f", sk) + " (t = 0.4); facet 2 turned 40 degrees "
+                  "towards +n1, front 0.3 beyond the kink";
+        sc.jP = u2;
+        sc.jW = Vec3(s2, 0, 0);
+    } else if (id == "E1") {
+        sc.plain = "two parallel cracks with opposite fronts (strengths 1 and 0.5)";
+        const Cut fa = stressFrame(n1, -0.14, Vec3(0, 1, 0), 0.65), fb = stressFrame(n1, 0.30, Vec3(0, -1, 0), 0.6);
+        const int ja = addHalfPlane("a", fa, false, 1.0, fa.s), jb = addHalfPlane("b", fb, false, 0.5, fb.s);
+        JVariant v;
+        v.name = "blend";
+        v.desc = "Shepard blend (weights 1/d_j^2) of the cracks' Level C functions (x g_j), and of their ramps; control variate "
+                 "J_xi,a + 0.5 J_xi,b";
+        v.J = blendJ({sc.cracks[0].dist, sc.cracks[1].dist},
+                     {[fa](const Vec3& X) { return levelC(fa, fa.s, X); }, [fb](const Vec3& X) { return 0.5*levelC(fb, fb.s, X); }});
+        v.Jr = blendJ({sc.cracks[0].dist, sc.cracks[1].dist},
+                      {[fa](const Vec3& X) { return levelCRamp(fa, fa.s, X); }, [fb](const Vec3& X) { return 0.5*levelCRamp(fb, fb.s, X); }});
+        v.cv = {levelCVariant(fa, fa.s, false, ja, 1.0).cv[0], levelCVariant(fb, fb.s, false, jb, 0.5).cv[0]};
+        sc.var.push_back(v);
+        sc.ramp = true;
+        sc.desc = "crack a: n1.X = -0.14, front direction (0, 1, 0), t = 0.65, g = 1; crack b: n1.X = 0.30, front direction "
+                  "(0, -1, 0), t = 0.6, g = 0.5; errors / (2 max g) = / 2";
+    } else if (id == "E2" || id == "F3") {
+        const bool e2 = id == "E2";
+        sc.plain = e2 ? "two cracks inside the same tet" : "tiny crack inside one tet";
+        sc.priority = 2;
+        if (e2) {
+            const auto a = addDisk("disk a", g0 + 0.05*n1, n1, 0.18, 64, 6, 1.0);
+            const auto b = addDisk("disk b", g0 - 0.05*n1, n1, 0.18, 64, 6, 1.0);
+            JVariant v = solidVariant(a.first, a.second, 1.0);
+            v.name = "blend";
+            v.desc = "Shepard blend of the two disks' Omega/(2 pi); control variate Omega_a,xi/(2 pi) + Omega_b,xi/(2 pi)";
+            v.cv.push_back(solidVariant(b.first, b.second, 1.0).cv[0]);
+            sc.var.push_back(v);
+            sc.desc = "two parallel disks of radius 0.18, normal n1, centres g0 +- 0.05 n1 (g0 = centroid of T+++), 64 front vertices";
+        } else {
+            const auto a = addDisk("disk", g0, n1, 0.06, 64, 6, 1.0);
+            sc.var.push_back(solidVariant(a.first, a.second, 1.0));
+            JVariant th = solidVariant(a.first, a.second, 1.0);
+            th.name = "theta";
+            th.desc = "theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon (fails far away); "
+                      "control variate Omega_xi";
+            sc.var.push_back(th);
+            sc.desc = "a disk of radius 0.06, normal n1, centre g0 = centroid of T+++ (inside T+++, no face contact), 64 front "
+                      "vertices";
+            sc.jP = g0;
+            sc.jW = Vec3(0.06, 64.0, 0);
+        }
+    } else if (id == "E3") {
+        sc.plain = "two crossing cracks (X junction)";
+        const Vec3 c2(0.12, -0.08, 0.10);
+        const Cut fA = stressFrame(n1, 0.08, Vec3(0, 1, 0), 1.0);
+        const Vec3 nB = Vec3(-0.4, 0.2, 1.0).normalized();
+        const Cut fB = stressFrame(nB, nB.dot(c2) + 0.05, n1.cross(nB), 0.55);
+        const int jA = addHalfPlane("A (through)", fA, true, 1.0, 0), jB = addHalfPlane("B", fB, false, 1.0, fB.s);
+        JVariant v;
+        v.name = "blend";
+        v.desc = "Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B";
+        v.J = blendJ({sc.cracks[0].dist, sc.cracks[1].dist},
+                     {[fA](const Vec3& X) { return fA.n.dot(X) - fA.d >= 0 ? 1.0 : -1.0; },
+                      [fB](const Vec3& X) { return levelC(fB, fB.s, X); }});
+        v.cv = {planeSignVariant(fA, jA).cv[0], levelCVariant(fB, fB.s, false, jB, 1.0).cv[0]};
+        sc.var.push_back(v);
+        sc.junction = true;
+        const Vec3 lineDir = n1.cross(nB).normalized();
+        // a point on both planes: least-norm solution of [n1; nB] X = [d1; dB]
+        Eigen::Matrix<double, 2, 3> A;
+        A.row(0) = n1.transpose();
+        A.row(1) = nB.transpose();
+        const Vec3 P0 = A.transpose()*(A*A.transpose()).inverse()*Eigen::Vector2d(fA.d, fB.d);
+        // the junction is the half of that line on B (u_B.X <= s_B): from the point where it meets B's front, into B
+        const double ul = fB.u.dot(lineDir);
+        sc.jP = P0 + ((fB.s - fB.u.dot(P0))/ul)*lineDir;
+        sc.jW = ul > 0 ? Vec3(-lineDir) : lineDir;
+        sc.desc = "A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front "
+                  "direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)";
+    } else if (id == "F1") {
+        sc.plain = "front passing exactly through the node";
+        sc.priority = 2;
+        const Vec3 c2(0.12, -0.08, 0.10);
+        const Cut f = frameAtS(n1, n1.dot(c2), Vec3(0, 1, 0), u1.dot(c2));
+        const int j = addHalfPlane("F1", f, false, 1.0, f.s);
+        sc.var.push_back(levelCVariant(f, f.s, false, j, 1.0));
+        sc.v0Undefined = true;
+        sc.desc = "K1's normal and front direction moved through c: plane n1.X = n1.c, front u1.X = u1.c (t = " + fmtd("%.4f", f.t) + ")";
+    } else if (id == "F2" || id == "F2b") {
+        // F2b (diagnostic): the same crack 0.03 from the face, outside the eps-tube (eps = 0.0141) that the quadrature leaves
+        // out, to tell the slab's missing energy from anything else
+        const double off = id == "F2" ? 1e-3 : 0.03;
+        sc.plain = id == "F2" ? "crack 0.001 away from an interior face" : "crack 0.03 away from an interior face (F2's control)";
+        sc.priority = id == "F2" ? 2 : 3;
+        const Vec3 c2(0.12, -0.08, 0.10), ex(1, 0, 0), ey(0, 1, 0);
+        Vec3 m = (ex - c2).cross(ey - c2).normalized();
+        if (m.z() < 0) m = -m;
+        const Vec3 fdir = c2 - 0.5*(ex + ey);
+        const Vec3 cen = (c2 + ex + ey)/3.0;
+        const Cut f0 = stressFrame(m, m.dot(c2) + off, fdir, 1.0);
+        const Cut f = frameAtS(m, m.dot(c2) + off, fdir, f0.u.dot(cen));
+        const int j = addHalfPlane(id, f, false, 1.0, f.s);
+        sc.var.push_back(levelCVariant(f, f.s, false, j, 1.0));
+        sc.desc = "plane m.X = m.c + " + fmtd("%g", off) + ", m = the normal of T+++'s face (c, e_x, e_y); front through that face's "
+                  "centroid projected (t = " + fmtd("%.4f", f.t) + "), crack on the side of the edge e_x-e_y";
+    } else if (id == "F4") {
+        sc.plain = "front 0.03 from the outer boundary";
+        sc.priority = 3;
+        // the edge of K1's section from (u, w) ~ (0.4235, -0.5731) to (0.7707, 0.0535); front direction = its outward normal
+        const Cut full = stressFrame(n1, 0.08, Vec3(0, 1, 0), 1.0);
+        const std::vector<Vec3>& P = full.fullPolygon;
+        size_t best = 0;
+        double bd = kInf;
+        for (size_t i = 0; i < P.size(); i++) {
+            const Vec3 &a = P[i], &b = P[(i + 1)%P.size()];
+            const double e = std::hypot(a.dot(u1) - 0.4235, a.dot(w1) + 0.5731) + std::hypot(b.dot(u1) - 0.7707, b.dot(w1) - 0.0535);
+            const double e2 = std::hypot(b.dot(u1) - 0.4235, b.dot(w1) + 0.5731) + std::hypot(a.dot(u1) - 0.7707, a.dot(w1) - 0.0535);
+            if (std::min(e, e2) < bd) {
+                bd = std::min(e, e2);
+                best = i;
+            }
+        }
+        const Vec3 &a = P[best], &b = P[(best + 1)%P.size()];
+        Vec3 nrm = (b - a).cross(n1).normalized();
+        Vec3 pc = Vec3::Zero();
+        for (const Vec3& p : P) pc += p/double(P.size());
+        if (nrm.dot(a - pc) < 0) nrm = -nrm;
+        const Cut f = frameAtS(n1, 0.08, nrm, nrm.dot(a) - 0.03);
+        const int j = addHalfPlane("F4", f, false, 1.0, f.s);
+        sc.var.push_back(levelCVariant(f, f.s, false, j, 1.0));
+        sc.desc = "K1's plane, front direction = the outward in-plane normal " + fmt3(nrm) + " of a section edge, front 0.03 inside "
+                  "that edge (t = " + fmtd("%.4f", f.t) + ")";
+    } else {
+        throw std::invalid_argument("--ring-stress: unknown case " + id);
+    }
+    sc.glob = CrackMesh(std::move(glob));
+    sc.walk = clipToO(sc.glob);
+    return sc;
+}
+
+// Binds the face functions that capture the case's own meshes (by address: sc must not move afterwards)
+void bindStressCase(StressCase& sc)
+{
+    if (sc.id == "B1") {
+        const CrackMesh* S = &sc.surf[0];
+        const Vec3 a = sc.jP;
+        const double sPsi = sc.jW.x();
+        sc.var[0].J = [S, a, sPsi](const Vec3& X) { return std::atan2(S->signedDistance(X), a.dot(X) - sPsi)/kPi; };
+        sc.var[1].J = [S](const Vec3& X) { return S->signedDistance(X) >= 0 ? 1.0 : -1.0; };
+        sc.exact = sc.var[1].J;
+        sc.jP = sc.jW = Vec3::Zero();
+    } else if (sc.id == "D1" || sc.id == "D2" || sc.id == "G1b" || sc.id == "D3" || sc.id == "D4" || sc.id == "D5") {
+        const CrackMesh* S = &sc.surf[0];
+        const Vec3 a = sc.jP;
+        const double sF = sc.jW.x();
+        sc.var[0].J = [S, a, sF](const Vec3& X) { return std::atan2(S->signedDistance(X), a.dot(X) - sF)/kPi; };
+        sc.jP = sc.jW = Vec3::Zero();
+    } else if (sc.id == "C1" || sc.id == "C2" || sc.id == "F3") {
+        const SolidAngleMesh* sm = &sc.solid[0];
+        sc.var[0].J = [sm](const Vec3& X) { return sm->omega(X)/(2*kPi); };
+        // theta-type: the plane's signed distance and the signed in-plane distance to the front polygon
+        std::vector<Vec3> P(sm->V.begin() + 1, sm->V.end());
+        const Vec3 n = (sm->V[size_t(sm->F[0][1])] - sm->V[0]).cross(sm->V[size_t(sm->F[0][2])] - sm->V[0]).normalized();
+        const double d = n.dot(sm->V[0]);
+        sc.var[1].J = [P, n, d](const Vec3& X) { return std::atan2(n.dot(X) - d, polygonSignedDist(P, n, X))/kPi; };
+        sc.jP = sc.jW = Vec3::Zero();
+    } else if (sc.id == "E2") {
+        const SolidAngleMesh *a = &sc.solid[0], *b = &sc.solid[1];
+        sc.var[0].J = blendJ({sc.cracks[0].dist, sc.cracks[1].dist},
+                             {[a](const Vec3& X) { return a->omega(X)/(2*kPi); }, [b](const Vec3& X) { return b->omega(X)/(2*kPi); }});
+    }
+}
+
+std::unique_ptr<StressCase> buildStressCase(const std::string& id)
+{
+    auto sc = std::make_unique<StressCase>(makeStressCase(id));
+    bindStressCase(*sc);
+    return sc;
+}
+
+// ---- one tet's crack in its xi frame ----
+// The walk crack's triangles near the tet mapped into xi (xi = J^-1 (X - X0), det J > 0: orientation kept) and clipped to
+// the reference tet; the edges on a tet face (crack-face lines) and on the front, mapped back to X for the point refinement
+struct StressTet {
+    CrackMesh mesh;
+    bool cut = false;
+    double areaX = 0;
+    std::vector<std::array<Vec3, 2>> faceLines, front;
+    std::vector<int> cracks;
+};
+StressTet stressTet(const TetFrame& T, const CrackMesh& walk)
+{
+    StressTet s;
+    Vec3 lo = T.X[0], hi = T.X[0];
+    for (const Vec3& p : T.X) {
+        lo = lo.cwiseMin(p);
+        hi = hi.cwiseMax(p);
+    }
+    std::vector<CrackMesh::Tri> sel;
+    for (const auto& t : walk.tris()) {
+        const Vec3 tlo = t.a.cwiseMin(t.b).cwiseMin(t.c), thi = t.a.cwiseMax(t.b).cwiseMax(t.c);
+        if ((tlo.array() > hi.array() + 1e-12).any() || (thi.array() < lo.array() - 1e-12).any()) continue;
+        sel.push_back(t);
+    }
+    const CrackMesh xi = CrackMesh(std::move(sel)).mapped(T.Jinv, -T.Jinv*T.X[0]);
+    const std::vector<Vec3> n = {Vec3(-1, 0, 0), Vec3(0, -1, 0), Vec3(0, 0, -1), Vec3(1, 1, 1)};
+    const std::vector<double> c = {0, 0, 0, 1};
+    s.mesh = xi.clipped(n, c, std::vector<uint8_t>(4, CrackMesh::kEdgeTet), 1e-14);
+    s.cut = !s.mesh.empty();
+    for (const auto& t : s.mesh.tris()) {
+        const Vec3 A = T.toX(t.a), B = T.toX(t.b), C = T.toX(t.c);
+        s.areaX += 0.5*(B - A).cross(C - A).norm();
+        const Vec3* v[3] = {&A, &B, &C};
+        for (int k = 0; k < 3; k++) {
+            if (t.edge[k] & (CrackMesh::kEdgeDomain | CrackMesh::kEdgeTet)) s.faceLines.push_back({*v[k], *v[(k + 1)%3]});
+            if (t.edge[k] & CrackMesh::kEdgeFront) s.front.push_back({*v[k], *v[(k + 1)%3]});
+        }
+        if (std::find(s.cracks.begin(), s.cracks.end(), t.crack) == s.cracks.end()) s.cracks.push_back(t.crack);
+    }
+    return s;
+}
+
+// ringPoints with the general crack: refined to depth 3-4 around every crack-face line and front segment of the tet (X),
+// the points within eps (physical distance to the walk crack) dropped
+PointSet stressPoints(const TetFrame& T, const StressTet& st, const CrackMesh& walk, int target, double eps)
+{
+    PointSet ps;
+    ps.eps = eps;
+    const Tet ref = referenceTet();
+    std::vector<std::array<Vec3, 2>> lines = st.faceLines;
+    lines.insert(lines.end(), st.front.begin(), st.front.end());
+    std::vector<Leaf> leaves = {Leaf{{ref.v[0], ref.v[1], ref.v[2], ref.v[3]}, 0}};
+    auto refine = [&](auto pred) {
+        std::vector<Leaf> out;
+        for (const Leaf& l : leaves) {
+            if (!pred(l)) {
+                out.push_back(l);
+                continue;
+            }
+            for (const Leaf& c : beyChildren(l)) out.push_back(c);
+        }
+        leaves.swap(out);
+    };
+    refine([](const Leaf&) { return true; });
+    refine([](const Leaf&) { return true; });
+    for (int level = 2; level < 4 && !lines.empty(); level++)
+        refine([&](const Leaf& l) {
+            if (l.depth != level) return false;
+            const Vec3 c = T.toX(0.25*(l.v[0] + l.v[1] + l.v[2] + l.v[3]));
+            double diam = 0;
+            for (int i = 0; i < 4; i++)
+                for (int j = i + 1; j < 4; j++) diam = std::max(diam, (T.J*(l.v[i] - l.v[j])).norm());
+            for (const auto& s : lines)
+                if (pointSegmentDist(c, s[0], s[1]) < 0.5*diam) return true;
+            return false;
+        });
+    auto counts = [&](double c) {
+        std::vector<int> m(leaves.size());
+        for (size_t i = 0; i < leaves.size(); i++) m[i] = std::max(1, int(std::lround(c*std::pow(8.0, -0.5*(leaves[i].depth - 2)))));
+        return m;
+    };
+    auto total = [](const std::vector<int>& m) {
+        long long s = 0;
+        for (int v : m) s += v;
+        return s;
+    };
+    double lo = 1, hi = double(target);
+    for (int it = 0; it < 60; it++) {
+        const double mid = 0.5*(lo + hi);
+        (total(counts(mid)) < target ? lo : hi) = mid;
+    }
+    const std::vector<int> m = counts(hi);
+    uint64_t idx = 1;
+    ps.nLeaves = int(leaves.size());
+    std::vector<Vec3> cand;
+    std::vector<double> candW;
+    for (size_t li = 0; li < leaves.size(); li++) {
+        const Leaf& l = leaves[li];
+        const double wl = leafVolume(l)/double(m[li])*std::fabs(T.detJ);
+        ps.leavesByDepth[l.depth]++;
+        ps.pointsByDepth[l.depth] += m[li];
+        for (int k = 0; k < m[li]; k++, idx++) {
+            const Vec3 b = cubeToSimplex(radicalInverse(idx, 2), radicalInverse(idx, 3), radicalInverse(idx, 5));
+            cand.push_back(l.v[0] + b.x()*(l.v[1] - l.v[0]) + b.y()*(l.v[2] - l.v[0]) + b.z()*(l.v[3] - l.v[0]));
+            candW.push_back(wl);
+        }
+    }
+    std::vector<char> keep(cand.size(), 1);
+    tbb::parallel_for(size_t(0), cand.size(), [&](size_t i) { keep[i] = !(walk.distance(T.toX(cand[i])) < eps); });
+    for (size_t i = 0; i < cand.size(); i++) {
+        ps.allXi.push_back(cand[i]);
+        ps.allW.push_back(candW[i]);
+        if (!keep[i]) {
+            ps.nDropped++;
+            continue;
+        }
+        ps.xi.push_back(cand[i]);
+        ps.X.push_back(T.toX(cand[i]));
+        ps.w.push_back(candW[i]);
+    }
+    return ps;
+}
+
+// Level C's theta/pi of a half-plane (plane n.X = d, front line u.X = sJ) in a tet's xi frame (xiFront with explicit data)
+XiFront xiFrontOf(const TetFrame& T, const Vec3& nX, double d, const Vec3& uX, double sJ)
+{
+    XiFront f;
+    const Vec3 wX = nX.cross(uX);
+    const Vec3 jn = T.J.transpose()*nX;
+    f.n = jn.normalized();
+    f.dn = (d - nX.dot(T.X[0]))/jn.norm();
+    const Vec3 wXi = (T.Jinv*wX).normalized();
+    f.u = wXi.cross(f.n);
+    if (f.u.dot(T.Jinv*uX) < 0) f.u = -f.u;
+    f.p0 = T.toXi(d*nX + sJ*uX);
+    return f;
+}
+
+// One variant's control variate in one tet's xi frame: the sum of its terms, each exactly harmonic in xi off its crack
+struct TetCv {
+    struct Term {
+        CvTerm::Kind kind = CvTerm::HalfPlane;
+        int crack = 0;
+        double coef = 1;
+        bool exactSelf = true;
+        XiFront hp;
+        Vec3 nX = Vec3::Zero();
+        double dX = 0;
+        const CrackMesh* surf = nullptr;
+        SolidAngleMesh sa;   // in xi
+    };
+    const TetFrame* T = nullptr;
+    std::vector<Term> terms;
+    double term(const Term& t, const Vec3& xi, int m) const
+    {
+        switch (t.kind) {
+        case CvTerm::HalfPlane: return t.coef*(m == 0 ? t.hp.J1(xi) : t.hp.J2(xi));
+        case CvTerm::PlaneSign: return m == 0 ? t.coef*(t.nX.dot(T->toX(xi)) - t.dX >= 0 ? 1.0 : -1.0) : 0.0;
+        case CvTerm::MeshSign: return m == 0 ? t.coef*(t.surf->signedDistance(T->toX(xi)) >= 0 ? 1.0 : -1.0) : 0.0;
+        case CvTerm::Solid: return m == 0 ? t.coef*t.sa.omega(xi)/(2*kPi) : 0.0;
+        }
+        return 0.0;
+    }
+    double value(const Vec3& xi, int m) const
+    {
+        double v = 0;
+        for (const Term& t : terms) v += term(t, xi, m);
+        return v;
+    }
+    Vec3 grad(const Vec3& xi, int m) const
+    {
+        Vec3 g = Vec3::Zero();
+        for (const Term& t : terms) {
+            if (t.kind == CvTerm::HalfPlane) g += t.coef*(m == 0 ? t.hp.grad1(xi) : t.hp.grad2(xi));
+            else if (t.kind == CvTerm::Solid && m == 0) g += (t.coef/(2*kPi))*t.sa.grad(xi);
+        }
+        return g;
+    }
+    // the control variate's part of the crack data: landing on crack j on side s (walk end xe, closest point q, both xi)
+    double atCrack(int j, int s, const Vec3& xe, const Vec3& q, int m) const
+    {
+        double v = 0;
+        for (const Term& t : terms) {
+            if (t.crack == j && t.exactSelf) {
+                if (m == 0) v += t.coef*double(s);
+                else if (t.kind == CvTerm::HalfPlane) v += t.coef*double(s)*std::sqrt(t.hp.r(q)/kSqrt2);
+            } else {
+                v += term(t, xe, m);
+            }
+        }
+        return v;
+    }
+};
+TetCv tetCv(const TetFrame& T, const JVariant& v, const StressCase& sc)
+{
+    TetCv c;
+    c.T = &T;
+    for (const CvTerm& t : v.cv) {
+        TetCv::Term u;
+        u.kind = t.kind;
+        u.crack = t.crack;
+        u.coef = t.coef;
+        u.exactSelf = t.exactSelf;
+        if (t.kind == CvTerm::HalfPlane) u.hp = xiFrontOf(T, t.n, t.d, t.u, t.sJ);
+        else if (t.kind == CvTerm::PlaneSign) {
+            u.nX = t.n;
+            u.dX = t.d;
+        } else if (t.kind == CvTerm::MeshSign) u.surf = &sc.surf[size_t(t.surf)];
+        else u.sa = sc.solid[size_t(t.surf)].mapped(T.Jinv, -T.Jinv*T.X[0]);
+        c.terms.push_back(std::move(u));
+    }
+    return c;
+}
+
+// the crack data of the target problem: +-g_j on crack j (g = 1), times min(1, sqrt(r/L)) for the ramp (r = the physical
+// distance to the crack's straight front line), at the physical point X
+double stressTarget(const StressCase& sc, int j, int s, const Vec3& X, int m)
+{
+    const StressCrack& c = sc.cracks[size_t(j)];
+    if (m == 0 || !c.halfPlane) return double(s)*c.g;
+    return double(s)*c.g*c.frame.g(X, GType::SqrtFront);
+}
+
+// ---- the solve on O (the GT and the direct ring solve): the walk crack, 8 Neumann faces, mirror first ball ----
+// K = 2: g = 1 and the ramp (= g = 1 for a case without the ramp, to keep the cache format). Points: the tets' points (H,
+// grad H), then the 7 vertex probes (H).
+RefRun stressSolveO(const StressCase& sc, const Ring& R, const std::vector<PointSet>& ps, int N, int B, uint64_t seed, int maxLen)
+{
+    RefRun r;
+    for (const PointSet& p : ps) r.X.insert(r.X.end(), p.X.begin(), p.X.end());
+    r.nA = r.X.size();
+    const std::vector<Vec3> probes = ringProbes(R);
+    r.X.insert(r.X.end(), probes.begin(), probes.end());
+    r.nF = probes.size();
+    std::vector<char> grad(r.X.size(), 1);
+    std::fill(grad.begin() + std::ptrdiff_t(r.nA), grad.end(), char(0));
+    QueryPoints q;
+    q.add(r.X, &grad, seed);
+    const ConvexDomain O = octahedron();
+    MeshJob jb;
+    jb.dom = &O;
+    jb.mesh = &sc.walk;
+    jb.pts = &q;
+    jb.nWalks = N;
+    jb.nBatches = B;
+    jb.K = 2;
+    jb.wp = ringReferenceWalkParams(O);
+    jb.wp.maxWalkLength = maxLen;
+    const bool ramp = sc.ramp;
+    jb.values = [&sc, ramp](const MeshTerminal& w, double* u) {
+        u[0] = stressTarget(sc, w.crack, w.side, w.x, 0);
+        u[1] = ramp ? stressTarget(sc, w.crack, w.side, w.x, 1) : u[0];
+    };
+    std::vector<SolveStats> st;
+    r.sums = std::move(solveMultiMeshJobs({jb}, &st)[0]);
+    r.stats = st[0];
+    return r;
+}
+
+uint64_t stressMeshHash(const StressCase& sc)
+{
+    std::vector<double> v;
+    for (const auto& t : sc.walk.tris()) {
+        for (const Vec3* p : {&t.a, &t.b, &t.c, &t.n}) v.insert(v.end(), {p->x(), p->y(), p->z()});
+        v.push_back(double(t.crack));
+        v.push_back(double(t.edge[0] + 8*t.edge[1] + 64*t.edge[2]));
+    }
+    for (const StressCrack& c : sc.cracks) {
+        v.push_back(c.g);
+        if (c.halfPlane) v.insert(v.end(), {c.frame.n.x(), c.frame.n.y(), c.frame.n.z(), c.frame.d, c.frame.u.x(), c.frame.u.y(),
+                                            c.frame.u.z(), c.frame.s, c.frame.L});
+    }
+    v.push_back(sc.ramp ? 1.0 : 0.0);
+    return fnv1a(v.data(), v.size()*sizeof(double));
+}
+
+const char* const kStressSolverVersion = "ring stress GT: own loop with a CrackMesh crack (walk_cache.cpp solveMultiMeshJobs) v1; "
+                                         "K = 2 (g = 1, ramp or g = 1 again)";
+
+// The GT of a case at its points: from the cache gate_cache/<file> if its key matches, else a timing pilot (N/100) and the
+// full run, written to the cache (useCache false: neither read nor written)
+RefRun stressGT(Report& out, const StressCase& sc, const Ring& R, const std::vector<PointSet>& ps, int N, int B, uint64_t seedTag,
+                int maxLen, const std::string& file, bool useCache, double* pilotExtrap = nullptr, bool pilotOnly = false,
+                bool skipPilot = false, bool cacheOnly = false)
+{
+    const GateParams gp = gateParams(false);
+    const uint64_t seed = mixSeed(gp.seed, seedTag);
+    RefRun r;
+    for (const PointSet& p : ps) r.X.insert(r.X.end(), p.X.begin(), p.X.end());
+    r.nA = r.X.size();
+    const std::vector<Vec3> probes = ringProbes(R);
+    r.X.insert(r.X.end(), probes.begin(), probes.end());
+    r.nF = probes.size();
+    const ConvexDomain O = octahedron();
+    const WalkParams wp = ringReferenceWalkParams(O);
+    char buf[256];
+    std::snprintf(buf, sizeof buf, "%016llx | points %zu (tets %zu, probes %zu), hash %016llx", (unsigned long long)stressMeshHash(sc),
+                  r.X.size(), r.nA, r.nF, (unsigned long long)fnv1a(r.X.data(), r.X.size()*sizeof(Vec3)));
+    std::string key = "ring stress GT on O | case " + sc.id + " | " + R.name + ", c " + fmtg3(R.V[0]) + " | walk mesh " +
+                      std::to_string(sc.walk.size()) + " triangles, hash " + buf + " | seed " + std::to_string(seed) + " | N " +
+                      std::to_string(N) + " | batches " + std::to_string(B) + " | O";
+    for (size_t k = 0; k < O.n.size(); k++) key += " " + fmtg3(O.n[k]) + "." + fmtg(O.c[k]);
+    key += ", L_O " + fmtg(O.L) + " | walk: absorbShellRel " + fmtg(wp.absorbShellRel) + ", maxWalkLength " + std::to_string(maxLen) +
+           ", mirrorGradBall " + (wp.mirrorGradBall ? "1" : "0") + ", kGradFirstBallShrink " + fmtg(kGradFirstBallShrink) + " | " +
+           kStressSolverVersion;
+    r.key = key;
+    r.file = (std::filesystem::path("gate_cache")/file).string();
+    if (file.rfind("ref_check", 0) == 0) throw std::logic_error("--ring-stress never writes a ref_check* cache");
+    if (useCache && readRefCache(r)) {
+        r.cached = true;
+        out("  GT loaded from %s (key matches); original run: %s\n", r.file.c_str(), r.stats.summary().c_str());
+        return r;
+    }
+    if (cacheOnly) {   // the ring view: nothing is solved here
+        r.ok = false;
+        return r;
+    }
+    r.nPilot = B*std::max(1, N/(100*B));
+    if (!skipPilot) {
+        const RefRun pr = stressSolveO(sc, R, ps, r.nPilot, B, mixSeed(gp.seed, seedTag + 100), maxLen);
+        r.pilotSeconds = pr.stats.seconds;
+        r.pilotExtrapolated = pr.stats.seconds*double(N)/double(r.nPilot);
+        out("  GT timing pilot, N = %d: %s -> extrapolated to N = %d: %.0f s\n", r.nPilot, pr.stats.summary().c_str(), N,
+            r.pilotExtrapolated);
+    }
+    if (pilotExtrap) *pilotExtrap = r.pilotExtrapolated;
+    if (pilotOnly) {
+        r.ok = false;
+        return r;
+    }
+    const RefRun full = stressSolveO(sc, R, ps, N, B, seed, maxLen);
+    r.sums = full.sums;
+    r.stats = full.stats;
+    out("  GT run: %s\n", r.stats.summary().c_str());
+    if (useCache) {
+        std::error_code ec;
+        std::filesystem::create_directories("gate_cache", ec);
+        out("  %s %s\n", writeRefCache(r) ? "GT cached to" : "COULD NOT WRITE the GT cache", r.file.c_str());
+    }
+    return r;
+}
+
+// ---- ours: the per-tet method on a general crack ----
+struct StressOursParams {
+    int nQ = 32, nR = 16, B = 8;
+    bool cv = true;        // control variates (the fast path); false: plain per-tet solves (H0: crack data, faces J; P_k:
+                           // crack 0, faces lambda_k) in every tet
+    int maxLen = 4096;
+};
+struct StressOurs {
+    std::vector<std::pair<int, int>> vms;          // the (variant, g mode) pairs solved
+    std::vector<std::vector<TetCv>> cv;            // [variant][tet]
+    std::vector<OwnRun> runP, runR;                // per tet: Q (cv) or P (plain); R (cv) or H0 (plain)
+    std::vector<char> hasP, hasR;
+    std::vector<std::vector<int>> comp;            // [tet][vm index]: the R component, -1: R = 0 exactly (no walks)
+    std::vector<std::vector<std::vector<double>>> cvVal;   // [vm][tet][point]
+    std::vector<std::vector<std::vector<Vec3>>> cvGrad;
+    std::vector<std::vector<Gram>> G;              // [vm][tet], layout H0, H0, P_0..P_3 (glueCheck4's h = 0)
+    std::vector<Glue4> gl;                         // [vm]
+    std::vector<std::vector<FieldAt>> F;           // [vm][tet]
+    std::vector<double> maxFace, maxCrack;         // [vm]: max |R's data| on the face grids / at the crack vertices
+    double secSetup = 0, secP = 0, secR = 0, secGram = 0, secGlue = 0, secField = 0, secTotal = 0;
+    long long walksP = 0, walksR = 0, stepsP = 0, stepsR = 0, capped = 0, escaped = 0;
+    int nPtets = 0, nRtets = 0;
+    int vmIndex(int v, int m) const
+    {
+        for (size_t k = 0; k < vms.size(); k++)
+            if (vms[k].first == v && vms[k].second == m) return int(k);
+        return -1;
+    }
+};
+
+// The R residual of one variant and g mode in one tet: max |J - C| on a 25 x 25 barycentric grid per face (points within
+// 1e-9 of the tet's crack skipped) and max |target - C| at the crack triangles' vertices and centroids (both sides)
+void stressResidual(const StressTet& st, const TetFrame& T, const JVariant& v, const TetCv& cv, int m, const StressCase& sc,
+                    double& maxFace, double& maxCrack)
+{
+    maxFace = maxCrack = 0;
+    const Tet ref = referenceTet();
+    for (int o = 0; o < 4; o++) {
+        std::array<int, 3> fv{};
+        int k = 0;
+        for (int i = 0; i < 4; i++)
+            if (i != o) fv[size_t(k++)] = i;
+        for (int i = 0; i <= 24; i++)
+            for (int j = 0; i + j <= 24; j++) {
+                const double l1 = i/24.0, l2 = j/24.0, l0 = 1.0 - l1 - l2;
+                const Vec3 xi = l0*ref.v[size_t(fv[0])] + l1*ref.v[size_t(fv[1])] + l2*ref.v[size_t(fv[2])];
+                if (st.cut && st.mesh.distance(xi) < 1e-9) continue;
+                const Vec3 X = T.toX(xi);
+                maxFace = std::max(maxFace, std::fabs((m ? v.Jr(X) : v.J(X)) - cv.value(xi, m)));
+            }
+    }
+    for (const auto& t : st.mesh.tris())
+        for (const Vec3& p : {t.a, t.b, t.c, Vec3((t.a + t.b + t.c)/3.0)})
+            for (int s : {-1, 1})
+                maxCrack = std::max(maxCrack, std::fabs(stressTarget(sc, t.crack, s, T.toX(p), m) - cv.atCrack(t.crack, s, p, p, m)));
+}
+
+StressOurs runStressOurs(const StressCase& sc, const Ring& R, const std::vector<StressTet>& stt, const std::vector<PointSet>& ps,
+                         const StressOursParams& p, uint64_t seed, uint64_t tagBase, bool withFields)
+{
+    using clk = std::chrono::steady_clock;
+    const auto tStart = clk::now();
+    const int B = p.B;
+    if (B < 3 || p.nQ%B || p.nR%B || p.nQ/B < 2 || p.nR/B < 2)
+        throw std::invalid_argument("--ring-stress ours: at least 3 batches, and nQ, nR multiples of the batch count with at least "
+                                    "2 walks per batch");
+    StressOurs o;
+    const size_t nV = sc.var.size();
+    for (size_t v = 0; v < nV; v++)
+        for (int m = 0; m < (sc.ramp ? 2 : 1); m++)
+            if (m == 0 || sc.var[v].Jr) o.vms.push_back({int(v), m});
+    const size_t nVm = o.vms.size();
+    o.cv.assign(nV, {});
+    if (p.cv)
+        for (size_t v = 0; v < nV; v++)
+            for (int t = 0; t < kRingNT; t++) o.cv[v].push_back(tetCv(R.T[size_t(t)], sc.var[v], sc));
+    o.comp.assign(kRingNT, std::vector<int>(nVm, -1));
+    o.maxFace.assign(nVm, 0.0);
+    o.maxCrack.assign(nVm, 0.0);
+    std::vector<int> KR(kRingNT, 0);
+    std::vector<double> rf(kRingNT*nVm, 0.0), rc(kRingNT*nVm, 0.0);   // each tet's and component's residuals (in parallel)
+    if (p.cv)
+        tbb::parallel_for(size_t(0), kRingNT*nVm, [&](size_t q) {
+            const size_t t = q/nVm, k = q%nVm;
+            stressResidual(stt[t], R.T[t], sc.var[size_t(o.vms[k].first)], o.cv[size_t(o.vms[k].first)][t], o.vms[k].second, sc, rf[q], rc[q]);
+        });
+    for (int t = 0; t < kRingNT; t++)
+        for (size_t k = 0; k < nVm; k++) {
+            const size_t q = size_t(t)*nVm + k;
+            o.maxFace[k] = std::max(o.maxFace[k], rf[q]);
+            o.maxCrack[k] = std::max(o.maxCrack[k], rc[q]);
+            if (!p.cv || rf[q] > 1e-12 || rc[q] > 1e-12) o.comp[size_t(t)][k] = KR[size_t(t)]++;
+        }
+    if (*std::max_element(KR.begin(), KR.end()) > 16) throw std::invalid_argument("--ring-stress: more than 16 R components");
+    const Tet ref = referenceTet();
+    WalkParams wpP = gateWalkParams(allDirichlet(), true, true), wpR = gateWalkParams(allDirichlet(), true, false);
+    wpP.maxWalkLength = wpR.maxWalkLength = p.maxLen;
+    const HarmonicExtension ext0 = [](const Vec3&, double* phi) {
+        for (int k = 0; k < 4; k++) phi[k] = 0.0;
+    };
+    const HarmonicExtension extL = [](const Vec3& xi, double* phi) {   // lambda_k: linear, its own harmonic extension
+        phi[0] = 1.0 - xi.sum();
+        phi[1] = xi[0];
+        phi[2] = xi[1];
+        phi[3] = xi[2];
+    };
+    const MeshTerminalValues tvQ = [](const MeshTerminal& w, double* u) {   // Q_k: crack -lambda_k(xi), faces 0
+        if (w.face >= 0) {
+            for (int k = 0; k < 4; k++) u[k] = 0.0;
+            return;
+        }
+        const double l[4] = {1.0 - w.x.sum(), w.x[0], w.x[1], w.x[2]};
+        for (int k = 0; k < 4; k++) u[k] = -l[k];
+    };
+    const MeshTerminalValues tvP = [](const MeshTerminal& w, double* u) {   // P_k (plain): crack 0, faces lambda_k(xi)
+        if (w.face < 0) {
+            for (int k = 0; k < 4; k++) u[k] = 0.0;
+            return;
+        }
+        const double l[4] = {1.0 - w.x.sum(), w.x[0], w.x[1], w.x[2]};
+        for (int k = 0; k < 4; k++) u[k] = l[k];
+    };
+    std::vector<QueryPoints> qP(kRingNT), qR(kRingNT);
+    std::vector<MeshJob> jobsP, jobsR;
+    std::vector<int> tetP, tetR;
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame* T = &R.T[size_t(t)];
+        const StressTet& st = stt[size_t(t)];
+        const std::vector<char> grad(ps[size_t(t)].size(), 1);
+        const uint64_t sP = mixSeed(seed, tagBase + 10*uint64_t(t));
+        MeshJob jb;
+        jb.tet = &ref;
+        jb.mesh = &st.mesh;
+        jb.nBatches = B;
+        if (st.cut || !p.cv) {
+            qP[size_t(t)].add(ps[size_t(t)].xi, &grad, sP);
+            jb.pts = &qP[size_t(t)];
+            jb.nWalks = p.nQ;
+            jb.K = 4;
+            jb.wp = wpP;
+            jb.values = p.cv ? tvQ : tvP;
+            jb.ext = p.cv ? &ext0 : &extL;
+            jobsP.push_back(jb);
+            tetP.push_back(t);
+        }
+        if (KR[size_t(t)] > 0) {
+            qR[size_t(t)].add(ps[size_t(t)].xi, &grad, mixSeed(sP, 77));
+            std::vector<std::pair<int, int>> comps;   // component -> (variant, mode)
+            std::vector<const TetCv*> cvs;
+            for (size_t k = 0; k < nVm; k++)
+                if (o.comp[size_t(t)][k] >= 0) {
+                    comps.push_back(o.vms[k]);
+                    cvs.push_back(p.cv ? &o.cv[size_t(o.vms[k].first)][size_t(t)] : nullptr);
+                }
+            jb.pts = &qR[size_t(t)];
+            jb.nWalks = p.nR;
+            jb.K = int(comps.size());
+            jb.wp = wpR;
+            jb.ext = nullptr;
+            jb.values = [T, &sc, comps, cvs](const MeshTerminal& w, double* u) {
+                if (w.face >= 0) {   // faces: J - C
+                    const Vec3 X = T->toX(w.x);
+                    for (size_t k = 0; k < comps.size(); k++) {
+                        const JVariant& v = sc.var[size_t(comps[k].first)];
+                        const int m = comps[k].second;
+                        u[k] = (m ? v.Jr(X) : v.J(X)) - (cvs[k] ? cvs[k]->value(w.x, m) : 0.0);
+                    }
+                } else {             // the crack: the target data - C (the self terms exact where known)
+                    const Vec3 X = T->toX(w.x);
+                    for (size_t k = 0; k < comps.size(); k++) {
+                        const int m = comps[k].second;
+                        u[k] = stressTarget(sc, w.crack, w.side, X, m) - (cvs[k] ? cvs[k]->atCrack(w.crack, w.side, w.xEnd, w.x, m) : 0.0);
+                    }
+                }
+            };
+            jobsR.push_back(jb);
+            tetR.push_back(t);
+        }
+    }
+    o.runP.assign(kRingNT, OwnRun{});
+    o.runR.assign(kRingNT, OwnRun{});
+    o.hasP.assign(kRingNT, 0);
+    o.hasR.assign(kRingNT, 0);
+    o.secSetup = secondsSince(tStart);
+    auto run = [&](const std::vector<MeshJob>& jobs, const std::vector<int>& tets, bool isP) {
+        const auto t0 = clk::now();
+        std::vector<SolveStats> st;
+        std::vector<MultiSums> sums;
+        if (!jobs.empty()) sums = solveMultiMeshJobs(jobs, &st);
+        for (size_t j = 0; j < jobs.size(); j++) {
+            OwnRun& r = isP ? o.runP[size_t(tets[j])] : o.runR[size_t(tets[j])];
+            r.sums = std::move(sums[j]);
+            r.stats = st[j];
+            (isP ? o.hasP : o.hasR)[size_t(tets[j])] = 1;
+            (isP ? o.walksP : o.walksR) += st[j].walksRequested;
+            (isP ? o.stepsP : o.stepsR) += st[j].totalSteps;
+            o.capped += st[j].walksCapped;
+            o.escaped += st[j].walksEscaped;
+        }
+        return secondsSince(t0);
+    };
+    o.secP = run(jobsP, tetP, true);
+    o.secR = run(jobsR, tetR, false);
+    o.nPtets = int(jobsP.size());
+    o.nRtets = int(jobsR.size());
+    // the control variates' values and gradients at the points (exact)
+    auto t0 = clk::now();
+    o.cvVal.assign(nVm, std::vector<std::vector<double>>(kRingNT));
+    o.cvGrad.assign(nVm, std::vector<std::vector<Vec3>>(kRingNT));
+    for (size_t k = 0; k < nVm; k++)
+        for (int t = 0; t < kRingNT; t++) {
+            const size_t n = ps[size_t(t)].size();
+            o.cvVal[k][size_t(t)].assign(n, 0.0);
+            o.cvGrad[k][size_t(t)].assign(n, Vec3::Zero());
+            if (!p.cv) continue;
+            const TetCv& c = o.cv[size_t(o.vms[k].first)][size_t(t)];
+            const int m = o.vms[k].second;
+            tbb::parallel_for(size_t(0), n, [&](size_t i) {
+                o.cvVal[k][size_t(t)][i] = c.value(ps[size_t(t)].xi[i], m);
+                o.cvGrad[k][size_t(t)][i] = c.grad(ps[size_t(t)].xi[i], m);
+            });
+        }
+    // the Grams (physical energy) and the glue
+    o.G.assign(nVm, {});
+    const std::vector<double> u4[4] = {unitCoef(4, 0), unitCoef(4, 1), unitCoef(4, 2), unitCoef(4, 3)};
+    for (size_t k = 0; k < nVm; k++)
+        for (int t = 0; t < kRingNT; t++) {
+            const TetFrame& T = R.T[size_t(t)];
+            const std::array<Vec3, 4> gN = gradN(T);
+            const OwnRun* pr = o.hasP[size_t(t)] ? &o.runP[size_t(t)] : nullptr;
+            const int ci = o.comp[size_t(t)][k];
+            const OwnRun* rr = ci >= 0 ? &o.runR[size_t(t)] : nullptr;
+            const std::vector<double> uR = rr ? unitCoef(rr->sums.K, ci) : std::vector<double>{};
+            const std::vector<Vec3>& cg = o.cvGrad[k][size_t(t)];
+            const bool known = p.cv;
+            o.G[k].push_back(gramFromBatches(ps[size_t(t)].w, B, 6, [&](size_t i, int b, Vec3* g) {
+                Vec3 h = cg[i];
+                if (rr) h += comboBatchGrad(rr->sums, i, b, uR);
+                g[0] = g[1] = T.JinvT*h;
+                for (int q = 0; q < 4; q++)
+                    g[2 + q] = (known ? gN[size_t(q)] : Vec3::Zero()) +
+                               (pr ? Vec3(T.JinvT*comboBatchGrad(pr->sums, i, b, u4[q])) : Vec3::Zero());
+            }));
+        }
+    o.secGram = secondsSince(t0);
+    t0 = clk::now();
+    for (size_t k = 0; k < nVm; k++) o.gl.push_back(glueRun4(R, o.G[k], 0));
+    o.secGlue = secondsSince(t0);
+    if (withFields) {
+        t0 = clk::now();
+        o.F.assign(nVm, {});
+        for (size_t k = 0; k < nVm; k++)
+            for (int t = 0; t < kRingNT; t++) {
+                const TetFrame& T = R.T[size_t(t)];
+                const PointSet& pst = ps[size_t(t)];
+                const std::array<Vec3, 4> gN = gradN(T);
+                const OwnRun* pr = o.hasP[size_t(t)] ? &o.runP[size_t(t)] : nullptr;
+                const int ci = o.comp[size_t(t)][k];
+                const OwnRun* rr = ci >= 0 ? &o.runR[size_t(t)] : nullptr;
+                const std::vector<double> uR = rr ? unitCoef(rr->sums.K, ci) : std::vector<double>{};
+                const Eigen::Vector4d cc = localValues(T, o.gl[k].c);
+                std::vector<Eigen::Vector4d> cJ;
+                for (const Vec7& x : o.gl[k].jack) cJ.push_back(localValues(T, x));
+                const bool known = p.cv;
+                FieldAt f;
+                f.resize(pst.size());
+                tbb::parallel_for(size_t(0), pst.size(), [&](size_t i) {
+                    const Vec3& xi = pst.xi[i];
+                    const double lam[4] = {1.0 - xi.sum(), xi[0], xi[1], xi[2]};
+                    BatchSeries sR, sQ[4];
+                    if (rr) batchSeries(rr->sums, i, ci, uR, sR);
+                    if (pr)
+                        for (int q = 0; q < 4; q++) batchSeries(pr->sums, i, q, u4[q], sQ[q]);
+                    auto eval = [&](const Eigen::Vector4d& c4, int a, double& H, Vec3& G) {
+                        double Rv = 0, Qv[4] = {0, 0, 0, 0};
+                        Vec3 Rg = Vec3::Zero(), Qg[4] = {Vec3::Zero(), Vec3::Zero(), Vec3::Zero(), Vec3::Zero()};
+                        if (rr) {
+                            Rv = a < 0 ? sR.SU/sR.N : (sR.SU - sR.su[size_t(a)])/(sR.N - sR.n[size_t(a)]);
+                            Rg = a < 0 ? Vec3(sR.G/double(B)) : Vec3((sR.G - sR.g[size_t(a)])/double(B - 1));
+                        }
+                        if (pr)
+                            for (int q = 0; q < 4; q++) {
+                                Qv[q] = a < 0 ? sQ[q].SU/sQ[q].N : (sQ[q].SU - sQ[q].su[size_t(a)])/(sQ[q].N - sQ[q].n[size_t(a)]);
+                                Qg[q] = a < 0 ? Vec3(sQ[q].G/double(B)) : Vec3((sQ[q].G - sQ[q].g[size_t(a)])/double(B - 1));
+                            }
+                        H = o.cvVal[k][size_t(t)][i] + Rv;
+                        G = T.JinvT*(o.cvGrad[k][size_t(t)][i] + Rg);
+                        for (int q = 0; q < 4; q++) {
+                            H += c4[q]*((known ? lam[q] : 0.0) + Qv[q]);
+                            G += c4[q]*((known ? gN[size_t(q)] : Vec3::Zero()) + T.JinvT*Qg[q]);
+                        }
+                    };
+                    eval(cc, -1, f.H[i], f.G[i]);
+                    std::vector<double> Ha(static_cast<size_t>(B));
+                    std::vector<Vec3> Ga(static_cast<size_t>(B));
+                    double hm = 0;
+                    Vec3 gm = Vec3::Zero();
+                    for (int a = 0; a < B; a++) {
+                        eval(cJ.empty() ? cc : cJ[size_t(a)], a, Ha[size_t(a)], Ga[size_t(a)]);
+                        hm += Ha[size_t(a)]/double(B);
+                        gm += Ga[size_t(a)]/double(B);
+                    }
+                    for (int a = 0; a < B; a++) {
+                        f.vH[i] += (Ha[size_t(a)] - hm)*(Ha[size_t(a)] - hm)*double(B - 1)/double(B);
+                        f.vG[i] += (Ga[size_t(a)] - gm).cwiseAbs2()*double(B - 1)/double(B);
+                    }
+                });
+                o.F[k].push_back(std::move(f));
+            }
+        o.secField = secondsSince(t0);
+    }
+    o.secTotal = secondsSince(tStart);
+    return o;
+}
+
+// H0 alone (no glue) of one variant and mode at a tet's points: C + R (cv) or the plain run, with per-point variance of H
+// and per-batch gradient spread (validation of the control variates)
+void stressH0(const StressOurs& o, int k, int t, const PointSet& ps, const TetFrame& T, size_t i, double& H, double& vH, Vec3& G,
+              Vec3& vG)
+{
+    const int ci = o.comp[size_t(t)][size_t(k)];
+    H = o.cvVal[size_t(k)][size_t(t)][i];
+    vH = 0;
+    G = o.cvGrad[size_t(k)][size_t(t)][i];
+    vG = Vec3::Zero();
+    if (ci < 0) {
+        G = T.JinvT*G;
+        return;
+    }
+    const MultiSums& s = o.runR[size_t(t)].sums;
+    const std::vector<double> u = unitCoef(s.K, ci);
+    double h, v;
+    long long n;
+    comboH(s, i, u, h, v, n);
+    H += h;
+    vH = v;
+    const int Bn = s.nBatches;
+    std::vector<Vec3> gb(static_cast<size_t>(Bn));
+    Vec3 gm = Vec3::Zero();
+    for (int b = 0; b < Bn; b++) gm += (gb[size_t(b)] = T.JinvT*comboBatchGrad(s, i, b, u))/double(Bn);
+    for (const Vec3& x : gb) vG += (x - gm).cwiseAbs2()/(double(Bn)*double(Bn - 1));
+    G = T.JinvT*G + gm;
+    (void)ps;
+}
+
+// ---- the GT side of one case: its fields at the points and the probes, the regions, the energies ----
+constexpr int kSR = 6;   // regions: all, near a front, near crack-face lines, near O's boundary, near interior faces, near the junction
+const char* const kSRName[kSR] = {"all", "front", "lines", "outer", "iface", "junction"};
+struct StressRef {
+    std::vector<size_t> off;
+    size_t nPts = 0;
+    std::vector<double> w;
+    std::vector<std::array<char, kSR>> reg;
+    FieldAt gt[2], gtP[2];
+    double gt2[2][kSR] = {}, Eref[2] = {}, ErefSe[2] = {}, gtRms[2] = {};
+    ErrStats floor[2];
+    int nModes = 1;
+    bool exact = false, hasRun = false;
+    RefRun ref;
+    std::string source, check;
+    double gtSeconds = 0;
+};
+
+std::vector<std::array<Vec3, 2>> walkFront(const StressCase& sc)
+{
+    std::vector<std::array<Vec3, 2>> f;
+    for (const auto& t : sc.walk.tris()) {
+        const Vec3* v[3] = {&t.a, &t.b, &t.c};
+        for (int k = 0; k < 3; k++)
+            if (t.edge[k] & CrackMesh::kEdgeFront) f.push_back({*v[k], *v[(k + 1)%3]});
+    }
+    return f;
+}
+
+void stressRefSetup(StressRef& r, const StressCase& sc, const Ring& R, const std::vector<StressTet>& stt, const std::vector<PointSet>& ps)
+{
+    const ConvexDomain O = octahedron();
+    r.nModes = sc.ramp ? 2 : 1;
+    r.off.assign(kRingNT, 0);
+    for (int t = 1; t < kRingNT; t++) r.off[size_t(t)] = r.off[size_t(t - 1)] + ps[size_t(t - 1)].size();
+    r.nPts = r.off.back() + ps.back().size();
+    std::vector<Vec3> X;
+    for (const PointSet& p : ps) {
+        X.insert(X.end(), p.X.begin(), p.X.end());
+        r.w.insert(r.w.end(), p.w.begin(), p.w.end());
+    }
+    const std::vector<std::array<Vec3, 2>> fr = walkFront(sc);
+    std::vector<std::array<Vec3, 2>> lines;
+    for (const StressTet& s : stt) lines.insert(lines.end(), s.faceLines.begin(), s.faceLines.end());
+    r.reg.assign(r.nPts, {});
+    tbb::parallel_for(size_t(0), r.nPts, [&](size_t i) {
+        const Vec3& x = X[i];
+        bool nf = false, nl = false, ni = false, nj = false;
+        for (const auto& s : fr)
+            if (pointSegmentDist(x, s[0], s[1]) < kNearRing) {
+                nf = true;
+                break;
+            }
+        for (const auto& s : lines)
+            if (pointSegmentDist(x, s[0], s[1]) < kNearRing) {
+                nl = true;
+                break;
+            }
+        for (const auto& f : R.innerFaces)
+            ni = ni || pointTriangleDist(x, R.V[size_t(f[0])], R.V[size_t(f[1])], R.V[size_t(f[2])]) < kNearRing;
+        if (sc.junction)   // the junction half-line (E3): from B's front point jP along jW into B (4 > O's diameter)
+            nj = pointSegmentDist(x, sc.jP, Vec3(sc.jP + 4.0*sc.jW)) < kNearRing;
+        r.reg[i] = {1, char(nf), char(nl), char(distToDomainFaces(O, x) < kNearRing), char(ni), char(nj)};
+    });
+    const std::vector<Vec3> probes = ringProbes(R);
+    for (int m = 0; m < r.nModes; m++) {
+        if (r.hasRun) {
+            r.gt[m] = refField(r.ref, m, 0, r.ref.nA);
+            r.gtP[m] = refField(r.ref, m, r.ref.nA, r.ref.nF);
+        } else {   // exact: the side indicator, no noise
+            r.gt[m].resize(r.nPts);
+            r.gtP[m].resize(probes.size());
+            for (size_t i = 0; i < r.nPts; i++) r.gt[m].H[i] = sc.exact(X[i]);
+            for (size_t i = 0; i < probes.size(); i++) r.gtP[m].H[i] = sc.exact(probes[i]);
+        }
+        double sh = 0, sw = 0;
+        for (size_t g = 0; g < r.nPts; g++) {
+            for (int k = 0; k < kSR; k++)
+                if (r.reg[g][k]) r.gt2[m][k] += r.w[g]*r.gt[m].G[g].squaredNorm();
+            r.floor[m].add(r.w[g], Vec3::Zero(), 0.0, Vec3::Zero(), r.gt[m].vH[g], 0.0, r.gt[m].vG[g], Vec3::Zero());
+            sh += r.w[g]*r.gt[m].H[g]*r.gt[m].H[g];
+            sw += r.w[g];
+        }
+        r.gtRms[m] = std::sqrt(sh/sw)/kTwoGMax;
+        if (r.hasRun) {
+            std::vector<double> wA(r.w);
+            wA.resize(r.ref.X.size(), 0.0);
+            solveEnergy(r.ref.sums, wA, m, r.Eref[m], r.ErefSe[m]);
+        }
+    }
+}
+
+// one measured row: a method at one setting, one face function, one g mode, one seed set
+struct StressRow {
+    std::string id, variant, method, label;
+    int g = 0, rep = 0, nQ = 0, nR = 0, N = 0, B = 0;
+    long long points = 0, walks = 0, moves = 0, capped = 0, escaped = 0;
+    int tetsCut = 0, tetsP = -1, tetsR = -1;
+    std::vector<double> times;
+    double tMed = 0, tSetup = 0, tP = 0, tR = 0, tWalks = 0, tGram = 0, tGlue = 0, tField = 0;
+    ErrStats e[kSR];
+    double gt2[kSR] = {};
+    double E = 0, Ese = 0, Eref = 0, ErefSe = 0;
+    bool hasE = false;
+    Vec7 vert = Vec7::Zero(), vref = Vec7::Zero(), cse = Vec7::Zero();
+    bool hasC = false;
+    double vErr = 0, gtRms = 0, maxFace = std::nan(""), maxCrack = std::nan("");
+    bool exactGT = false;
+};
+
+void fillStressErrors(const StressRef& r, const StressCase& sc, int m, const std::vector<FieldAt>& F, const std::vector<PointSet>& ps,
+                      StressRow& row)
+{
+    const FieldAt& g = r.gt[m];
+    for (int t = 0; t < kRingNT; t++) {
+        const FieldAt& f = F[size_t(t)];
+        for (size_t i = 0; i < ps[size_t(t)].size(); i++) {
+            const size_t q = r.off[size_t(t)] + i;
+            for (int k = 0; k < kSR; k++)
+                if (r.reg[q][k]) row.e[k].add(r.w[q], ps[size_t(t)].X[i], f.H[i] - g.H[q], f.G[i] - g.G[q], g.vH[q], f.vH[i], g.vG[q], f.vG[i]);
+        }
+    }
+    for (int k = 0; k < kSR; k++) row.gt2[k] = r.gt2[m][k];
+    for (int k = 0; k < kRingNV; k++) row.vref[k] = r.gtP[m].H[size_t(k)];
+    row.vErr = 0;
+    for (int k = sc.v0Undefined ? 1 : 0; k < kRingNV; k++) row.vErr = std::max(row.vErr, std::fabs(row.vert[k] - row.vref[k]));
+    row.Eref = r.Eref[m];
+    row.ErefSe = r.ErefSe[m];
+    row.gtRms = r.gtRms[m];
+    row.exactGT = !r.hasRun;
+}
+
+std::string stressCsvHeader()
+{
+    std::string h = "case,variant,g,method,label,seed_rep,nQ,nR,N,B,points,tets_cut,tets_P,tets_R,t_total_median,t_total_min,t_total_max,"
+                    "n_repeats,t_setup,t_walks_P,t_walks_R,t_walks,t_gram,t_glue,t_field,walks,moves,mean_walk_len,capped,escaped,"
+                    "H_rms,H_nc,H_max,H_se_fld,H_se_ref,H_rel_gt_rms,gt_rms,grad_rel,grad_rel_nc,grad_abs,grad_abs_nc,grad_se_ref_rel";
+    for (int k = 1; k < kSR; k++) h += std::string(",H_rms_") + kSRName[k] + ",grad_rel_" + kSRName[k] + ",n_" + kSRName[k];
+    h += ",E,E_se,E_ref,E_ref_se,E_relerr,E_relerr_se";
+    for (int k = 0; k < kRingNV; k++) h += ",v" + std::to_string(k);
+    for (int k = 0; k < kRingNV; k++) h += ",vref" + std::to_string(k);
+    h += ",vert_maxerr,c_se_max,R_face_resid_max,R_crack_resid_max,exact_gt\n";
+    return h;
+}
+std::string stressCsvRow(const StressRow& r)
+{
+    std::vector<std::string> c;
+    auto add = [&](const std::string& s) { c.push_back(s); };
+    auto num = [&](double v, const char* f = "%.6g") { c.push_back(csvNum(v, f)); };
+    auto itg = [&](long long v) { c.push_back(std::to_string(v)); };
+    add(r.id);
+    add(r.variant);
+    add(r.g ? "ramp" : "g1");
+    add(r.method);
+    add("\"" + r.label + "\"");
+    itg(r.rep);
+    itg(r.nQ);
+    itg(r.nR);
+    itg(r.N);
+    itg(r.B);
+    itg(r.points);
+    itg(r.tetsCut);
+    if (r.tetsP >= 0) itg(r.tetsP); else add("");
+    if (r.tetsR >= 0) itg(r.tetsR); else add("");
+    const double tMin = r.times.empty() ? 0.0 : *std::min_element(r.times.begin(), r.times.end());
+    const double tMax = r.times.empty() ? 0.0 : *std::max_element(r.times.begin(), r.times.end());
+    num(r.tMed, "%.5f");
+    num(tMin, "%.5f");
+    num(tMax, "%.5f");
+    itg((long long)r.times.size());
+    num(r.tSetup, "%.5f");
+    num(r.tP, "%.5f");
+    num(r.tR, "%.5f");
+    num(r.tWalks + r.tP + r.tR, "%.5f");
+    num(r.tGram, "%.5f");
+    num(r.tGlue, "%.6f");
+    num(r.tField, "%.5f");
+    itg(r.walks);
+    itg(r.moves);
+    num(r.walks > r.escaped ? double(r.moves)/double(r.walks - r.escaped) : 0.0, "%.3f");
+    itg(r.capped);
+    itg(r.escaped);
+    const ErrStats& e = r.e[0];
+    num(e.rmsH());
+    num(e.corrH());
+    num(e.maxH/kTwoGMax);
+    num(e.seFldH());
+    num(e.seRefH());
+    num(r.gtRms > 0 ? e.rmsH()/r.gtRms : std::nan(""));
+    num(r.gtRms);
+    num(gradRel(e, r.gt2[0]));
+    num(gradRelNc(e, r.gt2[0]));
+    num(e.rmsG());
+    num(e.corrG());
+    num(r.gt2[0] > 1e-12 ? std::sqrt(e.vRefG/r.gt2[0]) : std::nan(""));
+    for (int k = 1; k < kSR; k++) {
+        num(r.e[k].w > 0 ? r.e[k].rmsH() : std::nan(""));
+        num(r.e[k].w > 0 ? gradRel(r.e[k], r.gt2[k]) : std::nan(""));
+        itg(r.e[k].n);
+    }
+    auto rel = [](double E, double Er) { return std::fabs(Er) > 1e-12 ? (E - Er)/Er : std::nan(""); };
+    auto relSe = [](double se, double seR, double Er) { return std::fabs(Er) > 1e-12 ? std::hypot(se, seR)/std::fabs(Er) : std::nan(""); };
+    for (const double v : {r.E, r.Ese, r.Eref, r.ErefSe, rel(r.E, r.Eref), relSe(r.Ese, r.ErefSe, r.Eref)}) num(r.hasE ? v : std::nan(""));
+    for (int k = 0; k < kRingNV; k++) num(r.vert[k], "%.5f");
+    for (int k = 0; k < kRingNV; k++) num(r.vref[k], "%.5f");
+    num(r.vErr, "%.5f");
+    num(r.hasC ? r.cse.maxCoeff() : std::nan(""), "%.5f");
+    num(r.maxFace, "%.3g");
+    num(r.maxCrack, "%.3g");
+    itg(r.exactGT);
+    std::string s;
+    for (size_t i = 0; i < c.size(); i++) s += (i ? "," : "") + c[i];
+    return s + "\n";
+}
+void printStressRowHeader(Report& out)
+{
+    out("    %-30s %-14s %-4s %7s %8s %8s | %7s %7s %7s | %7s %7s | %7s %6s | %6s %6s\n", "method", "J", "g", "walks/M", "walks s",
+        "total s", "H RMS%", "nc %", "max %", "grad%", "grad nc", "E err%", "+-", "vert", "c se");
+}
+void printStressRow(Report& out, const StressRow& r)
+{
+    const ErrStats& e = r.e[0];
+    const double Erel = r.hasE && std::fabs(r.Eref) > 1e-12 ? 100*(r.E - r.Eref)/r.Eref : std::nan("");
+    const double Ese = r.hasE && std::fabs(r.Eref) > 1e-12 ? 100*std::hypot(r.Ese, r.ErefSe)/std::fabs(r.Eref) : std::nan("");
+    out("    %-30s %-14s %-4s %7.2f %8.3f %8.3f | %7.3f %7.3f %7.2f | %7.2f %7.2f | %+7.2f %6.2f | %6.4f %6.4f\n", r.label.c_str(),
+        r.variant.c_str(), r.g ? "ramp" : "g=1", 1e-6*double(r.walks), r.tWalks + r.tP + r.tR, r.tMed, 100*e.rmsH(), 100*e.corrH(),
+        100*e.maxH/kTwoGMax, 100*gradRel(e, r.gt2[0]), 100*gradRelNc(e, r.gt2[0]), Erel, Ese, r.vErr, r.hasC ? r.cse.maxCoeff() : 0.0);
+}
+
+// ---- checks of one case's geometry and face functions (printed and written to _geometry.txt) ----
+// J at the crack-face lines: per line piece of every tet, 3 points, J at +-1e-7 along the face perpendicular to the line
+// against side x g_j (points within 2e-3 of a front or of another crack skipped); the control variate's jump across every
+// crack triangle (centroid +-1e-7 along the normal in xi) against 2 g_j (centroids within 2e-3 of a front or another crack
+// skipped)
+struct StressChecks {
+    double maxJLine = 0, maxJrLine = 0, maxCvJump = 0;
+    long long nJLine = 0, nCvJump = 0;
+};
+StressChecks stressChecks(const StressCase& sc, const Ring& R, const std::vector<StressTet>& stt)
+{
+    StressChecks ck;
+    const std::vector<std::array<Vec3, 2>> fr = walkFront(sc);
+    auto nearFront = [&](const Vec3& x) {
+        for (const auto& s : fr)
+            if (pointSegmentDist(x, s[0], s[1]) < 2e-3) return true;
+        return false;
+    };
+    auto nearOther = [&](const Vec3& x, int j) {
+        for (size_t k = 0; k < sc.cracks.size(); k++)
+            if (int(k) != j && sc.cracks[k].dist && sc.cracks[k].dist(x) < 2e-3) return true;
+        return false;
+    };
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        const std::array<Vec3, 4> gN = gradN(T);
+        std::vector<TetCv> cvs;
+        for (const JVariant& v : sc.var) cvs.push_back(tetCv(T, v, sc));
+        for (const auto& tr : stt[size_t(t)].mesh.tris()) {
+            const Vec3 nX = (T.JinvT*tr.n).normalized();   // the triangle's normal in X (J^-T maps normals)
+            const Vec3 pts[3] = {T.toX(tr.a), T.toX(tr.b), T.toX(tr.c)};
+            for (int k = 0; k < 3; k++) {
+                if (!(tr.edge[k] & (CrackMesh::kEdgeDomain | CrackMesh::kEdgeTet))) continue;
+                const Vec3 &A = pts[k], &B = pts[(k + 1)%3];
+                // the tet face holding the edge: the barycentric coordinate that vanishes at both ends
+                const Vec3 xa = T.toXi(A), xb = T.toXi(B);
+                const double la[4] = {1 - xa.sum(), xa[0], xa[1], xa[2]}, lb[4] = {1 - xb.sum(), xb[0], xb[1], xb[2]};
+                int o = -1;
+                for (int f = 0; f < 4; f++)
+                    if (std::fabs(la[f]) < 1e-9 && std::fabs(lb[f]) < 1e-9) o = f;
+                if (o < 0) continue;
+                const Vec3 e = (B - A).normalized(), mf = gN[size_t(o)].normalized();
+                Vec3 d = mf.cross(e);
+                if (d.norm() < 1e-9) continue;
+                d.normalize();
+                for (double s : {0.25, 0.5, 0.75}) {
+                    const Vec3 P = A + s*(B - A);
+                    if (nearFront(P) || nearOther(P, tr.crack)) continue;
+                    for (int sg : {-1, 1}) {
+                        const Vec3 Q = P + sg*1e-7*d;
+                        const int side = nX.dot(Q - P) >= 0 ? 1 : -1;
+                        for (const JVariant& v : sc.var) {
+                            ck.maxJLine = std::max(ck.maxJLine, std::fabs(v.J(Q) - stressTarget(sc, tr.crack, side, P, 0)));
+                            if (v.Jr) ck.maxJrLine = std::max(ck.maxJrLine, std::fabs(v.Jr(Q) - stressTarget(sc, tr.crack, side, P, 1)));
+                        }
+                        ck.nJLine++;
+                    }
+                }
+            }
+            // the control variates' jump across the crack, in xi
+            const Vec3 q = (tr.a + tr.b + tr.c)/3.0, Xq = T.toX(q);
+            if (nearFront(Xq) || nearOther(Xq, tr.crack)) continue;
+            for (const TetCv& cv : cvs) {
+                const double jump = cv.value(q + 1e-7*tr.n, 0) - cv.value(q - 1e-7*tr.n, 0);
+                ck.maxCvJump = std::max(ck.maxCvJump, std::fabs(jump - 2*sc.cracks[size_t(tr.crack)].g));
+                ck.nCvJump++;
+            }
+        }
+    }
+    return ck;
+}
+
+// ---- validation pieces ----
+// two solves of the same field at the same points: per point z of H (both g modes) and pooled z of grad H per component
+struct PairZ {
+    ZStats H[2], G[2][3];
+};
+PairZ compareSolves(const RefRun& a, const RefRun& b, int nModes)
+{
+    PairZ z;
+    for (int m = 0; m < nModes; m++) {
+        const FieldAt fa = refField(a, m, 0, a.nA), fb = refField(b, m, 0, b.nA);
+        for (size_t i = 0; i < a.nA; i++) {
+            z.H[m].add(i, fa.H[i] - fb.H[i], fa.vH[i] + fb.vH[i]);
+            for (int c = 0; c < 3; c++) z.G[m][c].add(i, fa.G[i][c] - fb.G[i][c], fa.vG[i][c] + fb.vG[i][c]);
+        }
+    }
+    return z;
+}
+std::string pairZLine(const PairZ& z, int m)
+{
+    const ZStats& h = z.H[m];
+    char buf[512];
+    std::snprintf(buf, sizeof buf, "H: pooled z %+.2f, |z| < 3 at %.2f%% (%lld points; %lld with zero variance in both, max |dH| %.1e); "
+                  "grad pooled z %+.2f / %+.2f / %+.2f -> %s", h.pooled(), 100*h.frac(), h.n, h.zeroVar, h.maxAbsDiffZeroVar,
+                  z.G[m][0].pooled(), z.G[m][1].pooled(), z.G[m][2].pooled(),
+                  (h.n == 0 || h.passPooled()) && h.maxAbsDiffZeroVar <= 1e-12 && std::fabs(z.G[m][0].pooled()) < 3 &&
+                          std::fabs(z.G[m][1].pooled()) < 3 && std::fabs(z.G[m][2].pooled()) < 3
+                      ? "agree"
+                      : "DISAGREE");
+    return buf;
+}
+
+// Zombie (float, fcpw) on O with the walk crack absorbing (data +-g_j by the nearest triangle's crack and side), g = 1:
+// H at every point (N), grad H at the points farther than kRefZGradBand from O's faces (S solves of N/S walks)
+constexpr int kSZR = 5;
+const char* const kSZRName[kSZR] = {"near a crack (0.1)", "near a front (0.1)", "near interior faces (0.1)", "near the junction (0.1)",
+                                    "vertex probes"};
+struct StressZombie {
+    ZStats H, G[3], Hr[kSZR];
+    long long nGradPts = 0, nNaN = 0;
+    SolveStats st;
+    bool agree() const
+    {
+        bool g = true;
+        for (int a = 0; a < 3; a++) g = g && G[a].n > 0 && std::fabs(G[a].pooled()) < 3.0;
+        return H.passPooled() && g;
+    }
+};
+StressZombie zombieStress(const StressCase& sc, const Ring& R, const RefRun& r, const StressRef& sr, int N, int S, uint64_t seedTag)
+{
+    const GateParams gp = gateParams(false);
+    StressZombie z;
+    const ConvexDomain O = octahedron();
+    WalkParams wp;
+    wp.absorbShellRel = kGateShellRel*kSqrt2/O.L;
+    wp.reflectShellRel = 0.1*wp.absorbShellRel;
+    std::vector<Vec3> V;
+    std::vector<std::array<int, 3>> F;
+    for (const auto& t : sc.walk.tris()) {
+        const int b = int(V.size());
+        V.insert(V.end(), {t.a, t.b, t.c});
+        F.push_back({b, b + 1, b + 2});
+    }
+    const CrackMesh* walk = &sc.walk;
+    const StressCase* scp = &sc;
+    CutSolver solver(O, V, F, [walk, scp](const Vec3& x, bool normalAligned) -> float {
+        const CrackMesh::Hit h = walk->closest(x);
+        const double g = scp->cracks[size_t(walk->tri(h.tri).crack)].g;
+        return float(normalAligned ? g : -g);
+    }, wp);
+    std::vector<size_t> gi;
+    std::vector<Vec3> gX;
+    for (size_t i = 0; i < r.nA; i++)
+        if (distToDomainFaces(O, r.X[i]) > kRefZGradBand) {
+            gi.push_back(i);
+            gX.push_back(r.X[i]);
+        }
+    z.nGradPts = (long long)gi.size();
+    std::vector<Estimate> e;
+    z.st.add(solver.solve(r.X, nullptr, N, mixSeed(gp.seed, seedTag), e));
+    const std::vector<double> coef = unitCoef(2, 0);
+    for (size_t i = 0; i < r.X.size(); i++) {
+        double H, var;
+        long long n;
+        comboH(r.sums, i, coef, H, var, n);
+        const double diff = H - e[i].H, v = var + double(e[i].Hse)*e[i].Hse;
+        z.H.add(i, diff, v);
+        bool inR[kSZR] = {false, false, false, false, i >= r.nA};
+        if (i < r.nA) {
+            inR[0] = sc.walk.distance(r.X[i]) < kNearRing;
+            inR[1] = sr.reg[i][1] != 0;
+            inR[2] = sr.reg[i][4] != 0;
+            inR[3] = sr.reg[i][5] != 0;
+        }
+        for (int k = 0; k < kSZR; k++)
+            if (inR[k]) z.Hr[k].add(i, diff, v);
+    }
+    const std::vector<char> gf(gX.size(), 1);
+    std::vector<std::vector<Estimate>> eg(static_cast<size_t>(S));
+    for (int s = 0; s < S; s++) z.st.add(solver.solve(gX, &gf, N/S, mixSeed(gp.seed, seedTag + 10 + s), eg[size_t(s)]));
+    const int Bref = r.sums.nBatches;
+    for (size_t j = 0; j < gi.size(); j++) {
+        Vec3 zm = Vec3::Zero(), zv = Vec3::Zero();
+        bool finite = true;
+        for (int s = 0; s < S; s++) {
+            finite = finite && eg[size_t(s)][j].grad.allFinite();
+            zm += eg[size_t(s)][j].grad.cast<double>()/double(S);
+        }
+        if (!finite) {
+            z.nNaN++;
+            continue;
+        }
+        for (int s = 0; s < S; s++) zv += (eg[size_t(s)][j].grad.cast<double>() - zm).cwiseAbs2()/(double(S)*double(S - 1));
+        Vec3 om = Vec3::Zero(), ov = Vec3::Zero();
+        std::vector<Vec3> g(static_cast<size_t>(Bref));
+        for (int b = 0; b < Bref; b++) om += (g[size_t(b)] = comboBatchGrad(r.sums, gi[j], b, coef))/double(Bref);
+        for (const Vec3& x : g) ov += (x - om).cwiseAbs2()/(double(Bref)*double(Bref - 1));
+        for (int a = 0; a < 3; a++) z.G[a].add(gi[j], om[a] - zm[a], ov[a] + zv[a]);
+    }
+    return z;
+}
+
+// ---- the driver of one case ----
+struct StressSummary {
+    std::string id, plain, gtLine, check, geometry;
+    int priority = 1;
+    bool ran = false;
+    std::string failure;
+};
+
+std::string stressGtName(const std::string& id, int pts, int N, double epsRel = 0.01)
+{
+    return "ref_stress_" + id + "_p" + std::to_string(pts) + (N != 25600 ? "_N" + std::to_string(N) : "") +
+           (epsRel != 0.01 ? "_eps" + fmtd("%g", epsRel) : "") + ".bin";
+}
+
+void runStressCase(Report& out, const RingStressParams& p, StressCase& sc, std::vector<StressRow>& rows, StressSummary& sum,
+                   std::string& geoTxt)
+{
+    using clk = std::chrono::steady_clock;
+    const auto tCase = clk::now();
+    const GateParams gp = gateParams(false);
+    const int k = sc.index;
+    sum.id = sc.id;
+    sum.plain = sc.plain;
+    sum.priority = sc.priority;
+    out("\n=== %s (priority %d) ===\n", sc.id.c_str(), sc.priority);
+    const Ring R = stressRing(sc);
+    // geometry
+    auto tg = clk::now();
+    std::vector<StressTet> stt;
+    for (const TetFrame& T : R.T) stt.push_back(stressTet(T, sc.walk));
+    double aSum = 0;
+    int nCut = 0;
+    std::string geo = sc.id + ": " + sc.plain + "\n  " + sc.desc + "\n  " + R.name + "; walk crack: " + std::to_string(sc.walk.size()) +
+                      " triangles in O, area " + fmtd("%.6f", sc.walk.area()) + "; cracks:";
+    for (const StressCrack& c : sc.cracks) geo += " " + c.name + " (g = " + fmtd("%g", c.g) + ")";
+    geo += "\n  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces):";
+    for (int t = 0; t < kRingNT; t++) {
+        const StressTet& s = stt[size_t(t)];
+        aSum += s.areaX;
+        nCut += s.cut;
+        geo += std::string(" ") + kRingTetName[t] + " " + (s.cut ? "cut" : "-") + " " + std::to_string(s.mesh.size()) + " " +
+               fmtd("%.4f", s.areaX) + " " + std::to_string(s.faceLines.size()) + " " + std::to_string(s.front.size()) + ";";
+    }
+    const double aRel = std::fabs(aSum - sc.walk.area())/std::max(1e-300, sc.walk.area());
+    geo += "\n  sum of the tets' areas " + fmtd("%.12f", aSum) + " vs the walk crack's " + fmtd("%.12f", sc.walk.area()) + " (rel. diff " +
+           fmtd("%.1e", aRel) + ")\n";
+    const StressChecks ck = stressChecks(sc, R, stt);
+    geo += "  J at the crack-face lines (+-1e-7 along the face): max |J - side g| " + fmtd("%.2e", ck.maxJLine) +
+           (sc.ramp ? ", ramp " + fmtd("%.2e", ck.maxJrLine) : std::string()) + " over " + std::to_string(ck.nJLine) +
+           " samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| " + fmtd("%.2e", ck.maxCvJump) + " over " +
+           std::to_string(ck.nCvJump) + " samples\n";
+    for (const JVariant& v : sc.var) geo += "  J '" + v.name + "': " + v.desc + "\n";
+    out("%s  geometry built and checked in %.2f s\n", geo.c_str(), secondsSince(tg));
+    // the points and the GT
+    std::vector<PointSet> ps;
+    StressRef sr;
+    const int target = p.quick ? 512 : p.points;
+    const int Ngt = p.quick ? 1024 : p.gtWalks, Bgt = p.quick ? 16 : p.gtBatches;
+    const int maxLenGT = 65536;
+    auto buildPoints = [&](int tgt) {
+        ps.clear();
+        for (int t = 0; t < kRingNT; t++) ps.push_back(stressPoints(R.T[size_t(t)], stt[size_t(t)], sc.walk, tgt, p.epsRel*kSqrt2));
+    };
+    auto tGT = clk::now();
+    if (sc.check4 >= 0) {
+        PerfSetup s;
+        perfSetup(s, 2, sc.check4, gp.nRingPoints);
+        ps = s.ps;
+        if (!loadRingGT(s, sr.ref)) {
+            out("  check 4's cached GT %s is missing or its key differs: case skipped (nothing is solved or written)\n", sr.ref.file.c_str());
+            sum.failure = "no cached GT";
+            return;
+        }
+        sr.hasRun = true;
+        sr.source = "check 4's cached GT " + sr.ref.file + " (read-only; N = 25600, 4096 points per tet)";
+        sr.gtSeconds = sr.ref.stats.seconds;
+        out("  GT: %s; original run: %s\n", sr.source.c_str(), sr.ref.stats.summary().c_str());
+    } else if (sc.exact) {
+        buildPoints(target);
+        sr.source = "exact (+-1, the side indicator)";
+    } else {
+        int tgt = target;
+        buildPoints(tgt);
+        double extrap = 0;
+        RefRun r = stressGT(out, sc, R, ps, Ngt, Bgt, 5000000 + 1000*uint64_t(k), maxLenGT, stressGtName(sc.id, tgt, Ngt, p.epsRel), !p.quick && p.cache, &extrap,
+                            true);
+        bool lowered = false;
+        if (!r.cached && extrap > p.pilotLimit && tgt > 1024) {
+            out("  the GT pilot puts the full GT at %.0f s > %.0f s: points per tet lowered to 1024 (the walks are not lowered)\n", extrap,
+                p.pilotLimit);
+            tgt = 1024;
+            buildPoints(tgt);
+            lowered = true;
+        }
+        if (!r.cached)   // (the cache at the lowered density is looked up again; the pilot is not repeated at the same points)
+            r = stressGT(out, sc, R, ps, Ngt, Bgt, 5000000 + 1000*uint64_t(k), maxLenGT, stressGtName(sc.id, tgt, Ngt, p.epsRel), !p.quick && p.cache, nullptr,
+                         false, !lowered);
+        sr.ref = std::move(r);
+        sr.hasRun = true;
+        sr.source = std::string(sr.ref.cached ? "cached " : "solved ") + sr.ref.file + " (N = " + std::to_string(Ngt) + ", " +
+                    std::to_string(tgt) + " points per tet asked)";
+        sr.gtSeconds = sr.ref.stats.seconds;
+    }
+    size_t nPts = 0;
+    for (const PointSet& q : ps) nPts += q.size();
+    stressRefSetup(sr, sc, R, stt, ps);
+    sum.gtLine = sr.source + "; GT solve " + fmtd("%.1f s", sr.gtSeconds) +
+                 (sr.hasRun ? ", " + std::to_string(sr.ref.stats.walksCapped) + " capped, " + std::to_string(sr.ref.stats.walksEscaped) +
+                                  " escaped walks, mean length " + fmtd("%.1f", sr.ref.stats.meanWalkLength())
+                            : std::string());
+    out("  %zu points in the 8 tets + 7 probes; %d tets cut; GT ready in %.1f s\n", nPts, nCut, secondsSince(tGT));
+    for (int m = 0; m < sr.nModes; m++)
+        out("  GT noise floor (%s): H s.e. RMS %.4f%% (max %.4f%%) of 2g; grad s.e. RMS / grad RMS %.2f%%; GT RMS %.4f; energy %.5f +- %.5f\n",
+            m ? "ramp" : "g = 1", 100*sr.floor[m].seRefH(), 100*sr.floor[m].maxSeRefH/kTwoGMax,
+            100*std::sqrt(sr.floor[m].vRefG/std::max(1e-300, sr.gt2[m][0])), sr.gtRms[m], sr.Eref[m], sr.ErefSe[m]);
+    // validation
+    std::string check;
+    if (p.validate) {
+        if (sc.check4 >= 0) {   // the new mesh GT code reproduces check 4's cached GT
+            const int N = p.quick ? 256 : 2560, B = p.quick ? 16 : 64;
+            const RefRun nr = stressSolveO(sc, R, ps, N, B, mixSeed(gp.seed, 9500000 + 1000*uint64_t(k)), 4096);
+            const PairZ z = compareSolves(nr, sr.ref, sr.nModes);
+            out("  flat reproduction: the mesh GT code (N = %d, new seeds, %.1f s) vs check 4's cached GT:\n", N, nr.stats.seconds);
+            for (int m = 0; m < sr.nModes; m++) out("    %s %s\n", m ? "ramp " : "g = 1", pairZLine(z, m).c_str());
+            check += "mesh GT (N = " + std::to_string(N) + ") vs cached: " + pairZLine(z, 0) + "; ";
+        }
+        if (sc.exact || sc.check4 == 2) {   // the GT solver gives exactly +-1
+            const int N = p.quick ? 64 : 256, B = 16;
+            const RefRun nr = stressSolveO(sc, R, ps, N, B, mixSeed(gp.seed, 9600000 + 1000*uint64_t(k)), maxLenGT);
+            long long bad = 0;
+            double maxd = 0;
+            for (size_t i = 0; i < nr.X.size(); i++) {
+                double H, var;
+                long long n;
+                comboH(nr.sums, i, unitCoef(2, 0), H, var, n);
+                const double d = std::fabs(H - sc.exact(nr.X[i]));
+                maxd = std::max(maxd, d);
+                bad += d > 1e-12;
+            }
+            char buf[300];
+            std::snprintf(buf, sizeof buf, "GT solver at N = %d: %lld of %zu points differ from the exact +-1 (max |dH| %.1e), %lld capped, "
+                          "%lld escaped walks", N, bad, nr.X.size(), maxd, nr.stats.walksCapped, nr.stats.walksEscaped);
+            out("  exact check: %s\n", buf);
+            check += std::string(buf) + "; ";
+        }
+        const bool zz = p.zombie != "none" && ("," + p.zombie + ",").find("," + sc.id + ",") != std::string::npos;
+        if (zz && sr.hasRun) {
+            const int N = p.quick ? 128 : 1024, S = p.quick ? 8 : 16;
+            const auto t0 = clk::now();
+            const StressZombie z = zombieStress(sc, R, sr.ref, sr, N, S, 8000000 + 1000*uint64_t(k));
+            out("  Zombie cross-check (float; %s; %.1f s): H at %lld points, N = %d: |z| < 3 at %.2f%%, pooled z %+.2f; grad at %lld points "
+                "(%d x %d walks, %lld not finite): pooled z %+.2f / %+.2f / %+.2f -> %s\n", z.st.summary().c_str(), secondsSince(t0),
+                z.H.n, N, 100*z.H.frac(), z.H.pooled(), z.nGradPts, S, N/S, z.nNaN, z.G[0].pooled(), z.G[1].pooled(), z.G[2].pooled(),
+                z.agree() ? "agree" : "DISAGREE");
+            for (int r = 0; r < kSZR; r++)
+                out("    %-28s %6lld points: pooled z %+.2f, mean z^2 %.3f (%.3f), RMS discrepancy beyond noise %.1e (bound %.1e)\n",
+                    kSZRName[r], z.Hr[r].n, z.Hr[r].pooled(), z.Hr[r].meanZ2(), z.Hr[r].meanZ2Se(), z.Hr[r].ncRmsDiff(kTwoGMax),
+                    z.Hr[r].ncRmsDiffBound(kTwoGMax));
+            check += "Zombie " + std::string(z.agree() ? "agrees" : "DISAGREES") + " (H pooled z " + fmtd("%+.2f", z.H.pooled()) + ", |z| < 3 at " +
+                     fmtd("%.2f%%", 100*z.H.frac()) + "; grad pooled z " + fmtd("%+.2f", z.G[0].pooled()) + "/" + fmtd("%+.2f", z.G[1].pooled()) +
+                     "/" + fmtd("%+.2f", z.G[2].pooled()) + "); ";
+        }
+        if (sc.id == "D1" && sr.hasRun && !p.quick) {   // the GT's own consistency: an independent solve at N = 2560
+            const RefRun nr = stressSolveO(sc, R, ps, 2560, 64, mixSeed(gp.seed, 9700000 + 1000*uint64_t(k)), maxLenGT);
+            const PairZ z = compareSolves(nr, sr.ref, 1);
+            out("  GT re-run at N = 2560 (independent seeds, %.1f s) vs the GT: %s\n", nr.stats.seconds, pairZLine(z, 0).c_str());
+            check += "GT re-run N = 2560: " + pairZLine(z, 0) + "; ";
+        }
+    }
+    // ours
+    const std::vector<std::vector<int>> gOurs = parseGrid(p.quick && p.ours == "32/16/8,32/64/8,1024/256/16" ? "8/8/4" : p.ours, "32/16/8");
+    const std::vector<std::vector<int>> gDir = parseGrid(p.quick && p.direct == "16,32,64,128,256,512" ? "16,64" : p.direct, "16");
+    printStressRowHeader(out);
+    auto baseRow = [&](const std::string& method, const std::string& variant, int g, int rep) {
+        StressRow r;
+        r.id = sc.id;
+        r.method = method;
+        r.variant = variant;
+        r.g = g;
+        r.rep = rep;
+        r.points = (long long)nPts;
+        r.tetsCut = nCut;
+        return r;
+    };
+    auto oursRows = [&](const StressOurs& o, const StressOursParams& op, const std::vector<double>& times, int rep, const std::string& method,
+                        const std::string& lab) {
+        for (size_t kk = 0; kk < o.vms.size(); kk++) {
+            const int v = o.vms[kk].first, m = o.vms[kk].second;
+            StressRow r = baseRow(method, sc.var[size_t(v)].name, m, rep);
+            r.label = lab;
+            r.nQ = op.nQ;
+            r.nR = op.nR;
+            r.B = op.B;
+            r.times = times;
+            r.tMed = medianOf(times);
+            r.tSetup = o.secSetup;
+            r.tP = o.secP;
+            r.tR = o.secR;
+            r.tGram = o.secGram;
+            r.tGlue = o.secGlue;
+            r.tField = o.secField;
+            r.walks = o.walksP + o.walksR;
+            r.moves = o.stepsP + o.stepsR;
+            r.capped = o.capped;
+            r.escaped = o.escaped;
+            r.tetsP = o.nPtets;
+            r.tetsR = o.nRtets;
+            r.maxFace = o.maxFace[kk];
+            r.maxCrack = o.maxCrack[kk];
+            const JVariant& jv = sc.var[size_t(v)];
+            for (int q = 0; q < kRingNV; q++) r.vert[q] = (m ? jv.Jr(R.V[size_t(q)]) : jv.J(R.V[size_t(q)])) + o.gl[kk].c[q];
+            r.cse = o.gl[kk].se;
+            r.hasC = true;
+            fillStressErrors(sr, sc, m, o.F[kk], ps, r);
+            glueEnergy(R, o.G[kk], 0, o.gl[kk], r.E, r.Ese);
+            r.hasE = true;
+            printStressRow(out, r);
+            rows.push_back(r);
+        }
+    };
+    for (size_t si = 0; si < gOurs.size(); si++) {
+        StressOursParams op;
+        op.nQ = gOurs[si][0];
+        op.nR = gOurs[si].size() > 1 ? gOurs[si][1] : op.nQ;
+        op.B = gOurs[si].size() > 2 ? gOurs[si][2] : defaultBatches(op.nQ);
+        const int nSeeds = si == 0 ? std::max(1, p.seeds) : 1;
+        for (int rep = 0; rep < nSeeds; rep++) {
+            const uint64_t tagBase = 6000000 + 1000*uint64_t(k) + 100*uint64_t(rep) + 20000*uint64_t(si);
+            StressOurs o;
+            const std::vector<double> times = timedRuns(rep == 0 ? std::max(1, p.repeats) : 1, [&] {
+                o = runStressOurs(sc, R, stt, ps, op, gp.seed, tagBase, true);
+                return o.secTotal;
+            });
+            const std::string lab = "ours Q" + std::to_string(op.nQ) + "/R" + std::to_string(op.nR) + "/B" + std::to_string(op.B) +
+                                    (rep ? " s" + std::to_string(rep) : "");
+            oursRows(o, op, times, rep, "ours", lab);
+        }
+    }
+    // the slow path for the control variates' check: plain per-tet solves (no control variate) at N = 2560, and H0 of the
+    // control-variate path at Q32/R256, per point
+    if (p.validate && (sc.id == "C2" || sc.id == "D1" || sc.id == "D3" || sc.id == "E3")) {
+        StressOursParams pp;
+        pp.nQ = pp.nR = p.quick ? 256 : 2560;
+        pp.B = p.quick ? 16 : 64;
+        pp.cv = false;
+        StressOurs pl;
+        const std::vector<double> tp = timedRuns(1, [&] {
+            pl = runStressOurs(sc, R, stt, ps, pp, gp.seed, 9000000 + 1000*uint64_t(k), true);
+            return pl.secTotal;
+        });
+        oursRows(pl, pp, tp, 0, "ours-plain", "plain Q" + std::to_string(pp.nQ) + "/R" + std::to_string(pp.nR) + "/B" + std::to_string(pp.B));
+        StressOursParams cp;
+        cp.nQ = 32;
+        cp.nR = p.quick ? 64 : 256;
+        cp.B = 16;
+        const StressOurs cv = runStressOurs(sc, R, stt, ps, cp, gp.seed, 9100000 + 1000*uint64_t(k), false);
+        ZStats zv, zg[3];
+        for (int t = 0; t < kRingNT; t++)
+            for (size_t i = 0; i < ps[size_t(t)].size(); i++) {
+                if (dirichletDist(allDirichlet(), ps[size_t(t)].xi[i]) < kCompareBand) continue;
+                double h1, v1, h2, v2;
+                Vec3 g1, gv1, g2, gv2;
+                stressH0(pl, 0, t, ps[size_t(t)], R.T[size_t(t)], i, h1, v1, g1, gv1);
+                stressH0(cv, 0, t, ps[size_t(t)], R.T[size_t(t)], i, h2, v2, g2, gv2);
+                zv.add(i, h1 - h2, v1 + v2);
+                for (int a = 0; a < 3; a++) zg[a].add(i, g1[a] - g2[a], gv1[a] + gv2[a]);
+            }
+        char buf[400];
+        std::snprintf(buf, sizeof buf, "H0 (g = 1, J '%s'): plain N = %d vs control variate Q32/R%d: value pooled z %+.2f (|z| < 3 at %.2f%%, "
+                      "mean z^2 %.3f), grad pooled z %+.2f / %+.2f / %+.2f -> %s", sc.var[0].name.c_str(), pp.nR, cp.nR, zv.pooled(),
+                      100*zv.frac(), zv.meanZ2(), zg[0].pooled(), zg[1].pooled(), zg[2].pooled(),
+                      zv.passPooled() && std::fabs(zg[0].pooled()) < 3 && std::fabs(zg[1].pooled()) < 3 && std::fabs(zg[2].pooled()) < 3
+                          ? "agree"
+                          : "DISAGREE");
+        out("  control-variate check: %s\n", buf);
+        check += std::string(buf) + "; ";
+    }
+    // the direct ring solve (the GT's solver at small N)
+    for (size_t di = 0; di < gDir.size(); di++) {
+        const int N = gDir[di][0], B = gDir[di].size() > 1 ? gDir[di][1] : defaultBatches(N);
+        RefRun d;
+        const std::vector<double> times = timedRuns(1, [&] {
+            const auto t0 = clk::now();
+            d = stressSolveO(sc, R, ps, N, B, mixSeed(gp.seed, 7000000 + 1000*uint64_t(k) + 10*uint64_t(di)), maxLenGT);
+            return secondsSince(t0);
+        });
+        std::vector<double> tAll = times;
+        if (times[0] < 2.0)
+            for (int r = 1; r < 3; r++) {
+                const auto t0 = clk::now();
+                d = stressSolveO(sc, R, ps, N, B, mixSeed(gp.seed, 7000000 + 1000*uint64_t(k) + 10*uint64_t(di)), maxLenGT);
+                tAll.push_back(secondsSince(t0));
+            }
+        const auto tf = clk::now();
+        std::vector<FieldAt> F[2];
+        FieldAt P[2];
+        for (int m = 0; m < sr.nModes; m++) {
+            size_t off = 0;
+            for (const PointSet& q : ps) {
+                F[m].push_back(refField(d, m, off, q.size()));
+                off += q.size();
+            }
+            P[m] = refField(d, m, d.nA, d.nF);
+        }
+        const double secField = secondsSince(tf);
+        for (int m = 0; m < sr.nModes; m++) {
+            StressRow r = baseRow("direct", "-", m, 0);
+            r.label = "direct N" + std::to_string(N) + "/B" + std::to_string(B);
+            r.N = N;
+            r.B = B;
+            r.times = tAll;
+            for (double& x : r.times) x += secField;
+            r.tMed = medianOf(r.times);
+            r.tWalks = d.stats.seconds;
+            r.tField = secField;
+            r.walks = d.stats.walksRequested;
+            r.moves = d.stats.totalSteps;
+            r.capped = d.stats.walksCapped;
+            r.escaped = d.stats.walksEscaped;
+            for (int q = 0; q < kRingNV; q++) r.vert[q] = P[m].H[size_t(q)];
+            fillStressErrors(sr, sc, m, F[m], ps, r);
+            std::vector<double> wA(sr.w);
+            wA.resize(d.X.size(), 0.0);
+            solveEnergy(d.sums, wA, m, r.E, r.Ese);
+            r.hasE = true;
+            printStressRow(out, r);
+            rows.push_back(r);
+        }
+    }
+    sum.check = check.empty() ? "-" : check;
+    sum.geometry = geo;
+    sum.ran = true;
+    geoTxt += geo + "  GT: " + sum.gtLine + "\n  checks: " + sum.check + "\n\n";
+    out("  case %s done in %.1f s\n", sc.id.c_str(), secondsSince(tCase));
+}
+
+// ---- the per-case summary (the main comparison numbers; the report is written from these) ----
+struct OursNums {
+    int n = 0;
+    double rms = std::nan(""), rmsSd = 0, maxp = std::nan(""), vert = std::nan(""), grad = std::nan(""), gradNc = std::nan(""),
+           gradAbs = std::nan(""), E = std::nan(""), t = std::nan(""), nc = std::nan(""), relGt = std::nan("");
+};
+OursNums oursNums(const std::vector<StressRow>& rows, const std::string& id, const std::string& method, const std::string& variant, int g,
+                  int nQ, int nR, int B)
+{
+    std::vector<const StressRow*> v;
+    for (const StressRow& r : rows)
+        if (r.id == id && r.method == method && r.variant == variant && r.g == g && r.nQ == nQ && r.nR == nR && r.B == B) v.push_back(&r);
+    OursNums o;
+    o.n = int(v.size());
+    if (v.empty()) return o;
+    auto med = [&](auto f) {
+        std::vector<double> x;
+        for (const StressRow* r : v) x.push_back(f(*r));
+        return medianOf(x);
+    };
+    o.rms = med([](const StressRow& r) { return r.e[0].rmsH(); });
+    double m = 0, s = 0;
+    for (const StressRow* r : v) m += r->e[0].rmsH()/double(v.size());
+    for (const StressRow* r : v) s += (r->e[0].rmsH() - m)*(r->e[0].rmsH() - m)/std::max(1.0, double(v.size()) - 1);
+    o.rmsSd = std::sqrt(s);
+    o.nc = med([](const StressRow& r) { return r.e[0].corrH(); });
+    o.maxp = med([](const StressRow& r) { return r.e[0].maxH/kTwoGMax; });
+    o.vert = med([](const StressRow& r) { return r.vErr; });
+    o.grad = med([](const StressRow& r) { return gradRel(r.e[0], r.gt2[0]); });
+    o.gradNc = med([](const StressRow& r) { return gradRelNc(r.e[0], r.gt2[0]); });
+    o.gradAbs = med([](const StressRow& r) { return r.e[0].rmsG(); });
+    o.E = med([](const StressRow& r) { return r.hasE && std::fabs(r.Eref) > 1e-12 ? (r.E - r.Eref)/r.Eref : std::nan(""); });
+    o.t = v[0]->tMed;   // the first seed set's timing repeats
+    o.relGt = med([](const StressRow& r) { return r.gtRms > 0 ? r.e[0].rmsH()/r.gtRms : std::nan(""); });
+    return o;
+}
+// the direct solve's H RMS at time T (log-log interpolation between its measured settings; below the fastest one: that point
+// scaled by sqrt(t/T), RMS ~ 1/sqrt(N); flagged)
+double directAt(const std::vector<StressRow>& rows, const std::string& id, int g, double T, std::string& how)
+{
+    std::vector<std::pair<double, double>> p;
+    for (const StressRow& r : rows)
+        if (r.id == id && r.method == "direct" && r.g == g) p.push_back({r.tMed, r.e[0].rmsH()});
+    std::sort(p.begin(), p.end());
+    how = "-";
+    if (p.empty() || !(T > 0)) return std::nan("");
+    if (T <= p[0].first) {
+        how = "extrapolated";
+        return p[0].second*std::sqrt(p[0].first/T);
+    }
+    for (size_t i = 1; i < p.size(); i++)
+        if (T <= p[i].first) {
+            how = "interpolated";
+            const double a = std::log(p[i - 1].first), b = std::log(p[i].first);
+            return std::exp(std::log(p[i - 1].second) + (std::log(T) - a)*(std::log(p[i].second) - std::log(p[i - 1].second))/(b - a));
+        }
+    how = "beyond the largest N (its RMS)";
+    return p.back().second;
+}
+std::string stressVerdict(const OursNums& o, bool exactIndicator)
+{
+    if (o.n == 0 || !std::isfinite(o.rms)) return "fails (no result)";
+    if (exactIndicator) return o.maxp <= 1e-9 ? "works (exact to round-off)" : "fails (not exact: " + fmtd("%.1e", o.maxp) + ")";
+    if (o.rms <= 0.02 && o.maxp <= 0.20) return "works";
+    if (o.rms <= 0.05) return "degrades";
+    return "fails";
+}
+
+std::string stressSummaryCsvHeader()
+{
+    return "case,plain_name,priority,variant,g,ran,ours_setting,n_seeds,ours_H_rms,ours_H_rms_sd,ours_H_nc,ours_H_max,ours_vert_maxerr,"
+           "ours_grad_rel,ours_grad_rel_nc,ours_grad_abs,ours_E_relerr,ours_time,ours_H_rel_gt_rms,s1_H_rms,s2_H_rms,s2_H_max,"
+           "s2_vert_maxerr,direct_H_rms_at_ours_time,direct_how,gt,checks,verdict,failure\n";
+}
+
+// ---- self-test ----
+bool stressSelftest(Report& out)
+{
+    bool ok = true;
+    std::mt19937_64 rng(20261103);
+    std::uniform_real_distribution<double> U(-1.2, 1.2), U01(0.0, 1.0);
+    // 1. the tree against brute force, bit for bit
+    out("\n=== self-test 1: CrackMesh::closest (tree) against brute force, bit for bit (d2, triangle, closest point) ===\n");
+    {
+        std::vector<std::pair<std::string, CrackMesh>> meshes;
+        for (const char* id : {"A1", "D2", "D3", "E3", "C2"}) {
+            auto sc = buildStressCase(id);
+            meshes.push_back({std::string(id) + " walk crack", sc->walk});
+            if (std::string(id) == "D2") {
+                meshes.push_back({"D2 full sphere", sc->surf[0]});
+                const Ring R = stressRing(*sc);
+                meshes.push_back({"D2 T+++ in xi", stressTet(R.T[0], sc->walk).mesh});
+            }
+        }
+        {
+            auto sc = buildStressCase("B1");
+            meshes.push_back({"B1 tube", sc->surf[0]});
+        }
+        for (const auto& [name, m] : meshes) {
+            long long n = 0, diff = 0;
+            for (int i = 0; i < 4000; i++) {
+                Vec3 x;
+                if (i%2 == 0) x = Vec3(U(rng), U(rng), U(rng));
+                else {   // near the mesh: a random point of a random triangle, offset along its normal
+                    const auto& t = m.tri(int(rng()%m.size()));
+                    double a = U01(rng), b = U01(rng);
+                    if (a + b > 1) {
+                        a = 1 - a;
+                        b = 1 - b;
+                    }
+                    x = t.a + a*(t.b - t.a) + b*(t.c - t.a) + std::pow(10.0, -2 - 6*U01(rng))*(U01(rng) < 0.5 ? -1.0 : 1.0)*t.n;
+                }
+                const CrackMesh::Hit h1 = m.closest(x), h2 = m.closestBruteForce(x);
+                n++;
+                diff += !(std::memcmp(&h1.d2, &h2.d2, sizeof(double)) == 0 && h1.tri == h2.tri && std::memcmp(h1.q.data(), h2.q.data(), 3*sizeof(double)) == 0);
+            }
+            out("  %-22s %6zu triangles, %5d nodes: %lld points, %lld differ -> %s\n", name.c_str(), m.size(), m.nodes(), n, diff,
+                diff ? "FAIL" : "ok");
+            ok = ok && diff == 0;
+        }
+    }
+    // 2. flat K1 as a mesh against StripCut
+    out("\n=== self-test 2: K1 as a mesh (A1's walk crack) against check 4's StripCut on O ===\n");
+    {
+        auto sc = buildStressCase("A1");
+        const RingCrack rc = ringCrack(0);
+        const StripCut strips = ringStrips(rc);
+        double maxd = 0;
+        long long sideDiff = 0, n = 0;
+        for (int i = 0; i < 20000; i++) {
+            const Vec3 x(U(rng), U(rng), U(rng));
+            const CrackMesh::Hit h = sc->walk.closest(x);
+            const StripCut::Closest c = strips.closest(x, strips.nStrips());
+            maxd = std::max(maxd, std::fabs(std::sqrt(h.d2) - std::sqrt(c.d2)));
+            const double hgt = rc.n.dot(x) - rc.d;
+            if (std::fabs(hgt) > 1e-12) sideDiff += sc->walk.side(h, x) != (hgt >= 0 ? 1 : -1);
+            n++;
+        }
+        out("  %lld random points in O's box: max |distance difference| %.2e, side differs at %lld -> %s\n", n, maxd, sideDiff,
+            maxd < 1e-14 && sideDiff == 0 ? "ok" : "FAIL");
+        ok = ok && maxd < 1e-14 && sideDiff == 0;
+        out("  walk crack area %.15f vs StripCut's %.15f (rel. diff %.1e)\n", sc->walk.area(), strips.area(strips.nStrips()),
+            std::fabs(sc->walk.area() - strips.area(strips.nStrips()))/strips.area(strips.nStrips()));
+    }
+    // 3. per-tet areas, J at the crack-face lines and the control variates' jump, for every case
+    out("\n=== self-test 3: every case: the tets' crack areas add up to the walk crack's; J = side g at the crack-face lines;\n"
+        "    the control variates jump by exactly 2 g across the crack ===\n");
+    for (int k = 0; k < kNStress; k++) {
+        auto sc = buildStressCase(kStressIds[k]);
+        const Ring R = stressRing(*sc);
+        std::vector<StressTet> stt;
+        double a = 0;
+        for (const TetFrame& T : R.T) {
+            stt.push_back(stressTet(T, sc->walk));
+            a += stt.back().areaX;
+        }
+        const double aRel = std::fabs(a - sc->walk.area())/sc->walk.area();
+        const StressChecks ck = stressChecks(*sc, R, stt);
+        const bool good = aRel < 1e-12 && ck.maxJLine < 1e-4 && ck.maxJrLine < 1e-4 && ck.maxCvJump < 1e-4;
+        out("  %-4s walk %5zu tris, area %.6f, tets' sum rel. diff %.1e | J at lines max %.1e (ramp %.1e, %lld samples) | cv jump max "
+            "%.1e (%lld) -> %s\n", sc->id.c_str(), sc->walk.size(), sc->walk.area(), aRel, ck.maxJLine, ck.maxJrLine, ck.nJLine, ck.maxCvJump,
+            ck.nCvJump, good ? "ok" : "FAIL");
+        ok = ok && good;
+    }
+    // 4. the solid angle: limits, jump, Laplacian, gradient
+    out("\n=== self-test 4: solid angle (C2's disk fan, D2's curved cap) ===\n");
+    {
+        auto c2 = buildStressCase("C2");
+        auto d2 = buildStressCase("D2");
+        const SolidAngleMesh& disk = c2->solid[0];
+        const SolidAngleMesh& cap = d2->solid[0];
+        double limErr = 0, jumpErr = 0, lapMax = 0, gradRelErr = 0;
+        for (size_t f = 0; f < disk.F.size(); f += 7) {
+            const Vec3 a = disk.V[size_t(disk.F[f][0])], b = disk.V[size_t(disk.F[f][1])], c = disk.V[size_t(disk.F[f][2])];
+            const Vec3 q = (a + b + c)/3.0, n = (b - a).cross(c - a).normalized();
+            limErr = std::max(limErr, std::max(std::fabs(disk.omega(q + 1e-9*n) - 2*kPi), std::fabs(disk.omega(q - 1e-9*n) + 2*kPi)));
+        }
+        for (size_t f = 0; f < cap.F.size(); f += 11) {
+            const Vec3 a = cap.V[size_t(cap.F[f][0])], b = cap.V[size_t(cap.F[f][1])], c = cap.V[size_t(cap.F[f][2])];
+            const Vec3 q = (a + b + c)/3.0, n = (b - a).cross(c - a).normalized();
+            jumpErr = std::max(jumpErr, std::fabs(cap.omega(q + 1e-9*n) - cap.omega(q - 1e-9*n) - 4*kPi));
+        }
+        const CrackMesh* far[2] = {&c2->glob, &d2->surf[0]};
+        for (int i = 0; i < 200; i++) {
+            const Vec3 x(U(rng), U(rng), U(rng));
+            for (int mi = 0; mi < 2; mi++) {
+                const SolidAngleMesh* m = mi == 0 ? &disk : &cap;
+                if (far[mi]->distance(x) < 0.05) continue;
+                const double h = 1e-3, f0 = m->omega(x);
+                double lap = 0;
+                for (int a = 0; a < 3; a++) {
+                    const Vec3 e = Vec3::Unit(a);
+                    lap += (m->omega(x + h*e) - 2*f0 + m->omega(x - h*e))/(h*h);
+                }
+                const Vec3 g = m->grad(x);
+                Vec3 fd;
+                for (int a = 0; a < 3; a++) {
+                    const Vec3 e = Vec3::Unit(a);
+                    fd[a] = (m->omega(x + 1e-6*e) - m->omega(x - 1e-6*e))/2e-6;
+                }
+                lapMax = std::max(lapMax, std::fabs(lap)/(1.0 + g.norm()));
+                gradRelErr = std::max(gradRelErr, (g - fd).norm()/(1.0 + g.norm()));
+            }
+        }
+        const bool good = limErr < 1e-6 && jumpErr < 1e-6 && lapMax < 1e-2 && gradRelErr < 1e-5;
+        out("  flat disk: one-sided limits at +-1e-9 vs +-2 pi: max err %.1e; curved cap: jump vs 4 pi max err %.1e; finite-difference "
+            "Laplacian (h = 1e-3) max %.1e; Biot-Savart gradient vs central differences max rel. err %.1e -> %s\n", limErr, jumpErr, lapMax,
+            gradRelErr, good ? "ok" : "FAIL");
+        ok = ok && good;
+    }
+    // 5. determinism: the same seeds give the same sums, also with one thread
+    out("\n=== self-test 5: determinism of our method on C2 (Q8/R8/B4, 256 points per tet): repeat and one thread ===\n");
+    {
+        auto sc = buildStressCase("C2");
+        const Ring R = stressRing(*sc);
+        std::vector<StressTet> stt;
+        std::vector<PointSet> ps;
+        for (const TetFrame& T : R.T) stt.push_back(stressTet(T, sc->walk));
+        for (int t = 0; t < kRingNT; t++) ps.push_back(stressPoints(R.T[size_t(t)], stt[size_t(t)], sc->walk, 256, gateParams(false).eps));
+        StressOursParams op;
+        op.nQ = op.nR = 8;
+        op.B = 4;
+        const uint64_t seed = gateParams(false).seed;
+        const StressOurs a = runStressOurs(*sc, R, stt, ps, op, seed, 123, false), b = runStressOurs(*sc, R, stt, ps, op, seed, 123, false);
+        StressOurs c;
+        {
+            tbb::global_control gc(tbb::global_control::max_allowed_parallelism, 1);
+            c = runStressOurs(*sc, R, stt, ps, op, seed, 123, false);
+        }
+        bool same = true;
+        for (size_t k = 0; k < a.vms.size(); k++)
+            same = same && std::memcmp(a.gl[k].c.data(), b.gl[k].c.data(), sizeof(double)*kRingNV) == 0 &&
+                   std::memcmp(a.gl[k].c.data(), c.gl[k].c.data(), sizeof(double)*kRingNV) == 0;
+        for (int t = 0; t < kRingNT; t++)
+            if (a.hasR[size_t(t)]) same = same && sameSums(a.runR[size_t(t)].sums, c.runR[size_t(t)].sums);
+        out("  glued c (J '%s') %s; repeat and one thread: %s\n", sc->var[0].name.c_str(), fmtVec(a.gl[0].c).c_str(), same ? "identical" : "DIFFERENT");
+        ok = ok && same;
+    }
+    out("\nself-test: %s\n", ok ? "PASS" : "FAIL");
+    return ok;
+}
+
+} // namespace
+
+bool runRingStress(const RingStressParams& p)
+{
+    using clk = std::chrono::steady_clock;
+    const auto tStart = clk::now();
+    Report out(p.quick);
+    std::time_t now = std::time(nullptr);
+    std::tm tmNow{};
+#ifdef _WIN32
+    localtime_s(&tmNow, &now);
+#else
+    localtime_r(&now, &tmNow);
+#endif
+    char date[64], stamp[64];
+    std::strftime(date, sizeof date, "%Y-%m-%d %H:%M:%S", &tmNow);
+    std::strftime(stamp, sizeof stamp, "%Y%m%d_%H%M%S", &tmNow);
+    out("--ring-stress%s: %s; %u hardware threads (TBB default arena)\n", p.selftest ? " --selftest" : "", date,
+        std::thread::hardware_concurrency());
+    if (p.selftest) return stressSelftest(out);
+
+    // the cases
+    std::vector<std::string> ids;
+    const int prio[kNStress] = {1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 2, 1, 2, 2, 2, 3, 3, 3, 3, 1, 1};
+    if (p.cases == "all" || p.cases == "p1" || p.cases == "p2" || p.cases == "p3") {
+        const int maxP = p.cases == "all" ? 3 : p.cases[1] - '0';
+        for (int k = 0; k < kNStress; k++)
+            if (p.cases == "all" ? true : prio[k] == maxP) ids.push_back(kStressIds[k]);
+    } else {
+        std::stringstream ss(p.cases);
+        std::string item;
+        while (std::getline(ss, item, ','))
+            if (!item.empty()) ids.push_back(item);
+    }
+    for (const std::string& id : ids)
+        if (std::find(std::begin(kStressIds), std::end(kStressIds), id) == std::end(kStressIds)) {
+            out("unknown case %s (known: all, p1, p2, p3, or a list of", id.c_str());
+            for (const char* k : kStressIds) out(" %s", k);
+            out(")\n");
+            return false;
+        }
+    std::string tag = p.tag.empty() ? std::string("stress_") + stamp : p.tag;
+    std::error_code ec;
+    std::filesystem::create_directories("ring_stress", ec);
+    {
+        std::string b = tag;
+        for (int i = 2; std::filesystem::exists("ring_stress/" + b + "_rows.csv") || std::filesystem::exists("ring_stress/" + b + "_log.txt"); i++)
+            b = tag + "_" + std::to_string(i);
+        tag = b;
+    }
+    out("cases:");
+    for (const std::string& id : ids) out(" %s", id.c_str());
+    out("\noutput: ring_stress/%s_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin%s\n", tag.c_str(),
+        p.quick ? " (QUICK: none read or written)" : "");
+    out("settings: ours (Q/R/B) %s (seed sets %d for the first, timing repeats %d: median); direct N %s; points per tet %d (A1, A2, A3: "
+        "check 4's 4096); GT N = %d in %d batches, walk cap 65536; Zombie on %s; validation %s; points within %g sqrt(2) of a crack left "
+        "out%s%s\n",
+        p.quick ? "8/8/4" : p.ours.c_str(), p.seeds, p.repeats, p.quick ? "16,64" : p.direct.c_str(), p.quick ? 512 : p.points,
+        p.quick ? 1024 : p.gtWalks, p.quick ? 16 : p.gtBatches, p.zombie.c_str(), p.validate ? "on" : "off", p.epsRel,
+        p.epsRel != 0.01 ? " (NOT check 4's 0.01; A1, A2, A3 keep check 4's points)" : "", p.cache ? "" : "; GT cache off");
+
+    std::vector<StressRow> rows;
+    std::vector<StressSummary> sums;
+    std::string geoTxt;
+    std::vector<std::vector<int>> gOurs = parseGrid(p.quick && p.ours == "32/16/8,32/64/8,1024/256/16" ? "8/8/4" : p.ours, "32/16/8");
+    auto settingOf = [&](size_t i, int& nQ, int& nR, int& B) {
+        nQ = gOurs[i][0];
+        nR = gOurs[i].size() > 1 ? gOurs[i][1] : nQ;
+        B = gOurs[i].size() > 2 ? gOurs[i][2] : defaultBatches(nQ);
+    };
+    auto writeFiles = [&]() {
+        {
+            std::ofstream f("ring_stress/" + tag + "_rows.csv", std::ios::binary);
+            f << stressCsvHeader();
+            for (const StressRow& r : rows) f << stressCsvRow(r);
+        }
+        std::string sc = stressSummaryCsvHeader();
+        for (const StressSummary& s : sums) {
+            const auto cs = buildStressCase(s.id);
+            for (const JVariant& v : cs->var)
+                for (int g = 0; g < (cs->ramp ? 2 : 1); g++) {
+                    if (g == 1 && !v.Jr) continue;
+                    int nQ, nR, B;
+                    settingOf(0, nQ, nR, B);
+                    const OursNums o0 = oursNums(rows, s.id, "ours", v.name, g, nQ, nR, B);
+                    OursNums o1, o2;
+                    if (gOurs.size() > 1) {
+                        settingOf(1, nQ, nR, B);
+                        o1 = oursNums(rows, s.id, "ours", v.name, g, nQ, nR, B);
+                    }
+                    if (gOurs.size() > 2) {
+                        settingOf(gOurs.size() - 1, nQ, nR, B);
+                        o2 = oursNums(rows, s.id, "ours", v.name, g, nQ, nR, B);
+                    }
+                    std::string how;
+                    const double dAt = directAt(rows, s.id, g, o0.t, how);
+                    const bool exactInd = bool(cs->exact) && v.name == "indicator";
+                    std::vector<std::string> c = {s.id, "\"" + s.plain + "\"", std::to_string(s.priority), v.name, g ? "ramp" : "g1",
+                                                  std::to_string(int(s.ran))};
+                    settingOf(0, nQ, nR, B);
+                    c.push_back("Q" + std::to_string(nQ) + "/R" + std::to_string(nR) + "/B" + std::to_string(B));
+                    c.push_back(std::to_string(o0.n));
+                    for (double x : {o0.rms, o0.rmsSd, o0.nc, o0.maxp, o0.vert, o0.grad, o0.gradNc, o0.gradAbs, o0.E, o0.t, o0.relGt, o1.rms, o2.rms,
+                                     o2.maxp, o2.vert, dAt})
+                        c.push_back(csvNum(x));
+                    c.push_back(how);
+                    std::string gt = s.gtLine, ch = s.check;
+                    std::replace(gt.begin(), gt.end(), '"', '\'');
+                    std::replace(ch.begin(), ch.end(), '"', '\'');
+                    c.push_back("\"" + gt + "\"");
+                    c.push_back("\"" + ch + "\"");
+                    c.push_back(s.ran ? stressVerdict(o0, exactInd) : "fails (" + s.failure + ")");
+                    c.push_back("\"" + s.failure + "\"");
+                    for (size_t i = 0; i < c.size(); i++) sc += (i ? "," : "") + c[i];
+                    sc += "\n";
+                }
+        }
+        {
+            std::ofstream f("ring_stress/" + tag + "_summary.csv", std::ios::binary);
+            f << sc;
+        }
+        {
+            std::ofstream f("ring_stress/" + tag + "_geometry.txt", std::ios::binary);
+            f << geoTxt;
+        }
+        {
+            std::ofstream f("ring_stress/" + tag + "_log.txt", std::ios::binary);
+            f << out.text;
+        }
+    };
+    for (const std::string& id : ids) {
+        StressSummary s;
+        s.id = id;
+        try {
+            auto sc = buildStressCase(id);
+            s.plain = sc->plain;
+            s.priority = sc->priority;
+            runStressCase(out, p, *sc, rows, s, geoTxt);
+        } catch (const std::exception& e) {
+            out("  CASE %s FAILED: %s\n", id.c_str(), e.what());
+            s.failure = e.what();
+        }
+        sums.push_back(s);
+        writeFiles();
+    }
+    // the console summary
+    out("\n=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===\n");
+    out("  %-4s %-52s %-14s %8s %8s %8s %8s %8s %8s %9s %s\n", "case", "plain name", "J", "H RMS%", "max %", "vertex", "grad%", "time s",
+        "S_last%", "direct%", "verdict");
+    for (const StressSummary& s : sums) {
+        if (!s.ran) {
+            out("  %-4s %-52s FAILED: %s\n", s.id.c_str(), s.plain.c_str(), s.failure.c_str());
+            continue;
+        }
+        const auto cs = buildStressCase(s.id);
+        for (const JVariant& v : cs->var) {
+            int nQ, nR, B;
+            settingOf(0, nQ, nR, B);
+            const OursNums o0 = oursNums(rows, s.id, "ours", v.name, 0, nQ, nR, B);
+            settingOf(gOurs.size() - 1, nQ, nR, B);
+            const OursNums o2 = oursNums(rows, s.id, "ours", v.name, 0, nQ, nR, B);
+            std::string how;
+            const double dAt = directAt(rows, s.id, 0, o0.t, how);
+            out("  %-4s %-52s %-14s %8.3f %8.2f %8.4f %8.2f %8.3f %8.3f %9.3f %s\n", s.id.c_str(), s.plain.substr(0, 52).c_str(), v.name.c_str(),
+                100*o0.rms, 100*o0.maxp, o0.vert, 100*o0.grad, o0.t, 100*o2.rms, 100*dAt,
+                stressVerdict(o0, bool(cs->exact) && v.name == "indicator").c_str());
+        }
+    }
+    out("\n--ring-stress total %.1f s; %zu rows in ring_stress/%s_rows.csv\n", secondsSince(tStart), rows.size(), tag.c_str());
+    writeFiles();
+    return true;
+}
+
+int stressCachedPoints(const std::string& id)
+{
+    const auto sc = buildStressCase(id);   // throws on an unknown id
+    if (sc->exact || sc->check4 >= 0) return -1;
+    const std::string pre = "ref_stress_" + id + "_p";   // ref_stress_<id>_p<P>.bin: 25600 walks, default eps
+    int best = 0;
+    std::error_code ec;
+    for (const auto& e : std::filesystem::directory_iterator("gate_cache", ec)) {
+        const std::string f = e.path().filename().string();
+        if (f.rfind(pre, 0) != 0 || f.size() <= pre.size() + 4 || f.compare(f.size() - 4, 4, ".bin") != 0) continue;
+        const std::string num = f.substr(pre.size(), f.size() - 4 - pre.size());
+        if (num.find_first_not_of("0123456789") == std::string::npos) best = std::max(best, std::atoi(num.c_str()));
+    }
+    return best;
+}
+
+RingView stressRingView(const std::string& id, int pointsPerTet, int nQ, int nR, int walksRef, bool geometryOnly)
+{
+    const auto t0 = std::chrono::steady_clock::now();
+    if (std::find(std::begin(kStressIds), std::end(kStressIds), id) == std::end(kStressIds))
+        throw std::invalid_argument("--case: unknown ring stress case " + id);
+    auto scp = buildStressCase(id);
+    StressCase& sc = *scp;
+    const GateParams gp = gateParams(false);
+    const Ring R = stressRing(sc);
+    Report out(false);
+    RingView v;
+    v.title = "ring stress case " + sc.id + ": " + sc.plain + " (" + R.name + ") [fast method]";
+    std::copy(R.V.begin(), R.V.end(), v.verts.begin());
+    std::vector<StressTet> stt;
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        v.tets.push_back({size_t(T.global[0]), size_t(T.global[1]), size_t(T.global[2]), size_t(T.global[3])});
+        v.tetName.push_back(T.name);
+        stt.push_back(stressTet(T, sc.walk));
+        v.tetCut.push_back(char(stt.back().cut));
+    }
+    for (const auto& t : sc.walk.tris()) {
+        const int b = int(v.crackV.size());
+        v.crackV.insert(v.crackV.end(), {t.a, t.b, t.c});
+        v.crackF.push_back({b, b + 1, b + 2});
+    }
+    if (!sc.cracks.empty() && sc.cracks[0].halfPlane) {   // the slice clouds: the first crack's plane (flat cracks)
+        v.n = sc.cracks[0].frame.n;
+        v.d = sc.cracks[0].frame.d;
+    }
+    if (geometryOnly) return v;
+    // the points and the GT (as --ring-stress made them)
+    std::vector<PointSet> ps;
+    RefRun ref;
+    bool haveRun = false;
+    std::string gtLine;
+    if (sc.check4 >= 0) {
+        PerfSetup s;
+        perfSetup(s, 2, sc.check4, gp.nRingPoints);
+        ps = s.ps;
+        haveRun = loadRingGT(s, ref);
+        gtLine = haveRun ? "GT: check 4's cache " + ref.file : "";
+    } else {
+        for (int t = 0; t < kRingNT; t++) ps.push_back(stressPoints(R.T[size_t(t)], stt[size_t(t)], sc.walk, pointsPerTet, gp.eps));
+        if (!sc.exact) {
+            ref = stressGT(out, sc, R, ps, 25600, 64, 5000000 + 1000*uint64_t(sc.index), 65536, stressGtName(sc.id, pointsPerTet, 25600),
+                           true, nullptr, false, false, true);
+            if (ref.cached) {
+                haveRun = true;
+                gtLine = "GT: the --ring-stress cache " + ref.file;
+            }
+        }
+        if (!sc.exact && !haveRun) {   // no cache at this density: solved here (not cached)
+            const int B = walksRef >= 1280 ? 64 : 16, N = std::max(4*B, (walksRef + B/2)/B*B);
+            ref = stressSolveO(sc, R, ps, N, B, mixSeed(gp.seed, 5000000 + 1000*uint64_t(sc.index) + 300), 65536);
+            haveRun = true;
+            gtLine = "GT: no cache at " + std::to_string(pointsPerTet) + " points per tet; solved here at N = " + std::to_string(N) +
+                     " (not cached), " + fmtd("%.1f s", ref.stats.seconds);
+        }
+        if (sc.exact) gtLine = "GT: exact (+-1, the side indicator)";
+    }
+    StressRef sr;
+    sr.ref = ref;
+    sr.hasRun = haveRun;
+    stressRefSetup(sr, sc, R, stt, ps);
+    StressOursParams op;
+    op.B = defaultBatches(nQ);
+    auto whole = [&](int n) { return std::max(2*op.B, (n + op.B/2)/op.B*op.B); };
+    op.nQ = whole(nQ);
+    op.nR = whole(nR);
+    const StressOurs o = runStressOurs(sc, R, stt, ps, op, gp.seed, 6000000 + 1000*uint64_t(sc.index), true);
+    std::vector<double> w;
+    for (int t = 0; t < kRingNT; t++) {
+        v.X.insert(v.X.end(), ps[size_t(t)].X.begin(), ps[size_t(t)].X.end());
+        w.insert(w.end(), ps[size_t(t)].w.begin(), ps[size_t(t)].w.end());
+        v.tetOf.insert(v.tetOf.end(), ps[size_t(t)].size(), t);
+    }
+    v.pointsPerTet = sc.check4 >= 0 ? gp.nRingPoints : pointsPerTet;
+    v.walksTet = op.nQ;
+    v.walksR = op.nR;
+    v.walksRef = haveRun ? ref.sums.walksPerBatch*ref.sums.nBatches : 0;
+    v.fast = true;
+    char buf[600];
+    std::snprintf(buf, sizeof buf, "%zu sample points; our method: Q %d / R %d walks per point, %d batches, %.2f s (walks %.2f s); %s",
+                  v.X.size(), op.nQ, op.nR, op.B, o.secTotal, o.secP + o.secR, gtLine.c_str());
+    v.report.push_back(buf);
+    v.report.push_back(sc.desc);
+    v.report.push_back("error of the glued H against the GT, as a fraction of the jump 2: RMS / max; vertex values: glued / GT");
+    GateView::Field gtF{"GT (g = 1)"};
+    gtF.vol = sr.gt[0].H;
+    v.fields.push_back(gtF);
+    for (size_t k = 0; k < o.vms.size(); k++) {
+        if (o.vms[k].second != 0) continue;
+        const JVariant& jv = sc.var[size_t(o.vms[k].first)];
+        const std::string sfx = " [J " + jv.name + "] (g = 1)";
+        GateView::Field dec{"glued H" + sfx}, dif{"error = glued H - GT" + sfx}, h0{"H0" + sfx};
+        for (int t = 0; t < kRingNT; t++) {
+            dec.vol.insert(dec.vol.end(), o.F[k][size_t(t)].H.begin(), o.F[k][size_t(t)].H.end());
+            for (size_t i = 0; i < ps[size_t(t)].size(); i++) {
+                double H, vH;
+                Vec3 G, vG;
+                stressH0(o, int(k), t, ps[size_t(t)], R.T[size_t(t)], i, H, vH, G, vG);
+                h0.vol.push_back(H);
+            }
+        }
+        dif.difference = true;
+        double sq = 0, sw = 0;
+        for (size_t i = 0; i < dec.vol.size(); i++) {
+            dif.vol.push_back(dec.vol[i] - gtF.vol[i]);
+            sq += w[i]*dif.vol[i]*dif.vol[i];
+            sw += w[i];
+            dif.max = std::max(dif.max, std::fabs(dif.vol[i]));
+        }
+        dif.rms = std::sqrt(sq/sw)/kTwoGMax;
+        dif.max /= kTwoGMax;
+        std::string vt;
+        for (int q = 0; q < kRingNV; q++) {
+            std::snprintf(buf, sizeof buf, "%s v%d %+.3f/%+.3f", q ? "," : "", q, o.gl[k].c[q] + jv.J(R.V[size_t(q)]), sr.gtP[0].H[size_t(q)]);
+            vt += buf;
+        }
+        std::snprintf(buf, sizeof buf, "glued H%s: error RMS %.2f%%, max %.1f%%; vertices%s", sfx.c_str(), 100*dif.rms, 100*dif.max, vt.c_str());
+        v.report.push_back(buf);
+        v.fields.push_back(std::move(dec));
+        v.fields.push_back(std::move(dif));
+        v.fields.push_back(std::move(h0));
+    }
+    // the basis functions of the main J's run: P_k = lambda_k + Q_k in every tet with corner v
+    for (int q = 0; q < kRingNV; q++) {
+        v.basis[size_t(q)].assign(v.X.size(), 0.0);
+        v.inSupport[size_t(q)].assign(v.X.size(), 0);
+    }
+    size_t off = 0;
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        for (size_t i = 0; i < ps[size_t(t)].size(); i++) {
+            const Vec3& xi = ps[size_t(t)].xi[i];
+            const double lam[4] = {1.0 - xi.sum(), xi[0], xi[1], xi[2]};
+            for (int q = 0; q < 4; q++) {
+                double qv = 0, var;
+                long long n;
+                if (o.hasP[size_t(t)]) comboH(o.runP[size_t(t)].sums, i, unitCoef(4, q), qv, var, n);
+                v.basis[size_t(T.global[q])][off + i] = lam[q] + qv;
+                v.inSupport[size_t(T.global[q])][off + i] = 1;
+            }
+        }
+        off += ps[size_t(t)].size();
+    }
+    std::snprintf(buf, sizeof buf, "total %.1f s", secondsSince(t0));
+    v.report.push_back(buf);
+    return v;
 }

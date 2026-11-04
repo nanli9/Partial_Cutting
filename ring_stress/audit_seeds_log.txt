@@ -1,0 +1,119 @@
+--ring-stress: 2026-11-04 02:35:55; 16 hardware threads (TBB default arena)
+cases: E1 D2 F3 E3
+output: ring_stress/audit_seeds_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8 (seed sets 6 for the first, timing repeats 1: median); direct N 16; points per tet 2048 (A1, A2, A3: check 4's 4096); GT N = 25600 in 64 batches, walk cap 65536; Zombie on none; validation off; points within 0.01 sqrt(2) of a crack left out
+
+=== E1 (priority 1) ===
+E1: two parallel cracks with opposite fronts (strengths 1 and 0.5)
+  crack a: n1.X = -0.14, front direction (0, 1, 0), t = 0.65, g = 1; crack b: n1.X = 0.30, front direction (0, -1, 0), t = 0.6, g = 0.5; errors / (2 max g) = / 2
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 8 triangles in O, area 1.714556; cracks: a (g = 1) b (g = 0.5)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 4 0.2806 5 1; T-++ cut 7 0.1718 9 1; T+-+ cut 1 0.0734 3 0; T--+ cut 3 0.2765 5 0; T++- cut 4 0.2952 6 1; T-+- cut 9 0.1857 10 1; T+-- cut 3 0.2122 5 0; T--- cut 5 0.2193 7 0;
+  sum of the tets' areas 1.714555936638 vs the walk crack's 1.714555936638 (rel. diff 2.6e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.02e-06, ramp 1.35e-07 over 300 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.61e-06 over 36 samples
+  J 'blend': Shepard blend (weights 1/d_j^2) of the cracks' Level C functions (x g_j), and of their ramps; control variate J_xi,a + 0.5 J_xi,b
+  geometry built and checked in 0.00 s
+  GT loaded from gate_cache\ref_stress_E1_p2048.bin (key matches); original run: 18742 points, 479795200 walks counted of 479795200, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 41.4, 269.224 s
+  18735 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 0.1 s
+  GT noise floor (g = 1): H s.e. RMS 0.1762% (max 0.3052%) of 2g; grad s.e. RMS / grad RMS 9.03%; GT RMS 0.3131; energy 2.39544 +- 0.00355
+  GT noise floor (ramp): H s.e. RMS 0.0702% (max 0.0985%) of 2g; grad s.e. RMS / grad RMS 8.44%; GT RMS 0.1602; energy 0.40324 +- 0.00036
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                blend          g=1     0.90    0.218    0.237 |   3.748   3.431   23.45 |  230.29   45.87 |  +14.18  23.15 | 0.2806 0.0333
+    ours Q32/R16/B8                blend          ramp    0.90    0.218    0.237 |   3.212   2.996   11.32 |  416.83   52.14 |  +22.91  70.08 | 0.2131 0.0227
+    ours Q32/R16/B8 s1             blend          g=1     0.90    0.219    0.239 |   3.809   3.493   22.27 |  227.62   57.92 |  +29.62  21.73 | 0.2878 0.0373
+    ours Q32/R16/B8 s1             blend          ramp    0.90    0.219    0.239 |   3.279   3.069   10.76 |  421.21   94.57 |  +83.90  59.94 | 0.2192 0.0293
+    ours Q32/R16/B8 s2             blend          g=1     0.90    0.222    0.242 |   4.089   3.788   22.32 |  292.45   50.10 |  +28.51  22.34 | 0.3062 0.0322
+    ours Q32/R16/B8 s2             blend          ramp    0.90    0.222    0.242 |   3.340   3.136   10.66 |  497.60   92.18 |  +94.34  76.38 | 0.2084 0.0232
+    ours Q32/R16/B8 s3             blend          g=1     0.90    0.224    0.243 |   3.677   3.327   22.62 |  223.17   51.50 |  +20.41  19.28 | 0.2738 0.0340
+    ours Q32/R16/B8 s3             blend          ramp    0.90    0.224    0.243 |   3.043   2.805   12.35 |  415.42   93.22 |  +84.11  71.05 | 0.2052 0.0218
+    ours Q32/R16/B8 s4             blend          g=1     0.90    0.223    0.242 |   3.721   3.383   23.47 |  219.76    0.00 |   +3.66  40.15 | 0.2631 0.0421
+    ours Q32/R16/B8 s4             blend          ramp    0.90    0.223    0.242 |   3.151   2.935   10.58 |  406.80    0.00 |  -16.99 143.29 | 0.1996 0.0237
+    ours Q32/R16/B8 s5             blend          g=1     0.90    0.225    0.244 |   3.991   3.689   21.96 |  226.84   37.65 |  +13.61  17.80 | 0.3172 0.0345
+    ours Q32/R16/B8 s5             blend          ramp    0.90    0.225    0.244 |   3.266   3.057   10.08 |  416.08   42.68 |  +23.86  50.38 | 0.2118 0.0227
+    direct N16/B8                  -              g=1     0.30    0.155    0.159 |   7.083   0.215   39.57 |  591.31  238.67 | +563.46 875.80 | 0.1992 0.0000
+    direct N16/B8                  -              ramp    0.30    0.155    0.159 |   2.776   0.000   15.63 |  561.98  269.51 | +728.44 678.24 | 0.0938 0.0000
+  case E1 done in 2.1 s
+
+=== D2 (priority 1) ===
+D2: strongly curved crack surface (bowl, sphere radius 0.6)
+  sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; h = 0.04
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1094 triangles in O, area 0.773893; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 90 0.0231 59 4; T-++ cut 651 0.3916 152 9; T+-+ - 0 0.0000 0 0; T--+ cut 45 0.0160 25 12; T++- cut 278 0.1563 83 12; T-+- cut 322 0.1869 86 8; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.773893057674 vs the walk crack's 0.773893057674 (rel. diff 5.7e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.54e-06 over 2430 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.04e-05 over 1386 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = (x - y)/sqrt(2); control variate Omega_xi/(2 pi) of the crack-side triangles within 1.2 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  geometry built and checked in 0.11 s
+  GT loaded from gate_cache\ref_stress_D2_p2048.bin (key matches); original run: 16453 points, 421196800 walks counted of 421196800, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 49.0, 1288.522 s
+  16446 points in the 8 tets + 7 probes; 5 tets cut; GT ready in 0.1 s
+  GT noise floor (g = 1): H s.e. RMS 0.2564% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 13.70%; GT RMS 0.2858; energy 1.50780 +- 0.00360
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                theta          g=1     0.59    1.486    1.797 |   1.909   1.779    7.86 |   93.98   18.69 |   +4.87   3.14 | 0.0794 0.0190
+    ours Q32/R16/B8 s1             theta          g=1     0.59    1.524    2.011 |   1.631   1.512    8.70 |   93.82   19.98 |   +4.30   3.94 | 0.1018 0.0148
+    ours Q32/R16/B8 s2             theta          g=1     0.59    1.522    2.010 |   2.605   2.308    8.90 |  412.43   19.89 |   +1.30   2.67 | 0.1478 0.0975
+    ours Q32/R16/B8 s3             theta          g=1     0.59    1.519    1.999 |   1.614   1.457    8.73 |   88.03   19.05 |   +2.99   1.75 | 0.1107 0.0193
+    ours Q32/R16/B8 s4             theta          g=1     0.59    1.526    2.025 |   1.486   1.347    9.39 |   85.27   13.80 |   +1.62   2.15 | 0.1252 0.0190
+    ours Q32/R16/B8 s5             theta          g=1     0.59    1.512    1.995 |   1.656   1.491    8.51 |  116.64   24.21 |   +5.43   6.52 | 0.0980 0.0219
+    direct N16/B8                  -              g=1     0.26    0.783    0.779 |  10.267   0.620   46.50 |  814.73  146.59 | +230.03 1666.62 | 0.4427 0.0000
+  case D2 done in 14.4 s
+
+=== F3 (priority 2) ===
+F3: tiny crack inside one tet
+  a disk of radius 0.06, normal n1, centre g0 = centroid of T+++ (inside T+++, no face contact), 64 front vertices
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 384 triangles in O, area 0.011292; cracks: disk (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 384 0.0113 0 64; T-++ - 0 0.0000 0 0; T+-+ - 0 0.0000 0 0; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.011291574566 vs the walk crack's 0.011291574566 (rel. diff 4.6e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 0.00e+00 over 0 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.29e-05 over 768 samples
+  J 'solid': solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk
+  J 'theta': theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon (fails far away); control variate Omega_xi
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 256: 16368 points, 4190208 walks counted of 4190208, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 125.4, 22.567 s -> extrapolated to N = 25600: 2257 s
+  the GT pilot puts the full GT at 2257 s > 1500 s: points per tet lowered to 1024 (the walks are not lowered)
+  GT loaded from gate_cache\ref_stress_F3_p1024.bin (key matches); original run: 8253 points, 211276800 walks counted of 211276800, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 125.3, 1154.206 s
+  8246 points in the 8 tets + 7 probes; 1 tets cut; GT ready in 22.6 s
+  GT noise floor (g = 1): H s.e. RMS 0.3124% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 44.73%; GT RMS 0.0155; energy 0.12227 +- 0.00269
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                solid          g=1     0.17    0.116    0.131 |   2.195   0.000    5.26 |   50.55   18.35 |   -6.22   2.26 | 0.0559 0.0548
+    ours Q32/R16/B8                theta          g=1     0.17    0.116    0.131 |   2.719   0.000   14.85 |  527.37  114.74 | +162.06 191.07 | 0.1242 0.1021
+    ours Q32/R16/B8 s1             solid          g=1     0.17    0.115    0.131 |   1.506   0.000    4.71 |   50.86   19.04 |   -6.18   2.25 | 0.0414 0.0525
+    ours Q32/R16/B8 s1             theta          g=1     0.17    0.115    0.131 |   3.258   0.000   18.80 | 1693.84   76.35 |  +66.40 211.82 | 0.1937 0.1280
+    ours Q32/R16/B8 s2             solid          g=1     0.17    0.117    0.131 |   4.491   3.538    6.40 |   51.75   19.56 |   -6.77   2.30 | 0.1022 0.0557
+    ours Q32/R16/B8 s2             theta          g=1     0.17    0.117    0.131 |   6.411   0.928   19.25 |  554.00   23.98 |   +4.95 101.58 | 0.1706 0.1356
+    ours Q32/R16/B8 s3             solid          g=1     0.17    0.115    0.130 |   4.897   4.633    7.01 |   52.61   21.61 |   -6.61   2.40 | 0.1109 0.0318
+    ours Q32/R16/B8 s3             theta          g=1     0.17    0.115    0.130 |   6.771   3.864   20.28 | 1297.22   54.50 |  +35.73 223.55 | 0.2640 0.1750
+    ours Q32/R16/B8 s4             solid          g=1     0.17    0.115    0.131 |   4.845   3.746    6.98 |   51.57   18.56 |   -6.93   2.73 | 0.1093 0.0615
+    ours Q32/R16/B8 s4             theta          g=1     0.17    0.115    0.131 |   2.722   0.000   19.99 |  477.24   53.40 |  +40.02  59.58 | 0.1635 0.1145
+    ours Q32/R16/B8 s5             solid          g=1     0.17    0.115    0.131 |   8.238   7.892    9.42 |   62.56   24.97 |   -9.67   3.28 | 0.1775 0.0477
+    ours Q32/R16/B8 s5             theta          g=1     0.17    0.115    0.131 |   6.827   6.142   19.96 | 1072.12  128.48 | +145.85 144.17 | 0.3222 0.1095
+    direct N16/B8                  -              g=1     0.13    0.716    0.718 |  12.390   0.000   48.62 | 2437.27    0.00 | -5141.91 5535.01 | 0.5873 0.0000
+  case F3 done in 25.6 s
+
+=== E3 (priority 1) ===
+E3: two crossing cracks (X junction)
+  A = K1's plane through O (n1.X = 0.08); B = half-plane n_B = normalize(-0.4, 0.2, 1), d_B = n_B.c + 0.05, front direction n1 x n_B, t = 0.55; the data disagree on the junction line (bounded solution, singular gradient)
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 9 triangles in O, area 2.247635; cracks: A (through) (g = 1) B (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 2 0.1787 3 1; T-++ cut 4 0.3935 7 1; T+-+ cut 4 0.2203 5 0; T--+ cut 3 0.0750 4 0; T++- cut 8 0.2608 10 0; T-+- cut 12 0.7447 13 1; T+-- cut 7 0.2605 8 0; T--- cut 4 0.1142 6 1;
+  sum of the tets' areas 2.247635167842 vs the walk crack's 2.247635167842 (rel. diff 0.0e+00)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 7.20e-07 over 336 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.11e-06 over 43 samples
+  J 'blend': Shepard blend of A's indicator and B's Level C; control variate sign_A,xi + J_xi,B
+  geometry built and checked in 0.00 s
+  GT loaded from gate_cache\ref_stress_E3_p2048.bin (key matches); original run: 17230 points, 441088000 walks counted of 441088000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.6, 247.907 s
+  17223 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 0.1 s
+  GT noise floor (g = 1): H s.e. RMS 0.1944% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 7.78%; GT RMS 0.3914; energy 5.47973 +- 0.01332
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                blend          g=1     0.83    0.227    0.238 |   5.418   4.610   30.20 |  359.30    0.00 |  -26.37  32.07 | 0.3119 0.0916
+    ours Q32/R16/B8 s1             blend          g=1     0.83    0.232    0.243 |   5.569   4.939   24.53 |  320.98    0.00 |   -1.74  31.62 | 0.3374 0.0591
+    ours Q32/R16/B8 s2             blend          g=1     0.83    0.235    0.246 |   5.156   4.475   32.77 |  276.51   72.42 |  +53.85  22.68 | 0.2742 0.0507
+    ours Q32/R16/B8 s3             blend          g=1     0.83    0.244    0.255 |   5.131   4.378   28.09 |  384.70   65.62 |  +48.68 167.92 | 0.2737 0.0834
+    ours Q32/R16/B8 s4             blend          g=1     0.83    0.236    0.246 |   5.407   4.762   28.02 |  282.33   20.92 |   -0.53  22.88 | 0.3118 0.0401
+    ours Q32/R16/B8 s5             blend          g=1     0.83    0.236    0.246 |   5.557   4.883   24.25 |  286.57   42.15 |  +27.17  29.02 | 0.3300 0.0607
+    direct N16/B8                  -              g=1     0.28    0.155    0.158 |   7.761   0.000   44.25 |  342.43    0.00 |  -79.91  55.37 | 0.2928 0.0000
+  case E3 done in 2.1 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  E1   two parallel cracks with opposite fronts (strengths  blend             3.779    22.47   0.2842   227.23    0.237    3.779     7.083 degrades
+  D2   strongly curved crack surface (bowl, sphere radius 0 theta             1.644     8.71   0.1063    93.90    1.797    1.644    10.267 works
+  F3   tiny crack inside one tet                            solid             4.668     6.69   0.1058    51.66    0.131    4.668    28.973 degrades
+  F3   tiny crack inside one tet                            theta             4.834    19.61   0.1822   813.06    0.131    4.834    28.973 degrades
+  E3   two crossing cracks (X junction)                     blend             5.413    28.05   0.3118   303.77    0.238    5.413     7.761 fails
+
+--ring-stress total 44.3 s; 41 rows in ring_stress/audit_seeds_rows.csv

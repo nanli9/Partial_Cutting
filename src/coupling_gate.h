@@ -90,6 +90,9 @@ struct RingViewParams {
     // 0 on the faces). The reference is loaded from gate_cache/ at 4096 points and 25600 walks whatever walksTet is.
     bool fast = false;
     int walksR = 640;
+    // a --ring-stress case id (curved, kinked, several cracks, ...) instead of ring / crack: stressRingView below, always
+    // the fast method; "": check 4's ring and crack above
+    std::string stressCase;
 };
 struct RingView {
     std::string title;
@@ -111,9 +114,21 @@ struct RingView {
     int pointsPerTet = 0, walksTet = 0, walksRef = 0;   // as run (walks rounded to whole batches)
     bool fast = false;                            // made by the fast method (walksTet = Q's walks, walksR = R's)
     int walksR = 0;
+    // --ring-stress cases only (stressRingView): the crack as a triangle mesh in X; empty: the polygon 'crack' above
+    std::vector<Vec3> crackV;
+    std::vector<std::array<int, 3>> crackF;
 };
 // progress (optional): incremented after each tet's two runs (8 in all)
 RingView gateRingView(const RingViewParams& p, std::atomic<int>* progress = nullptr);
+// --gate coupling --view --check 4 --case ID: one --ring-stress case (coupling_gate.h RingStressParams) for the ring view:
+// the GT from its cache in gate_cache/ (as --ring-stress made it: 25600 walks, pointsPerTet per tet, or check 4's for A1, A2,
+// A3; the exact +-1 for complete cuts), else solved here at walksRef walks and not cached; our method at Q nQ / R nR (the
+// fast path) at the same points; fields: the GT, the glued H, their difference and H0 for every face function J of the case
+// (g = 1), and the basis functions of the main J's run. geometryOnly: only the ring, the crack and the title.
+RingView stressRingView(const std::string& id, int pointsPerTet, int nQ, int nR, int walksRef, bool geometryOnly = false);
+// The points per tet of case id's cached GT (gate_cache/ref_stress_<id>_p<P>.bin; the largest P if several), 0 if none;
+// -1 if it needs none (complete cuts: exact; A1, A2, A3: check 4's cache). Throws on an unknown id.
+int stressCachedPoints(const std::string& id);
 
 // Rewrites one marked section of gate_report.md at path (the view's, id "view_..."), keeping the others, and rebuilds
 // the report's summary. False if the file does not exist or cannot be written.
@@ -149,3 +164,34 @@ struct RingBenchParams {
     RingViewParams viewParams;
 };
 bool runRingBench(const RingBenchParams& p);
+
+// --ring-stress: the nodal ring of check 4 under other crack types, our per-tet method (each tet in its own xi frame, the
+// glue of check 4) against the GT (one solve on O in X) with ONE crack representation for both, a triangle mesh
+// (walk_cache.h CrackMesh): complete cuts (flat, cylinder, near the node), curved fronts (disks), curved and kinked crack
+// surfaces, several cracks (parallel, two in one tet, crossing), placement stress (front through the node, a crack 1e-3 from
+// an interior face, a tiny crack, a front near the boundary) and a distorted ring 3. Cases (ids): A1 A1s A2 A3 B1 B2 C1 C2
+// D1 D2 D3 E1 E2 E3 F1 F2 F3 F4 G1a G1b F2b; "all", or "p1" / "p2" / "p3" (priority). Per case: the geometry and its checks (the
+// tets' crack areas, J = the crack data at the crack-face lines, the control variates' jump), the GT (A1, A2, A3: check 4's
+// cached GT, read-only; complete cuts with g = 1: exact +-1; else solved and cached as gate_cache/ref_stress_<id>_p<P>.bin),
+// ours at the settings 'ours' (nQ/nR/B; the first one with 'seeds' seed sets and 'repeats' timing repeats), the direct ring
+// solve at N in 'direct', and the validations (validate: check 4's GTs reproduced by the mesh GT code, the exact cases'
+// GT solver, Zombie on the cases in 'zombie', an independent GT re-run for D1, plain per-tet solves vs the control
+// variates for C2, D1, D3, E3). Writes ring_stress/<tag>_rows.csv, _summary.csv, _log.txt, _geometry.txt (never
+// gate_report.md, ring_perf/, results*.txt or any ref_check* cache). selftest: the tree, the flat mesh against StripCut, every
+// case's geometry and J checks, the solid angle, determinism. quick: development only (512 points per tet, GT N = 1024,
+// ours Q8/R8/B4, direct 16 and 64, nothing cached, every line marked QUICK).
+struct RingStressParams {
+    std::string cases = "all";
+    std::string ours = "32/16/8,32/64/8,1024/256/16";
+    std::string direct = "16,32,64,128,256,512";
+    int points = 2048;                 // points per tet asked (the new GTs; A1, A2, A3 use check 4's 4096)
+    int gtWalks = 25600, gtBatches = 64;
+    int seeds = 3, repeats = 3;
+    std::string zombie = "D2,E3";      // case ids for the Zombie cross-check of the GT, or "none"
+    bool validate = true, selftest = false, quick = false;
+    double pilotLimit = 1500;          // s: a GT the pilot puts above this runs at 1024 points per tet (the walks are not lowered)
+    bool cache = true;                 // false (--no-cache, development): new GTs are neither read from nor written to gate_cache/
+    double epsRel = 0.01;              // the points within epsRel sqrt(2) of a crack are left out (check 4: 0.01; A1, A2, A3 keep it)
+    std::string tag;                   // output name (default stress_<date>_<time>)
+};
+bool runRingStress(const RingStressParams& p);

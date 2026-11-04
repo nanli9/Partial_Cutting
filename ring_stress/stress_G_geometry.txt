@@ -1,0 +1,20 @@
+G1a: flat crack K1 on the distorted ring 3
+  half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+  ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.1462 6 1; T+-+ cut 1 0.0494 2 0; T--+ cut 3 0.1349 4 0; T++- cut 5 0.0636 5 1; T-+- cut 6 0.1259 7 1; T+-- cut 3 0.1734 5 0; T--- cut 1 0.0497 3 0;
+  sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 4.5e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.82e-06 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.76e-05 over 24 samples
+  J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+  GT: solved gate_cache\ref_stress_G1a_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 198.5 s, 0 capped, 0 escaped walks, mean length 44.6
+  checks: -
+
+G1b: gently curved crack (sphere radius 2) on the distorted ring 3
+  sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + side outside; h = 0.06 within 1.25 of the origin
+  ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 520 triangles in O, area 0.789575; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 97 0.1071 39 12; T+-+ cut 76 0.0392 57 0; T--+ cut 181 0.1844 77 1; T++- cut 38 0.0283 22 6; T-+- cut 120 0.1494 37 13; T+-- cut 214 0.2047 96 2; T--- cut 101 0.0766 63 0;
+  sum of the tets' areas 0.789575173160 vs the walk crack's 0.789575173160 (rel. diff 8.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.14e-05 over 2346 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.53e-05 over 827 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side triangles within 1.25 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  GT: solved gate_cache\ref_stress_G1b_p2048.bin (N = 25600, 2048 points per tet asked); GT solve 836.8 s, 0 capped, 0 escaped walks, mean length 44.9
+  checks: -
+

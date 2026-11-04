@@ -1,0 +1,67 @@
+--ring-stress: 2026-11-04 01:40:13; 16 hardware threads (TBB default arena)
+cases: G1a G1b
+output: ring_stress/stress_G_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8,32/64/8,1024/256/16 (seed sets 3 for the first, timing repeats 3: median); direct N 16,32,64,128,256,512; points per tet 2048 (A1, A2, A3: check 4's 4096); GT N = 25600 in 64 batches, walk cap 65536; Zombie on D2,E3; validation on; points within 0.01 sqrt(2) of a crack left out
+
+=== G1a (priority 3) ===
+G1a: flat crack K1 on the distorted ring 3
+  half-plane n = normalize(1, 0.5, 0.2), d = 0.08, front direction (0, 1, 0), front at t = 0.5
+  ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 4 triangles in O, area 0.742978; cracks: K1 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 5 0.1462 6 1; T+-+ cut 1 0.0494 2 0; T--+ cut 3 0.1349 4 0; T++- cut 5 0.0636 5 1; T-+- cut 6 0.1259 7 1; T+-- cut 3 0.1734 5 0; T--- cut 1 0.0497 3 0;
+  sum of the tets' areas 0.742978081153 vs the walk crack's 0.742978081153 (rel. diff 4.5e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 3.82e-06 over 192 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 1.76e-05 over 24 samples
+  J 'levelC': Level C: J = theta/pi of the straight front (and its ramp); control variate J_xi (the half-plane's theta/pi in xi)
+  geometry built and checked in 0.00 s
+  GT timing pilot, N = 256: 17156 points, 4391936 walks counted of 4391936, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.6, 1.995 s -> extrapolated to N = 25600: 200 s
+  GT run: 17156 points, 439193600 walks counted of 439193600, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.6, 198.511 s
+  GT cached to gate_cache\ref_stress_G1a_p2048.bin
+  17149 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 200.6 s
+  GT noise floor (g = 1): H s.e. RMS 0.2501% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 15.84%; GT RMS 0.2999; energy 1.48444 +- 0.00950
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                levelC         g=1     0.76    0.212    0.220 |   1.978   1.859   13.88 |  127.73   32.56 |   +8.40   3.45 | 0.1218 0.0205
+    ours Q32/R16/B8 s1             levelC         g=1     0.76    0.210    0.221 |   1.769   1.604   14.20 |  114.81   34.18 |  +11.14   3.48 | 0.1337 0.0206
+    ours Q32/R16/B8 s2             levelC         g=1     0.76    0.218    0.231 |   1.826   1.726   13.72 |  102.44   36.44 |  +11.20   3.55 | 0.1234 0.0144
+    ours Q32/R64/B8                levelC         g=1     1.58    0.415    0.430 |   1.854   1.795   14.17 |   60.10   35.93 |  +10.38   1.31 | 0.1330 0.0156
+    ours Q1024/R256/B16            levelC         g=1    19.85    4.881    4.898 |   1.792   1.770   14.02 |   45.48   36.90 |  +11.56   0.90 | 0.1285 0.0039
+    direct N16/B8                  -              g=1     0.27    0.125    0.130 |   9.974   0.000   42.11 | 1012.30  293.89 | +838.37 3761.44 | 0.3120 0.0000
+    direct N32/B8                  -              g=1     0.55    0.246    0.250 |   7.069   0.000   29.79 |  551.52  179.07 | +293.63 1168.52 | 0.2845 0.0000
+    direct N64/B16                 -              g=1     1.10    0.493    0.497 |   4.962   0.000   22.98 |  344.89    0.00 | -186.76 241.77 | 0.1880 0.0000
+    direct N128/B16                -              g=1     2.20    0.980    0.984 |   3.519   0.000   15.36 |  245.32    0.00 |  -37.95 161.97 | 0.1058 0.0000
+    direct N256/B16                -              g=1     4.39    1.980    1.984 |   2.530   0.294   11.79 |  156.26    0.00 |  -17.36  55.41 | 0.0511 0.0000
+    direct N512/B16                -              g=1     8.78    3.932    3.935 |   1.799   0.217    7.85 |  108.99    0.00 |  -16.61  33.36 | 0.0493 0.0000
+  case G1a done in 233.4 s
+
+=== G1b (priority 3) ===
+G1b: gently curved crack (sphere radius 2) on the distorted ring 3
+  sphere radius 2 tangent to K1's plane at 0.08 n1 (centre -1.92 n1); crack = sphere n O n {u1.X < s1}; + side outside; h = 0.06 within 1.25 of the origin
+  ring 3 (distorted, c = (0.35, -0.25, 0.20)); walk crack: 520 triangles in O, area 0.789575; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ - 0 0.0000 0 0; T-++ cut 97 0.1071 39 12; T+-+ cut 76 0.0392 57 0; T--+ cut 181 0.1844 77 1; T++- cut 38 0.0283 22 6; T-+- cut 120 0.1494 37 13; T+-- cut 214 0.2047 96 2; T--- cut 101 0.0766 63 0;
+  sum of the tets' areas 0.789575173160 vs the walk crack's 0.789575173160 (rel. diff 8.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.14e-05 over 2346 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.53e-05 over 827 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side triangles within 1.25 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  geometry built and checked in 0.06 s
+  GT timing pilot, N = 256: 16650 points, 4262400 walks counted of 4262400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.9, 8.448 s -> extrapolated to N = 25600: 845 s
+  GT run: 16650 points, 426240000 walks counted of 426240000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 44.9, 836.805 s
+  GT cached to gate_cache\ref_stress_G1b_p2048.bin
+  16643 points in the 8 tets + 7 probes; 7 tets cut; GT ready in 845.4 s
+  GT noise floor (g = 1): H s.e. RMS 0.2509% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 13.95%; GT RMS 0.2981; energy 1.62731 +- 0.00505
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                theta          g=1     0.73    1.153    1.308 |   1.719   1.459   15.58 |  135.69   39.85 |  +15.68   4.08 | 0.2539 0.0321
+    ours Q32/R16/B8 s1             theta          g=1     0.73    1.165    1.313 |   1.683   1.482   15.10 |  178.96   38.51 |  +12.77  11.17 | 0.2450 0.0215
+    ours Q32/R16/B8 s2             theta          g=1     0.73    1.185    1.332 |   1.903   1.713   13.81 |  137.00   39.93 |   +8.87   7.68 | 0.2180 0.0302
+    ours Q32/R64/B8                theta          g=1     1.53    3.445    3.562 |   1.737   1.645   14.58 |   62.50   35.08 |   +9.50   2.43 | 0.2368 0.0198
+    ours Q1024/R256/B16            theta          g=1    19.21   25.482   25.234 |   1.836   1.808   14.29 |   48.09   34.73 |  +10.06   1.55 | 0.2278 0.0112
+    direct N16/B8                  -              g=1     0.27    0.527    0.530 |   9.939   0.000   49.83 |  783.55  108.03 | +102.79 529.40 | 0.3159 0.0000
+    direct N32/B8                  -              g=1     0.53    1.075    1.078 |   6.992   0.000   31.57 |  447.92    0.00 |  -89.00 299.50 | 0.1841 0.0000
+    direct N64/B16                 -              g=1     1.07    2.120    2.123 |   5.016   0.000   22.27 |  311.62    0.00 |  -50.56  87.35 | 0.2284 0.0000
+    direct N128/B16                -              g=1     2.13    4.159    4.162 |   3.569   0.296   14.26 |  214.95   48.22 |  +19.08  31.05 | 0.1818 0.0000
+    direct N256/B16                -              g=1     4.26    8.388    8.390 |   2.505   0.000   11.66 |  144.31    0.00 |  -10.43  24.60 | 0.1112 0.0000
+    direct N512/B16                -              g=1     8.52   16.766   16.768 |   1.802   0.185    7.83 |  101.96   20.40 |   +8.10   9.89 | 0.0465 0.0000
+  case G1b done in 975.2 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  G1a  flat crack K1 on the distorted ring 3                levelC            1.826    13.88   0.1234   114.81    0.220    1.792     7.563 works
+  G1b  gently curved crack (sphere radius 2) on the distort theta             1.719    15.10   0.2450   137.00    1.308    1.836     6.359 works
+
+--ring-stress total 1208.7 s; 22 rows in ring_stress/stress_G_rows.csv

@@ -1,0 +1,21 @@
+F2: crack 0.001 away from an interior face
+  plane m.X = m.c + 0.001, m = the normal of T+++'s face (c, e_x, e_y); front through that face's centroid projected (t = 0.2460), crack on the side of the edge e_x-e_y
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 2 triangles in O, area 0.327618; cracks: F2 (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 3 0.2590 3 1; T-++ cut 2 0.0649 3 1; T+-+ cut 1 0.0037 2 1; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.327618357447 vs the walk crack's 0.327618357447 (rel. diff 8.5e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 5.95e-06 over 48 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 9.19e-06 over 6 samples
+  J 'levelC': Level C: J = theta/pi of the straight front; control variate J_xi (the half-plane's theta/pi in xi)
+  GT: solved gate_cache\ref_stress_F2_p2048_eps0.0005.bin (N = 25600, 2048 points per tet asked); GT solve 216.2 s, 0 capped, 0 escaped walks, mean length 58.1
+  checks: -
+
+F3: tiny crack inside one tet
+  a disk of radius 0.06, normal n1, centre g0 = centroid of T+++ (inside T+++, no face contact), 64 front vertices
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 384 triangles in O, area 0.011292; cracks: disk (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 384 0.0113 0 64; T-++ - 0 0.0000 0 0; T+-+ - 0 0.0000 0 0; T--+ - 0 0.0000 0 0; T++- - 0 0.0000 0 0; T-+- - 0 0.0000 0 0; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.011291574566 vs the walk crack's 0.011291574566 (rel. diff 4.6e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 0.00e+00 over 0 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.29e-05 over 768 samples
+  J 'solid': solid angle: J = Omega(disk)/(2 pi); control variate Omega_xi of the pulled-back disk
+  J 'theta': theta-type J = atan2(n.X - d, psi)/pi, psi = signed in-plane distance to the front polygon (fails far away); control variate Omega_xi
+  GT: solved gate_cache\ref_stress_F3_p1024_eps0.0005.bin (N = 25600, 1024 points per tet asked); GT solve 1156.6 s, 0 capped, 0 escaped walks, mean length 125.2
+  checks: -
+

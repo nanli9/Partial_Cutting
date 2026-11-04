@@ -614,6 +614,75 @@ CutSolver::CutSolver(const ConvexDomain& dom, const Cut& cut, GType g, const Wal
     im.settings.ignoreReflectingBoundaryContribution = true;
 }
 
+CutSolver::CutSolver(const ConvexDomain& dom, const std::vector<Vec3>& V, const std::vector<std::array<int, 3>>& F,
+                     std::function<float(const Vec3&, bool)> dirichlet, const WalkParams& params)
+{
+    // the ConvexDomain constructor above with the given mesh and data (the ring stress test's Zombie cross-check)
+    if (params.usesGateFlags() || params.dirichletFaces)
+        throw std::invalid_argument("CutSolver(ConvexDomain, mesh): every face is Neumann and the crack carries the data");
+    const double absorbShell = params.absorbShellRel*dom.L;
+    const double margin = faceOffsetMargin(dom.v);
+    stopDistance_ = absorbShell + margin;
+    if (F.empty()) return;
+
+    impl_ = std::make_unique<Impl>();
+    Impl& im = *impl_;
+    using zombie::Vector3;
+    using zombie::Vector3i;
+    std::vector<Vector3> domV, cutV;
+    std::vector<Vector3i> domF, cutF;
+    for (const Vec3& p : dom.v) domV.push_back(p.cast<float>());
+    for (const auto& f : dom.tris) domF.emplace_back(f[0], f[1], f[2]);
+    for (const Vec3& p : V) cutV.push_back(p.cast<float>());
+    for (const auto& f : F) cutF.emplace_back(f[0], f[1], f[2]);
+    Vector3 bMin = domV[0], bMax = domV[0];
+    for (const Vector3& p : domV) { bMin = bMin.cwiseMin(p); bMax = bMax.cwiseMax(p); }
+    Vector3 pad = Vector3::Constant(1e-3f*float(dom.L));
+    im.queries.domainIsWatertight = false;
+    im.queries.domainMin = bMin - pad;
+    im.queries.domainMax = bMax + pad;
+    const float silhouettePrecision = 1e-3f;
+    im.absorbing.buildAccelerationStructure(cutV, cutF, true, false, false);
+    zombie::populateGeometricQueriesForDirichletBoundary<3>(im.absorbing, im.queries);
+    im.reflecting.buildAccelerationStructure(
+        domV, domF, zombie::getIgnoreCandidateSilhouetteCallback(true, silhouettePrecision), true, false, false);
+    zombie::populateGeometricQueriesForNeumannBoundary<3>(im.reflecting, zombie::getBranchTraversalWeightCallback(),
+                                                          im.queries);
+    auto exactDist = im.queries.computeDistToAbsorbingBoundary;
+    im.queries.computeDistToAbsorbingBoundary = [exactDist, m = float(margin)](const Vector3& x, bool signedDist) -> float {
+        float dist = exactDist(x, signedDist);
+        float shrunk = std::max(0.0f, std::fabs(dist) - m);
+        return dist < 0.0f ? -shrunk : shrunk;
+    };
+    std::vector<Eigen::Vector3f> pn;
+    std::vector<float> pc;
+    for (size_t k = 0; k < dom.n.size(); k++) {
+        pn.push_back(dom.n[k].cast<float>());
+        pc.push_back(float(dom.c[k]));
+    }
+    im.queries.outsideBoundingDomain = [pn, pc](const Vector3& x) -> bool {
+        for (size_t k = 0; k < pn.size(); k++)
+            if (pn[k].dot(x) - pc[k] > 1e-4f) return true;
+        return false;
+    };
+    im.pde.absorptionCoeff = 0.0f;
+    im.pde.isSourceConstant = true;
+    im.pde.areRobinConditionsPureNeumann = true;
+    im.pde.areRobinCoeffsNonnegative = true;
+    im.pde.source = [](const Vector3&) -> float { return 0.0f; };
+    im.pde.robin = [](const Vector3&, const Vector3&, bool) -> float { return 0.0f; };
+    im.pde.robinCoeff = [](const Vector3&, const Vector3&, bool) -> float { return 0.0f; };
+    im.pde.hasReflectingBoundaryConditions = [](const Vector3&) -> bool { return true; };
+    im.pde.dirichlet = [dirichlet](const Vector3& x, bool normalAligned) -> float {
+        return dirichlet(x.cast<double>(), normalAligned);
+    };
+    im.settings = zombie::WalkSettings(float(absorbShell), float(params.reflectShellRel*dom.L),
+                                       params.maxWalkLength, /*solveDoubleSided=*/true);
+    im.settings.silhouettePrecision = silhouettePrecision;
+    im.settings.ignoreSourceContribution = true;
+    im.settings.ignoreReflectingBoundaryContribution = true;
+}
+
 CutSolver::~CutSolver() = default;
 
 SolveStats CutSolver::solve(const std::vector<Vec3>& pts, const std::vector<char>* wantGrad, int nWalks,

@@ -1,0 +1,33 @@
+--ring-stress: 2026-11-03 22:10:10; 16 hardware threads (TBB default arena)
+cases: D2
+output: ring_stress/dev_d2_zombie_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8 (seed sets 1 for the first, timing repeats 1: median); direct N none; points per tet 512 (A1, A2, A3: check 4's 4096); GT N = 2560 in 64 batches, walk cap 65536; Zombie on D2; validation on
+
+=== D2 (priority 1) ===
+D2: strongly curved crack surface (bowl, sphere radius 0.6)
+  sphere radius 0.6 centred 0.6 (1,1,1)/sqrt(3); crack = sphere n O n {(x - y)/sqrt(2) < 0}; + side outside; h = 0.04
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 1094 triangles in O, area 0.773893; cracks: sphere (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 90 0.0231 59 4; T-++ cut 651 0.3916 152 9; T+-+ - 0 0.0000 0 0; T--+ cut 45 0.0160 25 12; T++- cut 278 0.1563 83 12; T-+- cut 322 0.1869 86 8; T+-- - 0 0.0000 0 0; T--- - 0 0.0000 0 0;
+  sum of the tets' areas 0.773893057674 vs the walk crack's 0.773893057674 (rel. diff 5.7e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.54e-06 over 2430 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.04e-05 over 1386 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the full sphere, psi = (x - y)/sqrt(2); control variate Omega_xi/(2 pi) of the crack-side triangles within 1.2 of the origin (curved: not exact on the crack, evaluated at the walk end)
+  geometry built and checked in 0.12 s
+  GT timing pilot, N = 64: 5157 points, 330048 walks counted of 330048, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.7, 0.948 s -> extrapolated to N = 2560: 38 s
+  GT run: 5157 points, 13201920 walks counted of 13201920, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.7, 38.692 s
+  5150 points in the 8 tets + 7 probes; 5 tets cut; GT ready in 39.7 s
+  GT noise floor (g = 1): H s.e. RMS 0.8110% (max 0.9884%) of 2g; grad s.e. RMS / grad RMS 38.11%; GT RMS 0.2858; energy 1.46658 +- 0.04112
+  Zombie cross-check (float; 70165 points, 9441275 walks counted of 9441280, 5 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 53.9, 56.908 s; 56.9 s): H at 5154 points, N = 1024: |z| < 3 at 99.51%, pooled z -0.16; grad at 4063 points (16 x 64 walks, 0 not finite): pooled z +1.35 / +0.13 / -1.44 -> agree
+    near a crack (0.1)             2300 points: pooled z -0.51, mean z^2 1.056 (0.031), RMS discrepancy beyond noise 1.4e-03 (bound 3.4e-03)
+    near a front (0.1)              847 points: pooled z +0.25, mean z^2 1.008 (0.047), RMS discrepancy beyond noise 2.3e-03 (bound 5.4e-03)
+    near interior faces (0.1)      3625 points: pooled z -0.25, mean z^2 1.039 (0.025), RMS discrepancy beyond noise 1.7e-03 (bound 3.7e-03)
+    near the junction (0.1)           0 points: pooled z +0.00, mean z^2 0.000 (0.000), RMS discrepancy beyond noise 0.0e+00 (bound 0.0e+00)
+    vertex probes                     7 points: pooled z +0.99, mean z^2 0.892 (0.407), RMS discrepancy beyond noise 3.4e-03 (bound 1.6e-02)
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                theta          g=1     0.20    0.527    0.972 |   1.973   1.560    8.24 |   89.71   20.95 |   -0.69   4.62 | 0.1412 0.0388
+  case D2 done in 97.7 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  D2   strongly curved crack surface (bowl, sphere radius 0 theta             1.973     8.24   0.1412    89.71    0.972    1.973       nan works
+
+--ring-stress total 97.7 s; 1 rows in ring_stress/dev_d2_zombie_rows.csv

@@ -1,0 +1,47 @@
+﻿--ring-stress --selftest: 2026-11-03 22:58:12; 16 hardware threads (TBB default arena)
+
+=== self-test 1: CrackMesh::closest (tree) against brute force, bit for bit (d2, triangle, closest point) ===
+  A1 walk crack               4 triangles,     1 nodes: 4000 points, 0 differ -> ok
+  D2 walk crack            1094 triangles,   651 nodes: 4000 points, 0 differ -> ok
+  D2 full sphere           5790 triangles,  4095 nodes: 4000 points, 0 differ -> ok
+  D2 T+++ in xi              90 triangles,    63 nodes: 4000 points, 0 differ -> ok
+  D3 walk crack              28 triangles,    15 nodes: 4000 points, 0 differ -> ok
+  E3 walk crack               9 triangles,     5 nodes: 4000 points, 0 differ -> ok
+  C2 walk crack            1312 triangles,  1023 nodes: 4000 points, 0 differ -> ok
+  B1 tube                 23016 triangles, 16383 nodes: 4000 points, 0 differ -> ok
+
+=== self-test 2: K1 as a mesh (A1's walk crack) against check 4's StripCut on O ===
+  20000 random points in O's box: max |distance difference| 8.88e-16, side differs at 0 -> ok
+  walk crack area 0.742978081152792 vs StripCut's 0.742978081152792 (rel. diff 4.5e-16)
+
+=== self-test 3: every case: the tets' crack areas add up to the walk crack's; J = side g at the crack-face lines;
+    the control variates jump by exactly 2 g across the crack ===
+  A1   walk     4 tris, area 0.742978, tets' sum rel. diff 3.0e-16 | J at lines max 3.8e-06 (ramp 3.5e-07, 192 samples) | cv jump max 7.8e-06 (48) -> ok
+  A1s  walk     4 tris, area 0.742978, tets' sum rel. diff 3.0e-16 | J at lines max 3.8e-06 (ramp 3.5e-07, 192 samples) | cv jump max 7.8e-06 (48) -> ok
+  A2   walk     2 tris, area 0.276983, tets' sum rel. diff 2.0e-16 | J at lines max 1.6e-06 (ramp 1.4e-07, 66 samples) | cv jump max 2.8e-06 (8) -> ok
+  A3   walk     6 tris, area 1.427378, tets' sum rel. diff 0.0e+00 | J at lines max 8.1e-08 (ramp 0.0e+00, 234 samples) | cv jump max 1.3e-07 (60) -> ok
+  B1   walk  1110 tris, area 1.621812, tets' sum rel. diff 4.0e-15 | J at lines max 9.0e-08 (ramp 0.0e+00, 3858 samples) | cv jump max 0.0e+00 (3096) -> ok
+  B2   walk     6 tris, area 1.424641, tets' sum rel. diff 1.6e-16 | J at lines max 8.1e-08 (ramp 0.0e+00, 240 samples) | cv jump max 1.3e-07 (60) -> ok
+  C1   walk   336 tris, area 0.618230, tets' sum rel. diff 7.2e-16 | J at lines max 1.2e-05 (ramp 0.0e+00, 1998 samples) | cv jump max 3.3e-05 (1216) -> ok
+  C2   walk  1312 tris, area 0.502856, tets' sum rel. diff 2.9e-15 | J at lines max 1.4e-05 (ramp 0.0e+00, 2568 samples) | cv jump max 3.1e-05 (3268) -> ok
+  D1   walk   520 tris, area 0.789575, tets' sum rel. diff 7.0e-16 | J at lines max 1.5e-05 (ramp 0.0e+00, 2000 samples) | cv jump max 3.1e-05 (767) -> ok
+  D2   walk  1094 tris, area 0.773893, tets' sum rel. diff 5.7e-16 | J at lines max 8.5e-06 (ramp 0.0e+00, 2430 samples) | cv jump max 2.0e-05 (1386) -> ok
+  D3   walk    28 tris, area 0.957788, tets' sum rel. diff 0.0e+00 | J at lines max 2.5e-06 (ramp 0.0e+00, 516 samples) | cv jump max 4.1e-06 (92) -> ok
+  E1   walk     8 tris, area 1.714556, tets' sum rel. diff 2.6e-16 | J at lines max 3.0e-06 (ramp 1.4e-07, 300 samples) | cv jump max 3.6e-06 (36) -> ok
+  E2   walk   779 tris, area 0.201180, tets' sum rel. diff 5.5e-16 | J at lines max 1.4e-05 (ramp 0.0e+00, 112 samples) | cv jump max 8.0e-06 (779) -> ok
+  E3   walk     9 tris, area 2.247635, tets' sum rel. diff 0.0e+00 | J at lines max 7.2e-07 (ramp 0.0e+00, 336 samples) | cv jump max 1.1e-06 (43) -> ok
+  F1   walk     2 tris, area 0.476596, tets' sum rel. diff 1.6e-15 | J at lines max 3.6e-06 (ramp 0.0e+00, 36 samples) | cv jump max 4.7e-06 (5) -> ok
+  F2   walk     2 tris, area 0.327618, tets' sum rel. diff 8.5e-16 | J at lines max 5.9e-06 (ramp 0.0e+00, 48 samples) | cv jump max 9.2e-06 (6) -> ok
+  F3   walk   384 tris, area 0.011292, tets' sum rel. diff 4.6e-16 | J at lines max 0.0e+00 (ramp 0.0e+00, 0 samples) | cv jump max 2.3e-05 (768) -> ok
+  F4   walk     4 tris, area 1.405122, tets' sum rel. diff 3.2e-16 | J at lines max 7.2e-07 (ramp 0.0e+00, 198 samples) | cv jump max 2.9e-06 (24) -> ok
+  G1a  walk     4 tris, area 0.742978, tets' sum rel. diff 4.5e-16 | J at lines max 3.8e-06 (ramp 2.5e-07, 192 samples) | cv jump max 1.8e-05 (24) -> ok
+  G1b  walk   520 tris, area 0.789575, tets' sum rel. diff 8.4e-16 | J at lines max 1.1e-05 (ramp 0.0e+00, 2346 samples) | cv jump max 2.5e-05 (827) -> ok
+  F2b  walk     2 tris, area 0.280231, tets' sum rel. diff 1.2e-15 | J at lines max 8.3e-06 (ramp 0.0e+00, 54 samples) | cv jump max 1.3e-05 (6) -> ok
+
+=== self-test 4: solid angle (C2's disk fan, D2's curved cap) ===
+  flat disk: one-sided limits at +-1e-9 vs +-2 pi: max err 2.2e-08; curved cap: jump vs 4 pi max err 3.0e-07; finite-difference Laplacian (h = 1e-3) max 5.9e-03; Biot-Savart gradient vs central differences max rel. err 2.1e-09 -> ok
+
+=== self-test 5: determinism of our method on C2 (Q8/R8/B4, 256 points per tet): repeat and one thread ===
+  glued c (J 'solid') (+0.00270, +0.52760, -0.29581, +0.00152, -0.35063, +0.01620, -0.11759); repeat and one thread: identical
+
+self-test: PASS

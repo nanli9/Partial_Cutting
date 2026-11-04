@@ -654,7 +654,8 @@ void showRingGeometry(const RingView& g)
     vm->addCellScalarQuantity("cut by the crack (1) or not (0)", std::vector<double>(g.tetCut.begin(), g.tetCut.end()));
     std::vector<std::array<int, 3>> tris;
     for (int k = 1; k + 1 < int(g.crack.size()); k++) tris.push_back({0, k, k + 1});
-    polyscope::SurfaceMesh* cm = polyscope::registerSurfaceMesh("crack", toArrays(g.crack), tris);
+    polyscope::SurfaceMesh* cm = g.crackF.empty() ? polyscope::registerSurfaceMesh("crack", toArrays(g.crack), tris)
+                                                  : polyscope::registerSurfaceMesh("crack", toArrays(g.crackV), g.crackF);
     cm->setSurfaceColor({0.95f, 0.70f, 0.15f});
     cm->setBackFacePolicy(polyscope::BackFacePolicy::Identical);
     cm->setTransparency(0.5f);
@@ -735,10 +736,51 @@ void showRingBasis(const RingView& v, int k, bool supportOnly)
     pv->setPointColor({0.85f, 0.1f, 0.1f});
 }
 
+// The ring view's crack list: check 4's K1, K2, K3 (on ring 1 or 2), then --ring-stress cases (each on its own ring, by the
+// fast method, the GT from its gate_cache/ref_stress_* cache)
+struct RingCrackChoice {
+    const char* group;   // a heading above this entry, or nullptr
+    const char* label;
+    int crack;           // check 4's crack (0, 1, 2), or -1: the --ring-stress case id
+    const char* id;
+    int ring;            // a stress case's ring (check 4's: 0, the panel's ring 1 or 2)
+};
+const RingCrackChoice kRingCracks[] = {
+    {"flat (check 4)", "K1: flat crack", 0, "", 0},
+    {nullptr, "K2: flat crack", 1, "", 0},
+    {nullptr, "K3: flat cut through", 2, "", 0},
+    {"curved (ring 2)", "C1: flat crack, gently curved front", -1, "C1", 2},
+    {nullptr, "C2: flat crack, strongly curved front", -1, "C2", 2},
+    {nullptr, "D1: curved crack (sphere, radius 2)", -1, "D1", 2},
+    {nullptr, "D2: strongly curved crack (bowl, radius 0.6)", -1, "D2", 2},
+    {nullptr, "D4: wavy crack (sine wave, wavelength 1)", -1, "D4", 2},
+    {nullptr, "D5: strongly wavy crack (sine wave, wavelength 0.6)", -1, "D5", 2},
+    {nullptr, "D3: kinked crack (40 degrees)", -1, "D3", 2},
+    {nullptr, "B1: curved cut through (cylinder)", -1, "B1", 2},
+    {"multiple cracks (ring 2)", "E1: two parallel cracks (g = 1 and 0.5)", -1, "E1", 2},
+    {nullptr, "E2: two small cracks in one tet", -1, "E2", 2},
+    {nullptr, "E3: two crossing cracks (X)", -1, "E3", 2},
+    {"other placements", "B2: flat cut through, 0.001 from the node", -1, "B2", 2},
+    {nullptr, "F1: front through the node", -1, "F1", 2},
+    {nullptr, "F2: crack 0.001 from an interior face", -1, "F2", 2},
+    {nullptr, "F2b: crack 0.03 from an interior face", -1, "F2b", 2},
+    {nullptr, "F3: tiny crack inside one tet", -1, "F3", 2},
+    {nullptr, "F4: front 0.03 from the outer boundary", -1, "F4", 2},
+    {nullptr, "G1a: K1 on the distorted ring 3", -1, "G1a", 3},
+    {nullptr, "G1b: sphere crack on the distorted ring 3", -1, "G1b", 3},
+};
+
 int runRingView(const RingViewParams& p0)
 {
     initPolyscope();
     RingViewParams ui = p0;   // the panel's setting
+    // the picked stress case's GT cache density (stressCachedPoints: -1 none needed, 0 no cache)
+    int stressPts = ui.stressCase.empty() ? 0 : stressCachedPoints(ui.stressCase);
+    auto crackLabel = [&ui]() -> std::string {
+        for (const RingCrackChoice& c : kRingCracks)
+            if (ui.stressCase.empty() ? c.crack == ui.crack : ui.stressCase == c.id) return c.label;
+        return "stress case " + ui.stressCase;   // a case off the list (--case)
+    };
     auto geometryOf = [](RingViewParams p) {
         p.geometryOnly = true;
         return gateRingView(p);
@@ -752,6 +794,7 @@ int runRingView(const RingViewParams& p0)
         return std::async(std::launch::async, [q, &progress] { return gateRingView(q, &progress); });
     };
     std::future<RingView> job = launch(ui);
+    RingViewParams running = ui;   // the setting of the run in progress or shown
     auto started = std::chrono::steady_clock::now();
     // what the balls show: -2 the ground truth (the whole-ring solve, g = 1), -1 the glued H (Level C, physical glue,
     // g = 1), 0..6 that vertex's basis function, -3 another field picked in the list
@@ -811,14 +854,41 @@ int runRingView(const RingViewParams& p0)
         ImGui::TextWrapped("%s", v.title.c_str());
         ImGui::Separator();
         ImGui::TextUnformatted("Ring and crack (applied by Recompute)");
-        ImGui::RadioButton("ring 1: congruent (node at 0)", &ui.ring, 1);
-        ImGui::SameLine();
-        ImGui::RadioButton("ring 2: real mesh (node moved)", &ui.ring, 2);
-        ImGui::RadioButton("K1", &ui.crack, 0);
-        ImGui::SameLine();
-        ImGui::RadioButton("K2", &ui.crack, 1);
-        ImGui::SameLine();
-        ImGui::RadioButton("K3 (cut through)", &ui.crack, 2);
+        const bool stress = !ui.stressCase.empty();
+        ImGui::PushItemWidth(-1.0f);
+        if (ImGui::BeginCombo("##crack", crackLabel().c_str())) {
+            for (const RingCrackChoice& c : kRingCracks) {
+                if (c.group) ImGui::SeparatorText(c.group);
+                const bool on = stress ? ui.stressCase == c.id : c.crack == ui.crack;
+                if (ImGui::Selectable(c.label, on) && !on) {
+                    ui.stressCase = c.id;
+                    if (c.crack >= 0) {
+                        ui.crack = c.crack;
+                        if (stress) ui.pointsPerTet = 4096;   // check 4's density: its reference loads from gate_cache
+                    } else {
+                        stressPts = stressCachedPoints(ui.stressCase);
+                        ui.pointsPerTet = stressPts > 0 ? stressPts : 2048;   // the density of the case's cached GT
+                        if (!stress) {   // stress cases run the fast method only
+                            ui.fast = true;
+                            ui.walksTet = 32;
+                            ui.walksR = 16;
+                        }
+                    }
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::PopItemWidth();
+        if (!stress) {
+            ImGui::RadioButton("ring 1: congruent (node at 0)", &ui.ring, 1);
+            ImGui::SameLine();
+            ImGui::RadioButton("ring 2: real mesh (node moved)", &ui.ring, 2);
+        } else {
+            int ring = 2;
+            for (const RingCrackChoice& c : kRingCracks)
+                if (ui.stressCase == c.id) ring = c.ring;
+            ImGui::TextWrapped("on ring %d (%s); g = 1; the fast method only", ring, ring == 3 ? "distorted" : "real mesh, node moved");
+        }
         ImGui::Separator();
         ImGui::TextUnformatted("Sample density and walks");
         ImGui::SliderInt("sample points per tet", &ui.pointsPerTet, 128, 16384, "%d", logClamp);
@@ -828,13 +898,19 @@ int runRingView(const RingViewParams& p0)
             ImGui::SliderInt("walks per point, Q runs (fast)", &ui.walksTet, 16, 2560, "%d", logClamp);
             ImGui::SliderInt("walks per point, R runs (fast)", &ui.walksR, 16, 2560, "%d", logClamp);
         }
-        ImGui::SliderInt("walks per point, ring reference", &ui.walksRef, 256, 25600, "%d", logClamp);
-        if (ImGui::Button("check 4's own setting (4096 / 2560 / 25600)")) {
+        ImGui::SliderInt(stress ? "walks per point, GT (when not cached)" : "walks per point, ring reference", &ui.walksRef, 256, 25600,
+                         "%d", logClamp);
+        if (!stress && ImGui::Button("check 4's own setting (4096 / 2560 / 25600)")) {
             ui.pointsPerTet = 4096;
             ui.walksTet = 2560;
             ui.walksRef = 25600;
         }
+        if (stress && stressPts > 0 && ui.pointsPerTet != stressPts &&
+            ImGui::Button(("the cached GT's density (" + std::to_string(stressPts) + " points per tet)").c_str()))
+            ui.pointsPerTet = stressPts;
+        ImGui::BeginDisabled(stress);
         ImGui::Checkbox("fast method (per-tet control variates + lean walks)", &ui.fast);
+        ImGui::EndDisabled();
         if (ui.fast) {
             ImGui::SameLine();
             if (ImGui::Button("fast defaults (Q 32 / R 16)")) {
@@ -842,7 +918,16 @@ int runRingView(const RingViewParams& p0)
                 ui.walksR = 16;
             }
         }
-        if (!ui.fast) {
+        if (stress) {
+            // the fast method's rough cost as below (curved cracks: a few times more, the solid angle at every R landing); the
+            // GT: exact, the case's cache at its density, or solved here at the GT walks
+            const bool cached = stressPts < 0 || stressPts == ui.pointsPerTet;
+            const double pts = 8.0*ui.pointsPerTet, tTet = pts*(ui.walksTet + ui.walksR)*0.2e-6, tRef = cached ? 0.0 : pts*ui.walksRef*0.7e-6;
+            const std::string gt = stressPts < 0 ? "exact or check 4's cache" : cached ? "loaded from gate_cache"
+                                 : "solved here, not cached: " + std::to_string(int(tRef)) + " s" +
+                                       (stressPts > 0 ? " (cached at " + std::to_string(stressPts) + " points per tet)" : "");
+            ImGui::TextWrapped("estimated: about %.1f s (our runs %.1f s, longer for curved cracks; GT %s)", tTet + tRef, tTet, gt.c_str());
+        } else if (!ui.fast) {
             // rough cost on 16 threads: ~0.7 us per walk on the ring, ~0.45 us per walk in a tet (two runs per tet)
             const bool asCheck = ui.pointsPerTet == 4096 && ui.walksTet == 2560 && ui.walksRef == 25600;
             const double pts = 8.0*ui.pointsPerTet, tTet = pts*ui.walksTet*2*0.45e-6, tRef = asCheck ? 0.0 : pts*ui.walksRef*0.7e-6;
@@ -857,7 +942,10 @@ int runRingView(const RingViewParams& p0)
                                "frame: P_k = lambda_k + Q_k and H0 = J_xi + R, with Q and R the only walks.", tTet + tRef, tTet,
                                refCached ? "loaded from gate_cache" : (std::to_string(int(tRef)) + " s").c_str());
         }
-        if (busy) {
+        if (busy && !running.stressCase.empty()) {   // no per-tet progress: the GT loads, then all tets run together
+            ImGui::TextWrapped("solving %s... %.0f s (details in the console)", running.stressCase.c_str(),
+                               std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count());
+        } else if (busy) {
             const int done = progress;
             const bool asCheck = ui.fast ? ui.pointsPerTet == 4096 && ui.walksRef == 25600
                                          : ui.pointsPerTet == 4096 && ui.walksTet == 2560 && ui.walksRef == 25600;
@@ -870,6 +958,7 @@ int runRingView(const RingViewParams& p0)
             have = false;
             showRingGeometry(v);
             job = launch(ui);
+            running = ui;
             started = std::chrono::steady_clock::now();
         }
         if (!error.empty()) ImGui::TextWrapped("error: %s", error.c_str());
@@ -894,7 +983,7 @@ int runRingView(const RingViewParams& p0)
             ImGui::TextWrapped("glued H = H0 + sum over vertices of (weight c_v x basis function of v). A vertex's basis "
                                "function: in each tet around it, that tet's local solve with crack 0 and faces = the vertex's "
                                "hat; 0 in the other tets.");
-            ImGui::TextUnformatted("more fields (the error, H0, the ramp g):");
+            ImGui::TextUnformatted(v.crackF.empty() ? "more fields (the error, H0, the ramp g):" : "more fields (the error, H0, each face function J):");
             ImGui::PushItemWidth(-1.0f);
             if (ImGui::BeginCombo("##field", show == -3 ? fieldLabel(v.fields[size_t(fieldIdx)].name).c_str() : "(pick one)")) {
                 for (int i = 0; i < int(v.fields.size()); i++)
@@ -908,9 +997,14 @@ int runRingView(const RingViewParams& p0)
             ImGui::PopItemWidth();
             ImGui::Separator();
             for (const std::string& s : v.report) ImGui::TextWrapped("%s", s.c_str());
-            ImGui::TextWrapped("The ramp g is computed in ring 1 only. The error field has its own colour range (shown in the "
-                               "Structures panel). The two slice clouds (off by default) hold the points within %.2f of the "
-                               "crack plane, one per side.", kGateSliceHalfWidth);
+            if (v.crackF.empty())
+                ImGui::TextWrapped("The ramp g is computed in ring 1 only. The error field has its own colour range (shown in the "
+                                   "Structures panel). The two slice clouds (off by default) hold the points within %.2f of the "
+                                   "crack plane, one per side.", kGateSliceHalfWidth);
+            else   // a stress case
+                ImGui::TextWrapped("g = 1. 'glued H' uses the case's main face function J (the first in the list); the list also has "
+                                   "the others. The error field has its own colour range (shown in the Structures panel).%s",
+                                   v.n.isZero() ? "" : " The two slice clouds (off by default) hold the points near the first crack's plane.");
         }
         ImGui::PopItemWidth();
     };
@@ -1143,9 +1237,12 @@ void printUsage()
                 "                                               and rewrites the view's section of ./gate_report.md\n"
                 "  partial_cut --gate coupling --view --check 4 [--ring 1|2] [--config 0|1|2]\n"
                 "                                               check 4's nodal ring (default ring 2, K1) with a panel to\n"
-                "                                               change the ring, the crack, the sample points per tet and\n"
-                "                                               the walk counts; recomputed in the background\n"
+                "                                               change the ring, the crack (K1, K2, K3, or a --ring-stress\n"
+                "                                               case: curved, kinked, several cracks, ...), the sample points\n"
+                "                                               per tet and the walk counts; recomputed in the background\n"
                 "    (add --fast: start with the panel's 'fast method' checkbox on, Q 32 / R 16 walks per point)\n"
+                "    (add --case ID [--points P] [--walks-tet Q] [--walks-r R] [--walks-ref N]: start on that --ring-stress\n"
+                "     case, at its cached GT's density; without a cache at P the GT is solved at N walks, not cached)\n"
                 "  partial_cut --ring-bench [--ring 1|2] [--config 0|1|2] [--ours LIST] [--direct LIST] [--current LIST]\n"
                 "              [--shell S] [--repeat R] [--seeds S] [--no-lean] [--no-fuse] [--tag NAME] [--quick]\n"
                 "                                               check 4's ring: the fast per-tet method vs the direct ring\n"
@@ -1156,6 +1253,19 @@ void printUsage()
                 "  partial_cut --ring-bench --selftest            lean walks vs runWalk bit for bit, J_xi, skip decisions, z tests\n"
                 "  partial_cut --ring-bench --view [--fast] [--ring r] [--config k] [--points P] [--walks-tet N]\n"
                 "              [--walks-r N] [--walks-ref N]   the ring view's computation headless: its panel lines\n"
+                "                                               (with --case ID: a --ring-stress case's view, headless)\n"
+                "  partial_cut --ring-stress [--case all|p1|p2|p3|ID[,ID...]] [--ours \"Q/R[/B],...\"] [--direct \"N[/B],...\"]\n"
+                "              [--points P] [--gt-walks N] [--seeds S] [--repeat R] [--zombie IDS|none] [--no-validate]\n"
+                "              [--no-cache] [--eps E] [--tag NAME] [--quick]\n"
+                "                                               the nodal ring under other crack types (complete, curved, kinked,\n"
+                "                                               several cracks, placement stress, ring 3): our per-tet method vs\n"
+                "                                               the GT on O; writes ring_stress/<tag>_rows.csv, _summary.csv,\n"
+                "                                               _log.txt, _geometry.txt and new GT caches gate_cache/ref_stress_*\n"
+                "                                               (--eps E: leave out the points within E sqrt(2) of a crack,\n"
+                "                                               default 0.01 as check 4; --no-cache: GTs not read or written)\n"
+                "                                               (ids: A1 A1s A2 A3 B1 B2 C1 C2 D1 D2 D3 E1 E2 E3 F1 F2 F3 F4 G1a G1b F2b D4 D5)\n"
+                "  partial_cut --ring-stress --selftest           crack-mesh tree, flat mesh vs StripCut, every case's J and\n"
+                "                                               control-variate checks, solid angle, determinism\n"
                 "  partial_cut --check-xi                     H(xi) on the reference tet: cut pull-back and rest-tet\n"
                 "                                               independence checks; rewrite their section of ./results.txt\n"
                 "  partial_cut --screenshot file.png [--t T] [--t-start T0 --steps K] [--rewalked] [--with-ui]\n"
@@ -1178,6 +1288,10 @@ int main(int argc, char** argv)
     // --ring-bench (coupling_gate.h runRingBench) and the ring view's --fast option
     bool ringBench = false, repeatGiven = false, ringFast = false;
     RingBenchParams benchP;
+    // --ring-stress (coupling_gate.h runRingStress); it shares --ours, --direct, --points, --seeds, --repeat, --tag, --quick and
+    // --selftest with --ring-bench
+    bool ringStress = false, seedsGiven = false, pointsGiven = false, walksTetGiven = false, walksRGiven = false, walksRefGiven = false;
+    RingStressParams stressP;
     RingViewParams ringView;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--validate") == 0) validate = true;
@@ -1211,19 +1325,41 @@ int main(int argc, char** argv)
         else if (std::strcmp(argv[i], "--ring-perf") == 0 && i + 1 < argc) ringPerf = argv[++i];
         else if (std::strcmp(argv[i], "--ring-bench") == 0) ringBench = true;
         else if (std::strcmp(argv[i], "--selftest") == 0) benchP.selftest = true;
-        else if (std::strcmp(argv[i], "--ours") == 0 && i + 1 < argc) benchP.ours = argv[++i];
-        else if (std::strcmp(argv[i], "--direct") == 0 && i + 1 < argc) benchP.direct = argv[++i];
+        else if (std::strcmp(argv[i], "--ours") == 0 && i + 1 < argc) stressP.ours = benchP.ours = argv[++i];
+        else if (std::strcmp(argv[i], "--direct") == 0 && i + 1 < argc) stressP.direct = benchP.direct = argv[++i];
         else if (std::strcmp(argv[i], "--current") == 0 && i + 1 < argc) benchP.current = argv[++i];
         else if (std::strcmp(argv[i], "--shell") == 0 && i + 1 < argc) benchP.shellRel = std::atof(argv[++i]);
-        else if (std::strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) benchP.seeds = std::max(1, std::atoi(argv[++i]));
-        else if (std::strcmp(argv[i], "--tag") == 0 && i + 1 < argc) benchP.tag = argv[++i];
+        else if (std::strcmp(argv[i], "--seeds") == 0 && i + 1 < argc) {
+            benchP.seeds = std::max(1, std::atoi(argv[++i]));
+            seedsGiven = true;
+        }
+        else if (std::strcmp(argv[i], "--tag") == 0 && i + 1 < argc) stressP.tag = benchP.tag = argv[++i];
+        else if (std::strcmp(argv[i], "--ring-stress") == 0) ringStress = true;
+        else if (std::strcmp(argv[i], "--case") == 0 && i + 1 < argc) stressP.cases = argv[++i];
+        else if (std::strcmp(argv[i], "--gt-walks") == 0 && i + 1 < argc) stressP.gtWalks = std::max(64, std::atoi(argv[++i]));
+        else if (std::strcmp(argv[i], "--zombie") == 0 && i + 1 < argc) stressP.zombie = argv[++i];
+        else if (std::strcmp(argv[i], "--no-validate") == 0) stressP.validate = false;
+        else if (std::strcmp(argv[i], "--no-cache") == 0) stressP.cache = false;
+        else if (std::strcmp(argv[i], "--eps") == 0 && i + 1 < argc) stressP.epsRel = std::max(1e-6, std::atof(argv[++i]));
         else if (std::strcmp(argv[i], "--no-lean") == 0) benchP.lean = false;
         else if (std::strcmp(argv[i], "--no-fuse") == 0) benchP.fuse = false;
         else if (std::strcmp(argv[i], "--fast") == 0) ringFast = true;
-        else if (std::strcmp(argv[i], "--points") == 0 && i + 1 < argc) ringView.pointsPerTet = std::max(64, std::atoi(argv[++i]));
-        else if (std::strcmp(argv[i], "--walks-tet") == 0 && i + 1 < argc) ringView.walksTet = std::max(2, std::atoi(argv[++i]));
-        else if (std::strcmp(argv[i], "--walks-r") == 0 && i + 1 < argc) ringView.walksR = std::max(2, std::atoi(argv[++i]));
-        else if (std::strcmp(argv[i], "--walks-ref") == 0 && i + 1 < argc) ringView.walksRef = std::max(2, std::atoi(argv[++i]));
+        else if (std::strcmp(argv[i], "--points") == 0 && i + 1 < argc) {
+            ringView.pointsPerTet = std::max(64, std::atoi(argv[++i]));
+            pointsGiven = true;
+        }
+        else if (std::strcmp(argv[i], "--walks-tet") == 0 && i + 1 < argc) {
+            ringView.walksTet = std::max(2, std::atoi(argv[++i]));
+            walksTetGiven = true;
+        }
+        else if (std::strcmp(argv[i], "--walks-r") == 0 && i + 1 < argc) {
+            ringView.walksR = std::max(2, std::atoi(argv[++i]));
+            walksRGiven = true;
+        }
+        else if (std::strcmp(argv[i], "--walks-ref") == 0 && i + 1 < argc) {
+            ringView.walksRef = std::max(2, std::atoi(argv[++i]));
+            walksRefGiven = true;
+        }
         else if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) { printUsage(); return 0; }
         else { std::fprintf(stderr, "unknown argument: %s\n", argv[i]); printUsage(); return 2; }
     }
@@ -1239,6 +1375,17 @@ int main(int argc, char** argv)
         if (checkXi) return runXiCheck(Settings{}, "results.txt") ? 0 : 1;
         if (!ringPerf.empty())   // profiling only (coupling_gate.h runRingPerf)
             return runRingPerf(gateRing == 1 ? 1 : 2, gateConfig >= 0 && gateConfig <= 2 ? gateConfig : 0, ringPerf) ? 0 : 1;
+        if (ringStress) {   // the ring under other crack types (coupling_gate.h runRingStress)
+            stressP.quick = quick;
+            stressP.selftest = benchP.selftest;
+            if (repeatGiven) stressP.repeats = repeats;
+            else if (quick) stressP.repeats = 1;
+            if (seedsGiven) stressP.seeds = benchP.seeds;
+            else if (quick) stressP.seeds = 1;
+            if (pointsGiven) stressP.points = ringView.pointsPerTet;
+            if (quick && stressP.zombie == "D2,E3") stressP.zombie = "none";
+            return runRingStress(stressP) ? 0 : 1;
+        }
         if (ringBench) {   // the fast ring method vs the direct ring solve (coupling_gate.h runRingBench)
             benchP.ring = gateRing == 1 || gateRing == 2 ? gateRing : 0;
             benchP.crack = gateConfig >= 0 && gateConfig <= 2 ? gateConfig : -1;
@@ -1246,6 +1393,21 @@ int main(int argc, char** argv)
             if (repeatGiven) benchP.repeats = repeats;
             else if (quick) benchP.repeats = 1;   // --quick: one repeat unless --repeat says otherwise
             benchP.view = gateViewMode;
+            if (gateViewMode && stressP.cases != "all") {   // a --ring-stress case's view headless: its lines and field hashes
+                const int cp = stressCachedPoints(stressP.cases);   // default: the density of the case's cached GT
+                const RingView v = stressRingView(stressP.cases, pointsGiven ? ringView.pointsPerTet : cp > 0 ? cp : 2048,
+                                                  walksTetGiven ? ringView.walksTet : 32,
+                                                  walksRGiven ? ringView.walksR : 16, walksRefGiven ? ringView.walksRef : 2560);
+                std::printf("%s\n", v.title.c_str());
+                for (const std::string& s : v.report) std::printf("  %s\n", s.c_str());
+                for (const GateView::Field& f : v.fields) {
+                    uint64_t h = 1469598103934665603ull;   // fnv1a of the values
+                    const unsigned char* b = reinterpret_cast<const unsigned char*>(f.vol.data());
+                    for (size_t i = 0; i < f.vol.size()*sizeof(double); i++) h = (h ^ b[i])*1099511628211ull;
+                    std::printf("  field \"%s\": %zu values, fnv1a %016llx\n", f.name.c_str(), f.vol.size(), (unsigned long long)h);
+                }
+                return 0;
+            }
             if (gateViewMode) {   // the ring view headless: ring 2, K1 unless told otherwise
                 ringView.ring = benchP.ring ? benchP.ring : 2;
                 ringView.crack = benchP.crack >= 0 ? benchP.crack : 0;
@@ -1265,11 +1427,18 @@ int main(int argc, char** argv)
                 RingViewParams rp;
                 if (gateRing == 1 || gateRing == 2) rp.ring = gateRing;
                 if (gateConfig >= 0 && gateConfig <= 2) rp.crack = gateConfig;
+                if (stressP.cases != "all") {   // --case ID: start on that --ring-stress case, at its cached GT's density
+                    rp.stressCase = stressP.cases;
+                    const int cp = stressCachedPoints(rp.stressCase);
+                    rp.pointsPerTet = pointsGiven ? ringView.pointsPerTet : cp > 0 ? cp : 2048;
+                    ringFast = true;
+                }
                 if (ringFast) {   // --fast: start with the fast method's checkbox on (and its default walks Q 32 / R 16)
                     rp.fast = true;
-                    rp.walksTet = 32;
-                    rp.walksR = 16;
+                    rp.walksTet = walksTetGiven ? ringView.walksTet : 32;
+                    rp.walksR = walksRGiven ? ringView.walksR : 16;
                 }
+                if (walksRefGiven) rp.walksRef = ringView.walksRef;
                 return runRingView(rp);
             }
             if (gateViewMode) {   // check 3 at y_f = 0.30 unless told otherwise; check 2 at z_c = 0.60

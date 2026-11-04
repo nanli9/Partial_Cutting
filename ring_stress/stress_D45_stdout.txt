@@ -1,0 +1,73 @@
+--ring-stress: 2026-11-04 09:41:15; 16 hardware threads (TBB default arena)
+cases: D4 D5
+output: ring_stress/stress_D45_rows.csv, _summary.csv, _log.txt, _geometry.txt; GT caches gate_cache/ref_stress_*.bin
+settings: ours (Q/R/B) 32/16/8,32/64/8,1024/256/16 (seed sets 3 for the first, timing repeats 3: median); direct N 16,32,64,128,256,512; points per tet 2048 (A1, A2, A3: check 4's 4096); GT N = 25600 in 64 batches, walk cap 65536; Zombie on D5; validation on; points within 0.01 sqrt(2) of a crack left out
+
+=== D4 (priority 1) ===
+D4: wavy crack (sine wave, amplitude 0.1, wavelength 1)
+  K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/1 + phase) (smallest radius of curvature 0.253, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.025 along w1
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 217 triangles in O, area 0.806484; cracks: wave (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 78 0.0306 80 0; T-++ cut 137 0.0737 107 31; T+-+ cut 186 0.2308 175 0; T--+ cut 126 0.0653 126 0; T++- cut 128 0.0874 102 28; T-+- cut 42 0.0254 33 11; T+-- cut 193 0.2676 189 0; T--- cut 49 0.0258 51 0;
+  sum of the tets' areas 0.806484064124 vs the walk crack's 0.806484064124 (rel. diff 1.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 8.52e-06 over 5178 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 2.72e-05 over 939 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+  geometry built and checked in 0.01 s
+  GT timing pilot, N = 256: 15813 points, 4048128 walks counted of 4048128, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.1, 7.988 s -> extrapolated to N = 25600: 799 s
+  GT run: 15813 points, 404812800 walks counted of 404812800, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.1, 835.571 s
+  GT cached to gate_cache\ref_stress_D4_p2048.bin
+  15806 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 843.7 s
+  GT noise floor (g = 1): H s.e. RMS 0.2472% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 13.38%; GT RMS 0.3059; energy 1.57906 +- 0.00501
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                theta          g=1     0.76    0.911    0.943 |   1.816   1.732   19.14 |  106.78   25.15 |   +3.72   3.10 | 0.1993 0.0116
+    ours Q32/R16/B8 s1             theta          g=1     0.76    0.915    0.949 |   1.989   1.901   19.40 |  119.44   45.31 |  +17.73  17.62 | 0.1950 0.0183
+    ours Q32/R16/B8 s2             theta          g=1     0.76    0.917    0.954 |   1.827   1.719   18.06 |   98.71   26.69 |   +5.43   3.11 | 0.2097 0.0167
+    ours Q32/R64/B8                theta          g=1     1.52    1.949    1.991 |   1.862   1.799   18.73 |  192.87  125.47 | +161.59 235.25 | 0.1851 0.0188
+    ours Q1024/R256/B16            theta          g=1    20.23   23.159   23.190 |   1.831   1.810   18.61 |   36.50   25.69 |   +4.98   0.42 | 0.1961 0.0037
+    direct N16/B8                  -              g=1     0.25    0.535    0.530 |   9.833   0.000   41.89 |  736.53  103.54 | +105.89 612.89 | 0.4358 0.0000
+    direct N32/B8                  -              g=1     0.51    1.039    1.060 |   7.049   0.825   30.52 |  476.20  172.22 | +318.94 466.90 | 0.3733 0.0000
+    direct N64/B16                 -              g=1     1.01    2.083    2.086 |   4.959   0.160   27.39 |  301.85    0.00 | -113.37 125.10 | 0.1446 0.0000
+    direct N128/B16                -              g=1     2.02    4.158    4.161 |   3.464   0.000   22.33 |  187.44    0.00 |  -51.67  28.39 | 0.2164 0.0000
+    direct N256/B16                -              g=1     4.05    8.387    8.390 |   2.447   0.000   11.98 |  131.59    0.00 |  -13.59  24.98 | 0.0992 0.0000
+    direct N512/B16                -              g=1     8.10   16.752   16.754 |   1.790   0.293    7.09 |  101.32   30.67 |  +10.00  17.26 | 0.0701 0.0000
+  case D4 done in 960.1 s
+
+=== D5 (priority 1) ===
+D5: strongly wavy crack (sine wave, amplitude 0.1, wavelength 0.6)
+  K1's plane bent into n1.X = 0.08 + 0.1 sin(2 pi w1.X/0.6 + phase) (smallest radius of curvature 0.091, a trough under the node), crack = {u1.X < s1} (K1's front, now a sine curve); tessellated with h = 0.015 along w1
+  ring 2 (real mesh, c = (0.12, -0.08, 0.10)); walk crack: 362 triangles in O, area 0.926848; cracks: wave (g = 1)
+  per tet (cut, triangles in xi, area in X, crack-face line pieces, front pieces): T+++ cut 106 0.0318 103 7; T-++ cut 238 0.0772 195 47; T+-+ cut 321 0.2377 294 0; T--+ cut 267 0.1292 269 0; T++- cut 194 0.0896 151 43; T-+- cut 48 0.0215 38 12; T+-- cut 282 0.3204 266 0; T--- cut 57 0.0195 59 0;
+  sum of the tets' areas 0.926848230171 vs the walk crack's 0.926848230171 (rel. diff 2.4e-16)
+  J at the crack-face lines (+-1e-7 along the face): max |J - side g| 1.38e-05 over 8230 samples; control variates' jump across the crack (xi, +-1e-7): max |jump - 2 g| 3.37e-05 over 1511 samples
+  J 'theta': theta-type J = atan2(phi, psi)/pi, phi = signed distance to the whole wavy sheet, psi = u1.X - s1; control variate Omega_xi/(2 pi) of the crack-side strips with |w1.X| < 1.1 (curved: not exact on the crack, evaluated at the walk end)
+  geometry built and checked in 0.04 s
+  GT timing pilot, N = 256: 15884 points, 4066304 walks counted of 4066304, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.3, 11.854 s -> extrapolated to N = 25600: 1185 s
+  GT run: 15884 points, 406630400 walks counted of 406630400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.3, 1201.773 s
+  GT cached to gate_cache\ref_stress_D5_p2048.bin
+  15877 points in the 8 tets + 7 probes; 8 tets cut; GT ready in 1213.8 s
+  GT noise floor (g = 1): H s.e. RMS 0.2458% (max 0.3125%) of 2g; grad s.e. RMS / grad RMS 14.43%; GT RMS 0.3088; energy 1.68399 +- 0.00488
+  Zombie cross-check (float; 220828 points, 29381624 walks counted of 29381632, 8 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 52.5, 179.753 s; 179.8 s): H at 15883 points, N = 1024: |z| < 3 at 99.36%, pooled z +0.44; grad at 12809 points (16 x 64 walks, 0 not finite): pooled z -0.10 / -1.67 / +2.64 -> agree
+    near a crack (0.1)             6220 points: pooled z +1.15, mean z^2 1.233 (0.049), RMS discrepancy beyond noise 0.0e+00 (bound 2.1e-03)
+    near a front (0.1)             2332 points: pooled z +1.32, mean z^2 1.011 (0.030), RMS discrepancy beyond noise 1.1e-03 (bound 3.5e-03)
+    near interior faces (0.1)     11469 points: pooled z +0.63, mean z^2 1.108 (0.025), RMS discrepancy beyond noise 1.0e-03 (bound 2.2e-03)
+    near the junction (0.1)           0 points: pooled z +0.00, mean z^2 0.000 (0.000), RMS discrepancy beyond noise 0.0e+00 (bound 0.0e+00)
+    vertex probes                     6 points: pooled z -1.65, mean z^2 1.536 (0.898), RMS discrepancy beyond noise 1.2e-02 (bound 2.2e-02)
+    method                         J              g    walks/M  walks s  total s |  H RMS%    nc %   max % |   grad% grad nc |  E err%     +- |   vert   c se
+    ours Q32/R16/B8                theta          g=1     0.76    1.249    1.312 |   2.057   1.930   18.49 |  123.92   35.71 |  +10.96   8.89 | 0.0935 0.0242
+    ours Q32/R16/B8 s1             theta          g=1     0.76    1.315    1.368 |   2.052   1.926   18.17 |  106.98   12.80 |   -0.35   3.99 | 0.1139 0.0203
+    ours Q32/R16/B8 s2             theta          g=1     0.76    1.286    1.343 |   2.121   2.002   19.10 |  110.01   31.01 |   +7.49   3.65 | 0.1278 0.0226
+    ours Q32/R64/B8                theta          g=1     1.52    2.748    2.879 |   2.030   1.985   18.38 |   53.42   26.06 |   +4.92   0.94 | 0.1279 0.0119
+    ours Q1024/R256/B16            theta          g=1    20.32   35.363   35.424 |   1.994   1.974   18.26 |   37.28   26.55 |   +5.27   0.46 | 0.1215 0.0033
+    direct N16/B8                  -              g=1     0.25    1.030    0.900 |   9.822   0.000   50.91 |  715.50    0.00 | -378.65 690.15 | 0.2888 0.0000
+    direct N32/B8                  -              g=1     0.51    1.707    1.738 |   7.066   1.278   31.64 |  468.04    0.00 |  -69.93 617.26 | 0.3150 0.0000
+    direct N64/B16                 -              g=1     1.02    3.551    3.554 |   4.965   0.609   27.23 |  329.23   80.56 |  +64.40 119.75 | 0.1789 0.0000
+    direct N128/B16                -              g=1     2.03    6.897    6.900 |   3.452   0.000   16.20 |  227.48   70.62 |  +49.85 119.29 | 0.1069 0.0000
+    direct N256/B16                -              g=1     4.07   13.528   13.531 |   2.478   0.221   13.89 |  134.30    0.00 |  -53.86  41.96 | 0.0945 0.0000
+    direct N512/B16                -              g=1     8.13   24.454   24.457 |   1.765   0.189    8.79 |  106.60   19.26 |   +4.92  20.62 | 0.0302 0.0000
+  case D5 done in 1500.9 s
+
+=== summary (g = 1, J = each case's main face function, ours at the first setting: median over its seed sets) ===
+  case plain name                                           J                H RMS%    max %   vertex    grad%   time s  S_last%   direct% verdict
+  D4   wavy crack (sine wave, amplitude 0.1, wavelength 1)  theta             1.827    19.14   0.1993   106.78    0.943    1.831     7.456 works
+  D5   strongly wavy crack (sine wave, amplitude 0.1, wavel theta             2.057    18.49   0.1139   110.01    1.312    1.994     8.133 degrades
+
+--ring-stress total 2461.1 s; 22 rows in ring_stress/stress_D45_rows.csv

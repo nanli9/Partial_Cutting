@@ -119,11 +119,14 @@ solve finishes.
 | `partial_cut --check-xi` | Checks that H lives in local coordinates ξ: the cut pull-back from random rest tets, a push-forward round trip, and that two different rest tets carrying the same ξ cut give bit-identical H (Zombie and our loop). See [Local coordinates ξ](#local-coordinates-ξ). Rewrites its own section of `results.txt`; takes under a second. |
 | `partial_cut --gate coupling [--check 0\|1\|2\|3\|4] [--quick]` | The coupling gate: can a tet's WoSt solve be glued to a neighbour through the shared face (see [Coupling gate](#coupling-gate---gate-coupling))? Check 4 glues the 8 tets of one nodal ring at its vertices. Prints the geometry setup, the quadrature checks, the sanity tests and the requested check (all of them without `--check`; `--check 4` alone skips the setup and sanity tests of tets A and B and leaves their sections as they are), and rewrites their sections of `gate_report.md` in the current directory (the summary at its top is rebuilt from the sections' findings, and the same findings are printed at the end of the run). The reference solves on U (checks 2 and 3) and on the octahedron (check 4) are cached in `gate_cache/` in the current directory and loaded on later runs. A full run takes about 3 minutes for checks 0 and 1, about 12 minutes for check 2 the first time (about 6 with the cache), about 18 minutes for check 3 the first time (about 11 with the cache), and about 90 minutes for check 4 the first time (5375 s; its six reference solves took 58 minutes) and about 30 with the cache; checks 0–3 with every cache present took 19 minutes (1134 s in the latest run), and 32 minutes with none (every reference recomputed). `--quick` is for development only (512 points, N = 256, reference N = 1024): every line is marked QUICK and nothing is written, not even the cache. |
 | `partial_cut --gate coupling --view [--check 2\|3] [--config i] [--screenshot out.png [--with-ui]]` | The coupling gate's Polyscope view of the union U = A ∪ B for one configuration: check 3 with `i` = 0, 1, 2 for y_f = 0.15, 0.30, 0.45 (default: check 3, i = 1), or check 2 with `i` = 0, 1 for z_c = 0.60, 0.35 (default 0). It shows the reference H, the decomposed H (check 3: Level A and Level B) and their difference, for both g types, as point clouds at the sample points of A and B, plus the F points carrying the reference trace and the glued trace. The crack is drawn on U, and a slice through the crack plane is shown as the sample points within 0.05 of it, one cloud per side. The values are the stored per-point ones: the reference is loaded from `gate_cache/` in the current directory (solved and cached if missing, 2-4 min), and the decomposed field comes from the check's main recipe runs with the check's own seeds (about 20 s), so it is the field behind the numbers in `gate_report.md`. With `--screenshot out.png` it writes, for every g = 1 field, `out_<field>.png` (the union) and `out_slice_<field>.png` (the slice face-on from the +g side), rewrites this view's section of `gate_report.md` in the current directory if that file exists (the images with their colour ranges and the errors of the fields shown), and exits. The images in `screenshots/` were made from the project folder with `--check 3 --config 1 --screenshot screenshots/gate_check3_yf0.30.png` and `--check 2 --config 0 --screenshot screenshots/gate_check2_zc0.60.png`. |
-| `partial_cut --gate coupling --view --check 4 [--ring 1\|2] [--config 0\|1\|2] [--fast]` | Check 4's nodal ring (default ring 2, K1) in Polyscope with a panel: the ring, the crack, the sample points per tet and the walk counts, recomputed in the background. By default it runs check 4's own path and setting, and the GT (the whole-ring reference) is loaded from `gate_cache/`. The panel's **fast method** checkbox is off by default; `--fast` turns it on from the start, at Q 32 / R 16 walks per point. It switches the per-tet runs to the fast method of [Fast ring method and the direct ring solve](#fast-ring-method-and-the-direct-ring-solve---ring-bench). The two per-tet sliders are then Q's and R's walks per point. The GT still loads from `gate_cache/` at 4096 points and 25,600 walks, whatever the per-tet walks are. |
+| `partial_cut --gate coupling --view --check 4 [--ring 1\|2] [--config 0\|1\|2] [--fast]` | Check 4's nodal ring (default ring 2, K1) in Polyscope with a panel: the ring, the crack, the sample points per tet and the walk counts, recomputed in the background. The crack list holds K1, K2 and K3, then the ring stress cases, grouped as curved (C1, C2, D1, D2, D4, D5, D3, B1), multiple cracks (E1, E2, E3) and other placements (B2, F1-F4, F2b, G1a, G1b). A stress case runs the fast method on its own ring, and its GT loads from its `--ring-stress` cache. By default it runs check 4's own path and setting, and the GT (the whole-ring reference) is loaded from `gate_cache/`. The panel's **fast method** checkbox is off by default; `--fast` turns it on from the start, at Q 32 / R 16 walks per point. It switches the per-tet runs to the fast method of [Fast ring method and the direct ring solve](#fast-ring-method-and-the-direct-ring-solve---ring-bench). The two per-tet sliders are then Q's and R's walks per point. The GT still loads from `gate_cache/` at 4096 points and 25,600 walks, whatever the per-tet walks are. |
 | `partial_cut --ring-perf <parts> [--ring 1\|2] [--config 0\|1\|2]` | Profiling of check 4's ring path. It prints only and reads `gate_cache/` read-only. The parts run in the order given: `x` the J_ξ checks, `a` the current per-tet runs timed per tet, `b` the walk stop distance sweep, `c` the cost of the direct ring solve, `d` the walk step profile (per part, per logical processor, thread scaling), `e` the current path against the control-variate prototype and the direct solve for this ring and crack, `f` part `e` for all six configurations (about 250 s), `r` / `R` a review check of the fast method against check 4's two runs per tet at the same points (1024 per tet) and N = 2560 / 10240 walks: z tests of the Gram entries S_T and b_T, the glued vertex values, and P_k, H0 and the glued H with their gradients (about 20 s / 70-100 s). |
 | `partial_cut --ring-bench [--ring 1\|2] [--config 0\|1\|2] [--ours LIST] [--direct LIST] [--current LIST] [--shell S] [--repeat R] [--seeds S] [--no-lean] [--no-fuse] [--tag NAME] [--quick]` | The benchmark of [Fast ring method and the direct ring solve](#fast-ring-method-and-the-direct-ring-solve---ring-bench): our fast per-tet method against the direct ring solve, and optionally check 4's current path, all timed and compared with the cached references, which are read only. Without `--ring` / `--config` it runs all six configurations (`--quick`: ring 2 K1, two settings per method, one repeat). It writes `ring_perf/<tag>_rows.csv`, `ring_perf/<tag>_summary.csv` and `ring_perf/<tag>_log.txt`, and never overwrites: a taken name gets `_2`, `_3`, and so on. |
 | `partial_cut --ring-bench --selftest` | The fast method's checks: the lean walks against `solveMulti` bit for bit, J_ξ, which fields need walks, same-target z tests against check 4's runs, and determinism. It takes about 10-20 s (8.3 s measured on an otherwise idle machine). |
 | `partial_cut --ring-bench --view [--fast] [--ring 1\|2] [--config 0\|1\|2] [--points P] [--walks-tet N] [--walks-r N] [--walks-ref N]` | The ring view's computation without the window. It prints the panel's lines and an FNV-1a hash of every field, for bit-identity checks. |
+| `partial_cut --ring-stress [--case all\|p1\|p2\|p3\|ID[,ID...]] [--ours LIST] [--direct LIST] [--points P] [--gt-walks N] [--seeds S] [--repeat R] [--zombie IDS\|none] [--no-validate] [--no-cache] [--eps E] [--tag NAME] [--quick]` | The ring stress test of [Ring stress test](#ring-stress-test---ring-stress): check 4's nodal ring under other crack types, our per-tet method against the GT. It writes `ring_stress/<tag>_rows.csv`, `_summary.csv`, `_log.txt` and `_geometry.txt` (never overwritten: `_2`, `_3`, ...) and caches new GTs as `gate_cache/ref_stress_<id>_p<P>.bin`. |
+| `partial_cut --gate coupling --view --check 4 --case ID [--points P] [--walks-tet Q] [--walks-r R] [--walks-ref N]` | The same ring view, opened on one ring stress case (its fields: the GT, our glued H at Q 32 / R 16 by default, their difference and H0 for each face function J, and the basis functions). P defaults to the density of the case's cached GT (2048 points per tet; 1024 for E2 and F3). Complete cuts need no GT, and A1, A2 and A3 use check 4's cache. At a P with no cache, the GT is solved at N walks and not cached. `--ring-bench --view --case ID` runs the same computation without the window and prints the panel lines and field hashes. |
+| `partial_cut --ring-stress --selftest` | The stress test's own checks: the crack-mesh tree against brute force bit for bit, the flat mesh against check 4's StripCut, every case's geometry, J and control-variate checks, the solid angle, and determinism (4 s measured). |
 | `partial_cut --help` | Prints the usage. |
 
 `--validate` and `--bench` use the first gate's Zombie solver, unchanged. The GUI and
@@ -1877,6 +1880,69 @@ path is one run (`ring_perf/regress_current_check4_*`). This is not the full ben
   2 K1 row for row. The default ring view still prints `glued H (g = 1): error RMS 1.40%, max 14.0%` with the same vertex
   values.
 
+### Ring stress test (`--ring-stress`)
+
+`--ring-stress` runs check 4's nodal ring with other crack types and compares our per-tet method with the GT. It is
+opt-in: no other mode calls it, and every other mode's output is unchanged.
+
+**One crack for both methods.** A crack is a triangle mesh (`CrackMesh` in `src/walk_cache.h`). Each triangle points
+to its + side and knows its crack id. Several cracks share one mesh, and each crack has its own strength g_j. The GT
+and the direct solve walk on O in X with this mesh (`solveMultiMeshJobs`). Our method maps each tet's part of the mesh
+into the tet's own ξ frame (xi = J⁻¹ (X − X0)), clips it to the reference tet, and solves Δ_ξ H = 0 there, as in check
+4. Closest points come from a box tree. Its result is bit-identical to brute force (checked by `--selftest`).
+
+**The face function J** must equal the crack data where a crack meets a tet face. The cases use:
+- Level C (θ/π) for a flat crack with a straight front;
+- the solid angle Ω/(2π) of the crack for a flat crack with any front (a disk);
+- atan2(φ, ψ)/π for curved or kinked cracks (φ = signed distance to the surface, ψ = a front level set);
+- the side indicator for complete cuts;
+- a 1/d² blend of the cracks' functions for several cracks.
+
+Each case's log checks J against the crack data at every crack-face line.
+
+**Control variates** are used only where the known part is exactly harmonic in ξ. That covers half-plane θ/π terms, the
+side indicator, and the solid angle of the crack mapped into ξ. Curved cracks use the solid angle, whose crack values
+are not exactly ±1. R then carries the difference, so it needs walks. The ramp g runs only for straight half-plane
+cracks (A1, A1s, A2, E1).
+
+**Cases.** Ring 2 unless noted:
+
+| ids | what |
+|---|---|
+| A1, A2, A3 | K1, K2, K3 through the new code, at check 4's points against its cached GTs (read only); A1s is K1 at the stress density with a new GT |
+| B1, B2 | complete cuts: a cylinder, and a plane 0.001 from the node |
+| C1, C2 | flat cracks with a gently / strongly curved front (disks) |
+| D1, D2, D3 | curved cracks (spheres of radius 2 and 0.6) and a kinked crack |
+| E1, E2, E3 | two parallel cracks (g = 1 and 0.5), two cracks in one tet, two crossing cracks |
+| F1, F2, F3, F4 | front through the node, a crack 0.001 from an interior face, a tiny crack in one tet, a front 0.03 from the boundary |
+| F2b | F2's control: the same crack 0.03 from the face, outside the eps-tube |
+| D4, D5 | K1's plane bent into a sine wave along its front (amplitude 0.1, wavelength 1 and 0.6; smallest radius of curvature 0.25 and 0.09), K1's front, now a sine curve |
+| G1a, G1b | K1 and the radius-2 sphere on ring 3 (node at (0.35, −0.25, 0.20)) |
+
+**Per case** the run prints the geometry and its checks, and loads or solves the GT. A1, A2 and A3 use check 4's
+cached GT. Complete cuts with g = 1 use the exact ±1. Every other case gets a new GT: 25,600 walks in 64 batches at
+2048 points per tet, cached under a new name. A pilot run first estimates the GT's time. If the full GT would take
+over 25 minutes, it runs at 1024 points per tet instead; the walks per point are never lowered. Then come ours at each
+`--ours` setting (default Q32/R16/B8 with 3 seed sets and 3 timing repeats, Q32/R64/B8, and Q1024/R256/B16), and the
+direct solve at each `--direct` N. Validation is on by default:
+- the mesh GT code against check 4's cached GTs (A cases);
+- the GT solver is exactly ±1 on complete cuts;
+- Zombie on `--zombie` (default D2, E3);
+- an independent GT re-run for D1;
+- plain per-tet solves (no control variate) against the control variates for C2, D1, D3 and E3.
+
+`_summary.csv` holds one line per case, face function and g. It gives our errors at the first setting (median over the
+seed sets), the floor at the last setting, the direct solve's error at our time (log-log interpolated), the GT's
+source and checks, and a verdict. The verdict is "works" for H RMS ≤ 2% and a worst point ≤ 20%, "degrades" up to 5%,
+and "fails" above. Development options: `--quick` (512 points per tet, GT N = 1024, Q8/R8/B4, nothing cached),
+`--no-cache` (no GT read or written), and `--eps E` (leave out the points within E √2 of a crack instead of check 4's
+0.01; A1, A2 and A3 keep check 4's points).
+
+**Non-regression.** In a full run of A1 through the new code, our method at Q32/R16/B8 gave an H RMS of 1.379%,
+1.388% and 1.425% over 3 seed sets. The existing fast path gives 1.394%. The worst point was 13.9% and the worst
+vertex error 0.118. The mesh GT at N = 2560 agrees with check 4's cached GT (pooled z −1.50; |z| < 3 at 99.68% of the
+points). The direct solve at N = 256 gave 2.507%; `--ring-bench` gives 2.500%.
+
 ## Files
 
 - `CMakeLists.txt`: the project and its pinned FetchContent dependencies.
@@ -1914,6 +1980,10 @@ path is one run (`ring_perf/regress_current_check4_*`). This is not the full ben
   method (`runRingFast`), the direct ring solve (`runRingDirect`), the benchmark and the ring view's fast option
   (`gateRingViewFast`) are at the end of `src/coupling_gate.cpp`. The lean walks (`solveMultiLean`,
   `solveMultiLeanJobs`) are in `src/walk_cache.cpp`.
+- `ring_stress/`: output of `--ring-stress` (`<tag>_rows.csv`, `_summary.csv`, `_log.txt`, `_geometry.txt`). The
+  stress test is the last section of `src/coupling_gate.cpp`. The crack mesh (`CrackMesh`) and its walks
+  (`solveMultiMeshJobs`) are in `src/walk_cache.cpp`. The Zombie cross-check on a mesh crack is the third
+  `CutSolver` constructor in `src/cut_problem.cpp`.
 - `results.txt`: output of the validation runs, one section per mode.
 - `results_options.txt` and `results_options_threads1.txt`: the `--compare-options` output
   with reflecting faces, at 16 threads (`--repeat 5`) and at 1 thread (`--threads 1
