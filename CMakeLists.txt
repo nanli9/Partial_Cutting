@@ -136,7 +136,15 @@ add_executable(partial_cut
     src/cut_problem.h
     src/cut_problem.cpp
     src/validation.h
-    src/validation.cpp)
+    src/validation.cpp
+    src/walk_cache.h
+    src/walk_cache.cpp
+    src/validation_reuse.h
+    src/validation_reuse.cpp
+    src/validation_xi.h
+    src/validation_xi.cpp
+    src/coupling_gate.h
+    src/coupling_gate.cpp)
 target_link_libraries(partial_cut PRIVATE zombie polyscope)
 set_target_properties(partial_cut PROPERTIES
     CXX_STANDARD 20

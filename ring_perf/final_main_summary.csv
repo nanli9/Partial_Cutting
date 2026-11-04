@@ -1,0 +1,313 @@
+config,g,family,kind,budget_or_threshold,value,label,interpolated_time
+ring 1 K1,g1,ours,equal_time,0.25,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,0.5,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,1,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,2,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,5,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,10,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,30,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,60,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,ours,equal_time,120,0.0136733,"ours Q32/R64/B8",
+ring 1 K1,g1,direct,equal_time,0.25,,"",
+ring 1 K1,g1,direct,equal_time,0.5,0.0700108,"direct N32/B8",
+ring 1 K1,g1,direct,equal_time,1,0.0498117,"direct N64/B16",
+ring 1 K1,g1,direct,equal_time,2,0.0351992,"direct N128/B16",
+ring 1 K1,g1,direct,equal_time,5,0.0249567,"direct N256/B16",
+ring 1 K1,g1,direct,equal_time,10,0.0179427,"direct N512/B16",
+ring 1 K1,g1,direct,equal_time,30,0.012805,"direct N1024/B16",
+ring 1 K1,g1,direct,equal_time,60,0.00832302,"direct N2560/B64",
+ring 1 K1,g1,direct,equal_time,120,0.00832302,"direct N2560/B64",
+ring 1 K1,g1,current,equal_time,0.25,,"",
+ring 1 K1,g1,current,equal_time,0.5,,"",
+ring 1 K1,g1,current,equal_time,1,,"",
+ring 1 K1,g1,current,equal_time,2,,"",
+ring 1 K1,g1,current,equal_time,5,,"",
+ring 1 K1,g1,current,equal_time,10,0.0145844,"current N256/B16",
+ring 1 K1,g1,current,equal_time,30,0.0145844,"current N256/B16",
+ring 1 K1,g1,current,equal_time,60,0.0145844,"current N256/B16",
+ring 1 K1,g1,current,equal_time,120,0.0145844,"current N256/B16",
+ring 1 K1,g1,ours,equal_accuracy,0.03,0.0451875,"ours Q8/R8/B4",0.0451875
+ring 1 K1,g1,ours,equal_accuracy,0.02,0.0451875,"ours Q8/R8/B4",0.0451875
+ring 1 K1,g1,ours,equal_accuracy,0.015,0.0451875,"ours Q8/R8/B4",0.0451875
+ring 1 K1,g1,ours,equal_accuracy,0.01,,"",
+ring 1 K1,g1,direct,equal_accuracy,0.03,3.62047,"direct N256/B16",2.49022
+ring 1 K1,g1,direct,equal_accuracy,0.02,7.23735,"direct N512/B16",5.76262
+ring 1 K1,g1,direct,equal_accuracy,0.015,14.3914,"direct N1024/B16",10.4255
+ring 1 K1,g1,direct,equal_accuracy,0.01,36.131,"direct N2560/B64",24.6041
+ring 1 K1,g1,current,equal_accuracy,0.03,6.80545,"current N256/B16",6.80545
+ring 1 K1,g1,current,equal_accuracy,0.02,6.80545,"current N256/B16",6.80545
+ring 1 K1,g1,current,equal_accuracy,0.015,6.80545,"current N256/B16",6.80545
+ring 1 K1,g1,current,equal_accuracy,0.01,,"",
+ring 1 K1,ramp,ours,equal_time,0.25,0.0116196,"ours Q32/R16/B8",
+ring 1 K1,ramp,ours,equal_time,0.5,0.0115993,"ours Q64/R32/B16",
+ring 1 K1,ramp,ours,equal_time,1,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,2,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,5,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,10,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,30,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,60,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,ours,equal_time,120,0.0115841,"ours Q128/R64/B16",
+ring 1 K1,ramp,direct,equal_time,0.25,,"",
+ring 1 K1,ramp,direct,equal_time,0.5,0.0242049,"direct N32/B8",
+ring 1 K1,ramp,direct,equal_time,1,0.0172629,"direct N64/B16",
+ring 1 K1,ramp,direct,equal_time,2,0.012128,"direct N128/B16",
+ring 1 K1,ramp,direct,equal_time,5,0.00858781,"direct N256/B16",
+ring 1 K1,ramp,direct,equal_time,10,0.00615428,"direct N512/B16",
+ring 1 K1,ramp,direct,equal_time,30,0.00441046,"direct N1024/B64",
+ring 1 K1,ramp,direct,equal_time,60,0.00287797,"direct N2560/B64",
+ring 1 K1,ramp,direct,equal_time,120,0.00287797,"direct N2560/B64",
+ring 1 K1,ramp,current,equal_time,0.25,,"",
+ring 1 K1,ramp,current,equal_time,0.5,,"",
+ring 1 K1,ramp,current,equal_time,1,,"",
+ring 1 K1,ramp,current,equal_time,2,,"",
+ring 1 K1,ramp,current,equal_time,5,,"",
+ring 1 K1,ramp,current,equal_time,10,0.011874,"current N256/B16",
+ring 1 K1,ramp,current,equal_time,30,0.011874,"current N256/B16",
+ring 1 K1,ramp,current,equal_time,60,0.011874,"current N256/B16",
+ring 1 K1,ramp,current,equal_time,120,0.011874,"current N256/B16",
+ring 1 K1,ramp,ours,equal_accuracy,0.03,0.0497959,"ours Q8/R8/B4",0.0497959
+ring 1 K1,ramp,ours,equal_accuracy,0.02,0.0497959,"ours Q8/R8/B4",0.0497959
+ring 1 K1,ramp,ours,equal_accuracy,0.015,0.0497959,"ours Q8/R8/B4",0.0497959
+ring 1 K1,ramp,ours,equal_accuracy,0.01,,"",
+ring 1 K1,ramp,direct,equal_accuracy,0.03,0.467635,"direct N32/B8",0.321479
+ring 1 K1,ramp,direct,equal_accuracy,0.02,0.912072,"direct N64/B16",0.681871
+ring 1 K1,ramp,direct,equal_accuracy,0.015,1.79931,"direct N128/B16",1.19527
+ring 1 K1,ramp,direct,equal_accuracy,0.01,3.62047,"direct N256/B16",2.6597
+ring 1 K1,ramp,current,equal_accuracy,0.03,6.80545,"current N256/B16",6.80545
+ring 1 K1,ramp,current,equal_accuracy,0.02,6.80545,"current N256/B16",6.80545
+ring 1 K1,ramp,current,equal_accuracy,0.015,6.80545,"current N256/B16",6.80545
+ring 1 K1,ramp,current,equal_accuracy,0.01,,"",
+ring 1 K2,g1,ours,equal_time,0.25,0.017593,"ours Q32/R16/B8",
+ring 1 K2,g1,ours,equal_time,0.5,0.017484,"ours Q128/R64/B16",
+ring 1 K2,g1,ours,equal_time,1,0.0174256,"ours Q256/R128/B16",
+ring 1 K2,g1,ours,equal_time,2,0.0174256,"ours Q256/R128/B16",
+ring 1 K2,g1,ours,equal_time,5,0.0174256,"ours Q256/R128/B16",
+ring 1 K2,g1,ours,equal_time,10,0.017417,"ours Q2560/R640/B64",
+ring 1 K2,g1,ours,equal_time,30,0.017417,"ours Q2560/R640/B64",
+ring 1 K2,g1,ours,equal_time,60,0.017417,"ours Q2560/R640/B64",
+ring 1 K2,g1,ours,equal_time,120,0.017417,"ours Q2560/R640/B64",
+ring 1 K2,g1,direct,equal_time,0.25,,"",
+ring 1 K2,g1,direct,equal_time,0.5,0.120676,"direct N16/B8",
+ring 1 K2,g1,direct,equal_time,1,0.0851221,"direct N32/B8",
+ring 1 K2,g1,direct,equal_time,2,0.060634,"direct N64/B16",
+ring 1 K2,g1,direct,equal_time,5,0.0303752,"direct N256/B16",
+ring 1 K2,g1,direct,equal_time,10,0.0216999,"direct N512/B16",
+ring 1 K2,g1,direct,equal_time,30,0.0154404,"direct N1024/B64",
+ring 1 K2,g1,direct,equal_time,60,0.010045,"direct N2560/B64",
+ring 1 K2,g1,direct,equal_time,120,0.010045,"direct N2560/B64",
+ring 1 K2,g1,current,equal_time,0.25,,"",
+ring 1 K2,g1,current,equal_time,0.5,,"",
+ring 1 K2,g1,current,equal_time,1,,"",
+ring 1 K2,g1,current,equal_time,2,,"",
+ring 1 K2,g1,current,equal_time,5,,"",
+ring 1 K2,g1,current,equal_time,10,0.0183386,"current N256/B16",
+ring 1 K2,g1,current,equal_time,30,0.0183386,"current N256/B16",
+ring 1 K2,g1,current,equal_time,60,0.0183386,"current N256/B16",
+ring 1 K2,g1,current,equal_time,120,0.0183386,"current N256/B16",
+ring 1 K2,g1,ours,equal_accuracy,0.03,0.0271058,"ours Q8/R8/B4",0.0271058
+ring 1 K2,g1,ours,equal_accuracy,0.02,0.0509462,"ours Q16/R16/B8",0.0410549
+ring 1 K2,g1,ours,equal_accuracy,0.015,,"",
+ring 1 K2,g1,ours,equal_accuracy,0.01,,"",
+ring 1 K2,g1,direct,equal_accuracy,0.03,8.40821,"direct N512/B16",4.37707
+ring 1 K2,g1,direct,equal_accuracy,0.02,16.8246,"direct N1024/B64",9.92912
+ring 1 K2,g1,direct,equal_accuracy,0.015,42.6741,"direct N2560/B64",18.0961
+ring 1 K2,g1,direct,equal_accuracy,0.01,,"",
+ring 1 K2,g1,current,equal_accuracy,0.03,6.48498,"current N256/B16",6.48498
+ring 1 K2,g1,current,equal_accuracy,0.02,6.48498,"current N256/B16",6.48498
+ring 1 K2,g1,current,equal_accuracy,0.015,,"",
+ring 1 K2,g1,current,equal_accuracy,0.01,,"",
+ring 1 K2,ramp,ours,equal_time,0.25,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,0.5,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,1,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,2,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,5,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,10,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,30,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,60,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,ours,equal_time,120,0.0152945,"ours Q32/R16/B8",
+ring 1 K2,ramp,direct,equal_time,0.25,,"",
+ring 1 K2,ramp,direct,equal_time,0.5,0.0312537,"direct N16/B8",
+ring 1 K2,ramp,direct,equal_time,1,0.0220931,"direct N32/B8",
+ring 1 K2,ramp,direct,equal_time,2,0.0157209,"direct N64/B16",
+ring 1 K2,ramp,direct,equal_time,5,0.00790708,"direct N256/B16",
+ring 1 K2,ramp,direct,equal_time,10,0.00562016,"direct N512/B16",
+ring 1 K2,ramp,direct,equal_time,30,0.00398581,"direct N1024/B64",
+ring 1 K2,ramp,direct,equal_time,60,0.00259629,"direct N2560/B64",
+ring 1 K2,ramp,direct,equal_time,120,0.00259629,"direct N2560/B64",
+ring 1 K2,ramp,current,equal_time,0.25,,"",
+ring 1 K2,ramp,current,equal_time,0.5,,"",
+ring 1 K2,ramp,current,equal_time,1,,"",
+ring 1 K2,ramp,current,equal_time,2,,"",
+ring 1 K2,ramp,current,equal_time,5,,"",
+ring 1 K2,ramp,current,equal_time,10,0.0153597,"current N256/B16",
+ring 1 K2,ramp,current,equal_time,30,0.0153597,"current N256/B16",
+ring 1 K2,ramp,current,equal_time,60,0.0153597,"current N256/B16",
+ring 1 K2,ramp,current,equal_time,120,0.0153597,"current N256/B16",
+ring 1 K2,ramp,ours,equal_accuracy,0.03,0.0301235,"ours Q8/R8/B4",0.0301235
+ring 1 K2,ramp,ours,equal_accuracy,0.02,0.0301235,"ours Q8/R8/B4",0.0301235
+ring 1 K2,ramp,ours,equal_accuracy,0.015,,"",
+ring 1 K2,ramp,ours,equal_accuracy,0.01,,"",
+ring 1 K2,ramp,direct,equal_accuracy,0.03,0.530558,"direct N32/B8",0.293081
+ring 1 K2,ramp,direct,equal_accuracy,0.02,1.05247,"direct N64/B16",0.648258
+ring 1 K2,ramp,direct,equal_accuracy,0.015,2.11859,"direct N128/B16",1.15856
+ring 1 K2,ramp,direct,equal_accuracy,0.01,4.26879,"direct N256/B16",2.65085
+ring 1 K2,ramp,current,equal_accuracy,0.03,6.48498,"current N256/B16",6.48498
+ring 1 K2,ramp,current,equal_accuracy,0.02,6.48498,"current N256/B16",6.48498
+ring 1 K2,ramp,current,equal_accuracy,0.015,,"",
+ring 1 K2,ramp,current,equal_accuracy,0.01,,"",
+ring 1 K3,g1,ours,equal_time,0.25,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,0.5,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,1,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,2,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,5,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,10,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,30,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,60,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,ours,equal_time,120,0.0108544,"ours Q16/R16/B8",
+ring 1 K3,g1,direct,equal_time,0.25,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,0.5,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,1,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,2,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,5,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,10,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,30,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,60,0,"direct N16/B8",
+ring 1 K3,g1,direct,equal_time,120,0,"direct N16/B8",
+ring 1 K3,g1,current,equal_time,0.25,,"",
+ring 1 K3,g1,current,equal_time,0.5,,"",
+ring 1 K3,g1,current,equal_time,1,,"",
+ring 1 K3,g1,current,equal_time,2,,"",
+ring 1 K3,g1,current,equal_time,5,,"",
+ring 1 K3,g1,current,equal_time,10,0.0109125,"current N256/B16",
+ring 1 K3,g1,current,equal_time,30,0.0109125,"current N256/B16",
+ring 1 K3,g1,current,equal_time,60,0.0109125,"current N256/B16",
+ring 1 K3,g1,current,equal_time,120,0.0109125,"current N256/B16",
+ring 1 K3,g1,ours,equal_accuracy,0.03,0.052305,"ours Q8/R8/B4",0.052305
+ring 1 K3,g1,ours,equal_accuracy,0.02,0.052305,"ours Q8/R8/B4",0.052305
+ring 1 K3,g1,ours,equal_accuracy,0.015,0.052305,"ours Q8/R8/B4",0.052305
+ring 1 K3,g1,ours,equal_accuracy,0.01,,"",
+ring 1 K3,g1,direct,equal_accuracy,0.03,0.194154,"direct N16/B8",0.194154
+ring 1 K3,g1,direct,equal_accuracy,0.02,0.194154,"direct N16/B8",0.194154
+ring 1 K3,g1,direct,equal_accuracy,0.015,0.194154,"direct N16/B8",0.194154
+ring 1 K3,g1,direct,equal_accuracy,0.01,0.194154,"direct N16/B8",0.194154
+ring 1 K3,g1,current,equal_accuracy,0.03,6.59995,"current N256/B16",6.59995
+ring 1 K3,g1,current,equal_accuracy,0.02,6.59995,"current N256/B16",6.59995
+ring 1 K3,g1,current,equal_accuracy,0.015,6.59995,"current N256/B16",6.59995
+ring 1 K3,g1,current,equal_accuracy,0.01,,"",
+ring 2 K1,g1,ours,equal_time,0.25,0.0144238,"ours Q16/R16/B8",
+ring 2 K1,g1,ours,equal_time,0.5,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,1,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,2,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,5,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,10,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,30,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,60,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,ours,equal_time,120,0.0138195,"ours Q32/R64/B8",
+ring 2 K1,g1,direct,equal_time,0.25,0.0997617,"direct N16/B8",
+ring 2 K1,g1,direct,equal_time,0.5,0.0710019,"direct N32/B8",
+ring 2 K1,g1,direct,equal_time,1,0.0496699,"direct N64/B16",
+ring 2 K1,g1,direct,equal_time,2,0.0352862,"direct N128/B16",
+ring 2 K1,g1,direct,equal_time,5,0.0250011,"direct N256/B16",
+ring 2 K1,g1,direct,equal_time,10,0.0177878,"direct N512/B16",
+ring 2 K1,g1,direct,equal_time,30,0.0128019,"direct N1024/B16",
+ring 2 K1,g1,direct,equal_time,60,0.00828259,"direct N2560/B64",
+ring 2 K1,g1,direct,equal_time,120,0.00828259,"direct N2560/B64",
+ring 2 K1,g1,current,equal_time,0.25,,"",
+ring 2 K1,g1,current,equal_time,0.5,,"",
+ring 2 K1,g1,current,equal_time,1,,"",
+ring 2 K1,g1,current,equal_time,2,,"",
+ring 2 K1,g1,current,equal_time,5,,"",
+ring 2 K1,g1,current,equal_time,10,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,30,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,60,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,120,0.0147637,"current N256/B16",
+ring 2 K1,g1,ours,equal_accuracy,0.03,0.113853,"ours Q8/R8/B4",0.113853
+ring 2 K1,g1,ours,equal_accuracy,0.02,0.113853,"ours Q8/R8/B4",0.113853
+ring 2 K1,g1,ours,equal_accuracy,0.015,0.205388,"ours Q16/R16/B8",0.189934
+ring 2 K1,g1,ours,equal_accuracy,0.01,,"",
+ring 2 K1,g1,direct,equal_accuracy,0.03,3.5484,"direct N256/B16",2.47643
+ring 2 K1,g1,direct,equal_accuracy,0.02,7.247,"direct N512/B16",5.66716
+ring 2 K1,g1,direct,equal_accuracy,0.015,14.3365,"direct N1024/B16",10.3207
+ring 2 K1,g1,direct,equal_accuracy,0.01,36.1597,"direct N2560/B64",24.3244
+ring 2 K1,g1,current,equal_accuracy,0.03,7.14574,"current N256/B16",7.14574
+ring 2 K1,g1,current,equal_accuracy,0.02,7.14574,"current N256/B16",7.14574
+ring 2 K1,g1,current,equal_accuracy,0.015,7.14574,"current N256/B16",7.14574
+ring 2 K1,g1,current,equal_accuracy,0.01,,"",
+ring 2 K2,g1,ours,equal_time,0.25,0.0181912,"ours Q8/R8/B4",
+ring 2 K2,g1,ours,equal_time,0.5,0.018091,"ours Q64/R32/B16",
+ring 2 K2,g1,ours,equal_time,1,0.0180581,"ours Q128/R64/B16",
+ring 2 K2,g1,ours,equal_time,2,0.0180581,"ours Q128/R64/B16",
+ring 2 K2,g1,ours,equal_time,5,0.0180533,"ours Q1024/R256/B16",
+ring 2 K2,g1,ours,equal_time,10,0.0180533,"ours Q1024/R256/B16",
+ring 2 K2,g1,ours,equal_time,30,0.0180533,"ours Q1024/R256/B16",
+ring 2 K2,g1,ours,equal_time,60,0.0180533,"ours Q1024/R256/B16",
+ring 2 K2,g1,ours,equal_time,120,0.0180533,"ours Q1024/R256/B16",
+ring 2 K2,g1,direct,equal_time,0.25,,"",
+ring 2 K2,g1,direct,equal_time,0.5,0.120894,"direct N16/B8",
+ring 2 K2,g1,direct,equal_time,1,0.0857123,"direct N32/B8",
+ring 2 K2,g1,direct,equal_time,2,0.0605495,"direct N64/B16",
+ring 2 K2,g1,direct,equal_time,5,0.0303505,"direct N256/B16",
+ring 2 K2,g1,direct,equal_time,10,0.0215226,"direct N512/B16",
+ring 2 K2,g1,direct,equal_time,30,0.0153242,"direct N1024/B16",
+ring 2 K2,g1,direct,equal_time,60,0.00994249,"direct N2560/B64",
+ring 2 K2,g1,direct,equal_time,120,0.00994249,"direct N2560/B64",
+ring 2 K2,g1,current,equal_time,0.25,,"",
+ring 2 K2,g1,current,equal_time,0.5,,"",
+ring 2 K2,g1,current,equal_time,1,,"",
+ring 2 K2,g1,current,equal_time,2,,"",
+ring 2 K2,g1,current,equal_time,5,,"",
+ring 2 K2,g1,current,equal_time,10,0.0189625,"current N256/B16",
+ring 2 K2,g1,current,equal_time,30,0.0189625,"current N256/B16",
+ring 2 K2,g1,current,equal_time,60,0.0189625,"current N256/B16",
+ring 2 K2,g1,current,equal_time,120,0.0189625,"current N256/B16",
+ring 2 K2,g1,ours,equal_accuracy,0.03,0.0849957,"ours Q8/R8/B4",0.0849957
+ring 2 K2,g1,ours,equal_accuracy,0.02,0.0849957,"ours Q8/R8/B4",0.0849957
+ring 2 K2,g1,ours,equal_accuracy,0.015,,"",
+ring 2 K2,g1,ours,equal_accuracy,0.01,,"",
+ring 2 K2,g1,direct,equal_accuracy,0.03,8.46411,"direct N512/B16",4.3786
+ring 2 K2,g1,direct,equal_accuracy,0.02,16.9899,"direct N1024/B16",9.83889
+ring 2 K2,g1,direct,equal_accuracy,0.015,43.4811,"direct N2560/B64",18.3768
+ring 2 K2,g1,direct,equal_accuracy,0.01,43.4811,"direct N2560/B64",42.9591
+ring 2 K2,g1,current,equal_accuracy,0.03,7.10291,"current N256/B16",7.10291
+ring 2 K2,g1,current,equal_accuracy,0.02,7.10291,"current N256/B16",7.10291
+ring 2 K2,g1,current,equal_accuracy,0.015,,"",
+ring 2 K2,g1,current,equal_accuracy,0.01,,"",
+ring 2 K3,g1,ours,equal_time,0.25,0.0110552,"ours Q16/R16/B8",
+ring 2 K3,g1,ours,equal_time,0.5,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,1,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,2,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,5,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,10,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,30,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,60,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,ours,equal_time,120,0.0110548,"ours Q32/R16/B8",
+ring 2 K3,g1,direct,equal_time,0.25,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,0.5,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,1,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,2,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,5,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,10,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,30,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,60,0,"direct N16/B8",
+ring 2 K3,g1,direct,equal_time,120,0,"direct N16/B8",
+ring 2 K3,g1,current,equal_time,0.25,,"",
+ring 2 K3,g1,current,equal_time,0.5,,"",
+ring 2 K3,g1,current,equal_time,1,,"",
+ring 2 K3,g1,current,equal_time,2,,"",
+ring 2 K3,g1,current,equal_time,5,,"",
+ring 2 K3,g1,current,equal_time,10,0.0112379,"current N256/B16",
+ring 2 K3,g1,current,equal_time,30,0.0112379,"current N256/B16",
+ring 2 K3,g1,current,equal_time,60,0.0112379,"current N256/B16",
+ring 2 K3,g1,current,equal_time,120,0.0112379,"current N256/B16",
+ring 2 K3,g1,ours,equal_accuracy,0.03,0.101069,"ours Q8/R8/B4",0.101069
+ring 2 K3,g1,ours,equal_accuracy,0.02,0.101069,"ours Q8/R8/B4",0.101069
+ring 2 K3,g1,ours,equal_accuracy,0.015,0.101069,"ours Q8/R8/B4",0.101069
+ring 2 K3,g1,ours,equal_accuracy,0.01,,"",
+ring 2 K3,g1,direct,equal_accuracy,0.03,0.196047,"direct N16/B8",0.196047
+ring 2 K3,g1,direct,equal_accuracy,0.02,0.196047,"direct N16/B8",0.196047
+ring 2 K3,g1,direct,equal_accuracy,0.015,0.196047,"direct N16/B8",0.196047
+ring 2 K3,g1,direct,equal_accuracy,0.01,0.196047,"direct N16/B8",0.196047
+ring 2 K3,g1,current,equal_accuracy,0.03,6.88368,"current N256/B16",6.88368
+ring 2 K3,g1,current,equal_accuracy,0.02,6.88368,"current N256/B16",6.88368
+ring 2 K3,g1,current,equal_accuracy,0.015,6.88368,"current N256/B16",6.88368
+ring 2 K3,g1,current,equal_accuracy,0.01,,"",

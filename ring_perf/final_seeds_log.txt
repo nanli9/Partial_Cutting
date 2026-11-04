@@ -1,0 +1,434 @@
+--ring-bench: 2026-11-03 19:17:06; 16 hardware threads (TBB default arena)
+output: ring_perf/final_seeds_rows.csv, ring_perf/final_seeds_summary.csv, ring_perf/final_seeds_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: lean (solveMultiLean, the same walks without box and face tests); repeats 1 (median; runs over 30 s once); seed sets 3
+  ours (nQ/nR/B): 32/16/8 64/32/16 256/128/16; direct (N/B): 256/16 1024/16; current (N/B):
+
+=== ring 1, K1 ===
+  reference gate_cache\ref_check4_ring1_K1.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32009 points, 819430400 walks counted of 819430400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 47.2, 588.990 s
+  ring 1 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 16.82%;
+    energy over the ring minus the eps-tube 1.51485 +- 0.01243, within 0.1 of the crack-face lines 0.73121 +- 0.00114
+  ring 1 K1, ramp: reference noise floor (its batch s.e.): H RMS 0.086% (max 0.101%) of 2g; grad s.e. RMS / grad RMS 15.75%;
+    energy over the ring minus the eps-tube 0.21675 +- 0.00250, within 0.1 of the crack-face lines 0.06687 +- 0.00007
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.009 s: shared by both methods, timed for neither
+  32002 points in the 8 tets + 7 vertex probes; tets cut by the crack: 1 1 1 1 1 0 1 0
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      0.76    26.2    0.150    0.015    0.164 |  1.367  1.338  13.55  0.126 |   26.51   20.40  20.435 |   +2.39    0.82 | 0.1075 0.0056
+    ours Q32/R16/B8                ramp     0.76    26.2    0.147    0.020    0.167 |  1.162  1.158   6.47  0.040 |   40.49   36.89  11.785 |  +13.27    1.15 | 0.0791 0.0018
+    ours Q64/R32/B16               g=1      1.52    52.4    0.296    0.025    0.321 |  1.404  1.377  13.66  0.109 |   26.48   20.41  20.410 |   +2.41    0.82 | 0.1108 0.0055
+    ours Q64/R32/B16               ramp     1.52    52.4    0.300    0.035    0.335 |  1.160  1.156   6.49  0.029 |   40.26   36.86  11.718 |  +13.34    1.15 | 0.0798 0.0014
+    ours Q256/R128/B16             g=1      6.10   209.6    1.188    0.025    1.213 |  1.406  1.382  13.70  0.045 |   26.46   20.41  20.396 |   +2.42    0.82 | 0.1115 0.0019
+    ours Q256/R128/B16             ramp     6.10   209.6    1.165    0.037    1.202 |  1.162  1.159   6.49  0.016 |   40.13   36.87  11.680 |  +13.31    1.15 | 0.0796 0.0005
+    direct N256/B16                g=1      8.19   387.0    3.644    0.005    3.649 |  2.496  0.000  11.73  2.500 |  179.47   45.56 138.350 |  +17.02   45.96 | 0.0306 0.0000
+    direct N256/B16                ramp     8.19   387.0    3.644    0.005    3.649 |  0.859  0.000   4.02  0.860 |  165.75   44.63  48.244 |   +0.95   43.09 | 0.0359 0.0000
+    direct N1024/B16               g=1     32.78  1547.5   14.374    0.004   14.378 |  1.280  0.121   6.74  1.250 |   81.73    0.00  63.004 |   -5.44   14.31 | 0.0177 0.0000
+    direct N1024/B16               ramp    32.78  1547.5   14.374    0.004   14.378 |  0.441  0.049   1.92  0.430 |   84.69   27.60  24.652 |   +5.17   19.67 | 0.0133 0.0000
+    ours Q32/R16/B8 s1             g=1      0.76    26.2    0.151    0.014    0.165 |  1.386  1.359  14.05  0.099 |   26.51   20.42  20.438 |   +2.41    0.82 | 0.1190 0.0036
+    ours Q32/R16/B8 s1             ramp     0.76    26.2    0.151    0.021    0.172 |  1.177  1.173   6.49  0.042 |   40.52   36.92  11.795 |  +13.25    1.16 | 0.0796 0.0012
+    ours Q64/R32/B16 s1            g=1      1.52    52.4    0.317    0.026    0.343 |  1.371  1.346  13.89  0.076 |   26.48   20.41  20.411 |   +2.41    0.82 | 0.1151 0.0029
+    ours Q64/R32/B16 s1            ramp     1.52    52.4    0.315    0.040    0.356 |  1.171  1.167   6.50  0.032 |   40.30   36.90  11.731 |  +13.28    1.15 | 0.0798 0.0012
+    ours Q256/R128/B16 s1          g=1      6.10   209.5    1.256    0.027    1.283 |  1.376  1.353  13.83  0.038 |   26.45   20.40  20.391 |   +2.41    0.82 | 0.1139 0.0012
+    ours Q256/R128/B16 s1          ramp     6.10   209.5    1.200    0.038    1.238 |  1.162  1.159   6.45  0.014 |   40.14   36.88  11.682 |  +13.25    1.15 | 0.0785 0.0004
+    direct N256/B16 s1             g=1      8.19   386.9    3.691    0.006    3.697 |  2.509  0.000  12.11  2.501 |  171.43    0.00 132.149 |  -19.51   74.59 | 0.0741 0.0000
+    direct N256/B16 s1             ramp     8.19   386.9    3.691    0.006    3.697 |  0.864  0.000   3.78  0.860 |  160.10    0.00  46.599 |   -5.39   81.15 | 0.0317 0.0000
+    direct N1024/B16 s1            g=1     32.78  1547.5   14.860    0.006   14.865 |  1.285  0.164   6.35  1.250 |   88.30   26.90  68.069 |   +1.09   14.86 | 0.0515 0.0000
+    direct N1024/B16 s1            ramp    32.78  1547.5   14.860    0.006   14.865 |  0.441  0.043   1.89  0.430 |   86.30   32.63  25.119 |   +5.68   16.70 | 0.0124 0.0000
+    ours Q32/R16/B8 s2             g=1      0.76    26.2    0.162    0.017    0.179 |  1.463  1.436  13.87  0.125 |   26.52   20.43  20.444 |   +2.44    0.82 | 0.1069 0.0076
+    ours Q32/R16/B8 s2             ramp     0.76    26.2    0.152    0.023    0.175 |  1.142  1.138   6.42  0.049 |   40.41   36.83  11.763 |  +13.33    1.15 | 0.0782 0.0020
+    ours Q64/R32/B16 s2            g=1      1.52    52.4    0.305    0.027    0.332 |  1.404  1.377  13.55  0.107 |   26.48   20.41  20.413 |   +2.43    0.82 | 0.1084 0.0053
+    ours Q64/R32/B16 s2            ramp     1.52    52.4    0.318    0.037    0.356 |  1.148  1.144   6.41  0.035 |   40.26   36.85  11.718 |  +13.28    1.15 | 0.0778 0.0014
+    ours Q256/R128/B16 s2          g=1      6.10   209.5    1.189    0.027    1.215 |  1.389  1.365  13.70  0.053 |   26.46   20.41  20.394 |   +2.42    0.82 | 0.1116 0.0025
+    ours Q256/R128/B16 s2          ramp     6.10   209.5    1.288    0.038    1.326 |  1.157  1.154   6.45  0.018 |   40.13   36.87  11.681 |  +13.29    1.15 | 0.0787 0.0005
+    direct N256/B16 s2             g=1      8.19   387.0    3.747    0.005    3.752 |  2.513  0.000  12.25  2.501 |  182.01   49.31 140.306 |  +16.71   48.16 | 0.0777 0.0000
+    direct N256/B16 s2             ramp     8.19   387.0    3.747    0.005    3.752 |  0.867  0.070   3.67  0.860 |  184.30   89.55  53.644 |  +67.08   52.95 | 0.0298 0.0000
+    direct N1024/B16 s2            g=1     32.78  1547.7   14.475    0.004   14.479 |  1.277  0.068   6.49  1.250 |   86.77    7.18  66.891 |   -0.71   15.68 | 0.0291 0.0000
+    direct N1024/B16 s2            ramp    32.78  1547.7   14.475    0.004   14.479 |  0.442  0.055   1.91  0.430 |   87.63   29.00  25.506 |   +3.60   18.58 | 0.0125 0.0000
+  vertex values v0..v6 (g = 1): reference -0.6170 +0.7025 -0.4427 +0.0395 -0.8350 +0.8944 -0.5320
+    ours Q32/R16/B8                -0.6168 +0.6752 -0.4406 +0.0258 -0.8039 +0.7869 -0.4537   (max err 0.1075)
+    ours Q64/R32/B16               -0.6151 +0.6772 -0.4393 +0.0282 -0.8051 +0.7836 -0.4456   (max err 0.1108)
+    ours Q256/R128/B16             -0.6153 +0.6767 -0.4395 +0.0285 -0.8063 +0.7828 -0.4446   (max err 0.1115)
+    direct N256/B16                -0.6016 +0.6719 -0.4375 +0.0391 -0.8047 +0.8672 -0.5078   (max err 0.0306)
+    direct N1024/B16               -0.6348 +0.6875 -0.4395 +0.0547 -0.8203 +0.9043 -0.5371   (max err 0.0177)
+    ours Q32/R16/B8 s1             -0.6157 +0.6770 -0.4408 +0.0272 -0.8052 +0.7754 -0.4499   (max err 0.1190)
+    ours Q64/R32/B16 s1            -0.6167 +0.6758 -0.4411 +0.0263 -0.8054 +0.7792 -0.4522   (max err 0.1151)
+    ours Q256/R128/B16 s1          -0.6166 +0.6759 -0.4411 +0.0265 -0.8048 +0.7805 -0.4510   (max err 0.1139)
+    direct N256/B16 s1             -0.6641 +0.7188 -0.5156 +0.0234 -0.8047 +0.8203 -0.6016   (max err 0.0741)
+    direct N1024/B16 s1            -0.5957 +0.7090 -0.4941 +0.0273 -0.8535 +0.8691 -0.5645   (max err 0.0515)
+    ours Q32/R16/B8 s2             -0.6121 +0.6775 -0.4358 +0.0335 -0.8079 +0.7875 -0.4374   (max err 0.1069)
+    ours Q64/R32/B16 s2            -0.6140 +0.6758 -0.4375 +0.0313 -0.8062 +0.7860 -0.4481   (max err 0.1084)
+    ours Q256/R128/B16 s2          -0.6159 +0.6760 -0.4398 +0.0281 -0.8058 +0.7828 -0.4484   (max err 0.1116)
+    direct N256/B16 s2             -0.5938 +0.7422 -0.4062 +0.1172 -0.8125 +0.9531 -0.4766   (max err 0.0777)
+    direct N1024/B16 s2            -0.5879 +0.7207 -0.4551 +0.0625 -0.8242 +0.9199 -0.5293   (max err 0.0291)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.405% +- 0.051% [1.367%, 1.463%] (3)
+    ours Q32/R16/B8                ramp: 1.160% +- 0.017% [1.142%, 1.177%] (3)
+    ours Q64/R32/B16               g=1: 1.393% +- 0.019% [1.371%, 1.404%] (3)
+    ours Q64/R32/B16               ramp: 1.160% +- 0.011% [1.148%, 1.171%] (3)
+    ours Q256/R128/B16             g=1: 1.390% +- 0.015% [1.376%, 1.406%] (3)
+    ours Q256/R128/B16             ramp: 1.160% +- 0.003% [1.157%, 1.162%] (3)
+    direct N256/B16                g=1: 2.506% +- 0.009% [2.496%, 2.513%] (3)
+    direct N256/B16                ramp: 0.863% +- 0.004% [0.859%, 0.867%] (3)
+    direct N1024/B16               g=1: 1.281% +- 0.004% [1.277%, 1.285%] (3)
+    direct N1024/B16               ramp: 0.441% +- 0.001% [0.441%, 0.442%] (3)
+
+  summary ring 1 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%
+      direct                 -         -         -         -    2.496%    2.496%    1.280%    1.280%    1.280%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.164 s [0.164]   2.0%: 0.164 s [0.164]   1.5%: 0.164 s [0.164]   1.0%: not reached
+      direct           3.0%: 3.649 s [3.649]   2.0%: 14.378 s [5.751]   1.5%: 14.378 s [10.387]   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.103 / 0.123 s, direct 9.122 / 10.946 s; direct/ours = 4 x 22.22 = 88.9x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.164 s, direct 3.649 s per ring; direct/ours = 4 x 22.22 = 88.9x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.103 / 0.123 s, direct 35.945 / 43.133 s; direct/ours = 4 x 87.55 = 350.2x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.164 s, direct 5.751 s per ring; direct/ours = 4 x 35.02 = 140.1x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.103 / 0.123 s, direct 35.945 / 43.133 s; direct/ours = 4 x 87.55 = 350.2x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.164 s, direct 10.387 s per ring; direct/ours = 4 x 63.25 = 253.0x
+
+  summary ring 1 K1, ramp (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.162%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%
+      direct                 -         -         -         -    0.859%    0.859%    0.441%    0.441%    0.441%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.167 s [0.167]   2.0%: 0.167 s [0.167]   1.5%: 0.167 s [0.167]   1.0%: not reached
+      direct           3.0%: 3.649 s [3.649]   2.0%: 3.649 s [3.649]   1.5%: 3.649 s [3.649]   1.0%: 3.649 s [3.649]
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.104 / 0.125 s, direct 9.122 / 10.946 s; direct/ours = 4 x 21.87 = 87.5x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.167 s, direct 3.649 s per ring; direct/ours = 4 x 21.87 = 87.5x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.104 / 0.125 s, direct 9.122 / 10.946 s; direct/ours = 4 x 21.87 = 87.5x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.167 s, direct 3.649 s per ring; direct/ours = 4 x 21.87 = 87.5x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.104 / 0.125 s, direct 9.122 / 10.946 s; direct/ours = 4 x 21.87 = 87.5x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.167 s, direct 3.649 s per ring; direct/ours = 4 x 21.87 = 87.5x
+
+=== ring 1, K2 ===
+  reference gate_cache\ref_check4_ring1_K2.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32265 points, 825984000 walks counted of 825984000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 59.9, 700.380 s
+  ring 1 K2, g = 1: reference noise floor (its batch s.e.): H RMS 0.301% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 25.99%;
+    energy over the ring minus the eps-tube 0.91960 +- 0.04610, within 0.1 of the crack-face lines 0.30924 +- 0.00089
+  ring 1 K2, ramp: reference noise floor (its batch s.e.): H RMS 0.078% (max 0.083%) of 2g; grad s.e. RMS / grad RMS 21.73%;
+    energy over the ring minus the eps-tube 0.08774 +- 0.00251, within 0.1 of the crack-face lines 0.02971 +- 0.00004
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.010 s: shared by both methods, timed for neither
+  32258 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 0 1 0 0 0 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      0.38    13.1    0.070    0.014    0.085 |  1.759  1.707  12.44  0.304 |   40.37   30.86  24.628 |   +5.49    5.01 | 0.0728 0.0092
+    ours Q32/R16/B8                ramp     0.38    13.1    0.070    0.018    0.089 |  1.529  1.526   7.18  0.065 |   62.66   58.73  11.681 |  +36.38    2.86 | 0.1469 0.0019
+    ours Q64/R32/B16               g=1      0.75    26.2    0.143    0.023    0.166 |  1.786  1.750  12.49  0.192 |   40.37   30.88  24.629 |   +5.50    5.01 | 0.0736 0.0057
+    ours Q64/R32/B16               ramp     0.75    26.2    0.144    0.030    0.174 |  1.544  1.541   7.24  0.044 |   62.63   58.73  11.677 |  +36.39    2.86 | 0.1479 0.0012
+    ours Q256/R128/B16             g=1      3.02   104.7    0.588    0.022    0.610 |  1.743  1.713  12.16  0.111 |   40.37   30.88  24.626 |   +5.49    5.01 | 0.0664 0.0030
+    ours Q256/R128/B16             ramp     3.02   104.7    0.562    0.032    0.594 |  1.538  1.535   7.24  0.026 |   62.62   58.72  11.673 |  +36.40    2.86 | 0.1481 0.0006
+    direct N256/B16                g=1      8.26   494.9    4.251    0.004    4.255 |  3.038  0.264  14.19  3.011 |  281.54   85.73 171.759 | +159.86  398.60 | 0.0920 0.0000
+    direct N256/B16                ramp     8.26   494.9    4.251    0.004    4.255 |  0.791  0.102   3.34  0.780 |  241.59   92.65  45.037 | +151.74  270.07 | 0.0193 0.0000
+    direct N1024/B16               g=1     33.04  1980.3   16.819    0.004   16.823 |  1.544  0.163   7.70  1.506 |  121.95    0.00  74.401 |  -10.14   72.05 | 0.0454 0.0000
+    direct N1024/B16               ramp    33.04  1980.3   16.819    0.004   16.823 |  0.399  0.026   1.83  0.390 |  102.57    0.00  19.121 |   -5.22   40.70 | 0.0121 0.0000
+    ours Q32/R16/B8 s1             g=1      0.38    13.1    0.075    0.014    0.089 |  1.751  1.709  12.22  0.232 |   40.38   30.88  24.632 |   +5.49    5.01 | 0.0676 0.0084
+    ours Q32/R16/B8 s1             ramp     0.38    13.1    0.078    0.018    0.096 |  1.531  1.527   7.23  0.077 |   62.67   58.74  11.683 |  +36.38    2.86 | 0.1479 0.0022
+    ours Q64/R32/B16 s1            g=1      0.75    26.2    0.149    0.021    0.171 |  1.756  1.712  12.32  0.248 |   40.37   30.87  24.628 |   +5.49    5.01 | 0.0698 0.0072
+    ours Q64/R32/B16 s1            ramp     0.75    26.2    0.144    0.032    0.176 |  1.536  1.533   7.23  0.060 |   62.64   58.74  11.678 |  +36.40    2.86 | 0.1477 0.0018
+    ours Q256/R128/B16 s1          g=1      3.02   104.7    0.583    0.024    0.606 |  1.746  1.717  12.18  0.101 |   40.37   30.88  24.628 |   +5.50    5.01 | 0.0666 0.0031
+    ours Q256/R128/B16 s1          ramp     3.02   104.7    0.568    0.031    0.599 |  1.534  1.532   7.24  0.018 |   62.63   58.73  11.675 |  +36.42    2.86 | 0.1481 0.0005
+    direct N256/B16 s1             g=1      8.26   495.2    4.246    0.004    4.250 |  3.025  0.000  15.03  3.011 |  246.58    0.00 150.433 |  -82.29  218.08 | 0.1020 0.0000
+    direct N256/B16 s1             ramp     8.26   495.2    4.246    0.004    4.250 |  0.784  0.019   4.04  0.780 |  201.04    0.00  37.479 |  -77.47   96.89 | 0.0312 0.0000
+    direct N1024/B16 s1            g=1     33.04  1980.4   16.945    0.004   16.949 |  1.540  0.123   7.75  1.505 |  191.12  139.64 116.600 | +156.01  131.15 | 0.0581 0.0000
+    direct N1024/B16 s1            ramp    33.04  1980.4   16.945    0.004   16.949 |  0.398  0.019   1.78  0.390 |  153.34  108.66  28.587 |  +87.60   79.95 | 0.0125 0.0000
+    ours Q32/R16/B8 s2             g=1      0.38    13.1    0.075    0.012    0.087 |  1.754  1.705  12.08  0.283 |   40.39   30.89  24.641 |   +5.48    5.01 | 0.0593 0.0072
+    ours Q32/R16/B8 s2             ramp     0.38    13.1    0.074    0.018    0.092 |  1.535  1.532   7.26  0.070 |   62.65   58.73  11.680 |  +36.45    2.86 | 0.1486 0.0019
+    ours Q64/R32/B16 s2            g=1      0.75    26.2    0.145    0.024    0.169 |  1.747  1.708  11.88  0.208 |   40.38   30.88  24.632 |   +5.48    5.01 | 0.0600 0.0061
+    ours Q64/R32/B16 s2            ramp     0.75    26.2    0.147    0.028    0.175 |  1.531  1.528   7.23  0.054 |   62.63   58.73  11.676 |  +36.44    2.86 | 0.1479 0.0015
+    ours Q256/R128/B16 s2          g=1      3.02   104.7    0.566    0.024    0.590 |  1.741  1.710  12.07  0.127 |   40.37   30.88  24.627 |   +5.49    5.01 | 0.0644 0.0037
+    ours Q256/R128/B16 s2          ramp     3.02   104.7    0.620    0.032    0.652 |  1.532  1.530   7.24  0.027 |   62.63   58.73  11.675 |  +36.42    2.86 | 0.1480 0.0009
+    direct N256/B16 s2             g=1      8.26   495.3    4.414    0.005    4.419 |  3.022  0.000  13.90  3.011 |  298.97   82.08 182.393 | +112.34  540.51 | 0.1606 0.0000
+    direct N256/B16 s2             ramp     8.26   495.3    4.414    0.005    4.419 |  0.776  0.000   3.71  0.780 |  218.40    0.00  40.714 |  +10.21  191.23 | 0.0392 0.0000
+    direct N1024/B16 s2            g=1     33.04  1980.6   17.246    0.005   17.251 |  1.542  0.146   7.07  1.506 |  125.22    0.00  76.394 |  -11.78   67.07 | 0.0708 0.0000
+    direct N1024/B16 s2            ramp    33.04  1980.6   17.246    0.005   17.251 |  0.397  0.000   1.68  0.390 |  102.18    0.00  19.048 |  -13.22   39.39 | 0.0193 0.0000
+  vertex values v0..v6 (g = 1): reference +0.0395 +0.0475 -0.8650 -0.0684 +0.2014 +0.1313 -0.0659
+    ours Q32/R16/B8                +0.0397 +0.0429 -0.8319 -0.0153 +0.1286 +0.1379 -0.1250   (max err 0.0728)
+    ours Q64/R32/B16               +0.0354 +0.0386 -0.8351 -0.0203 +0.1278 +0.1317 -0.1251   (max err 0.0736)
+    ours Q256/R128/B16             +0.0418 +0.0450 -0.8338 -0.0136 +0.1350 +0.1382 -0.1151   (max err 0.0664)
+    direct N256/B16                +0.0469 +0.0859 -0.8516 -0.1250 +0.1094 +0.2031 -0.0391   (max err 0.0920)
+    direct N1024/B16               -0.0059 +0.0820 -0.8906 -0.0645 +0.1934 +0.1602 -0.0430   (max err 0.0454)
+    ours Q32/R16/B8 s1             +0.0413 +0.0445 -0.8345 -0.0169 +0.1338 +0.1326 -0.1170   (max err 0.0676)
+    ours Q64/R32/B16 s1            +0.0387 +0.0419 -0.8353 -0.0170 +0.1316 +0.1349 -0.1192   (max err 0.0698)
+    ours Q256/R128/B16 s1          +0.0405 +0.0437 -0.8345 -0.0153 +0.1348 +0.1358 -0.1153   (max err 0.0666)
+    direct N256/B16 s1             -0.0625 +0.0312 -0.9062 -0.0312 +0.2109 +0.1250 +0.0078   (max err 0.1020)
+    direct N1024/B16 s1            +0.0430 +0.0527 -0.8594 -0.0625 +0.1973 +0.1250 -0.0078   (max err 0.0581)
+    ours Q32/R16/B8 s2             +0.0461 +0.0492 -0.8350 -0.0091 +0.1451 +0.1413 -0.1000   (max err 0.0593)
+    ours Q64/R32/B16 s2            +0.0459 +0.0490 -0.8339 -0.0091 +0.1414 +0.1421 -0.1060   (max err 0.0600)
+    ours Q256/R128/B16 s2          +0.0433 +0.0464 -0.8338 -0.0127 +0.1370 +0.1382 -0.1125   (max err 0.0644)
+    direct N256/B16 s2             +0.1172 -0.0078 -0.8828 -0.1094 +0.2109 +0.1172 -0.2266   (max err 0.1606)
+    direct N1024/B16 s2            +0.0566 +0.0566 -0.8457 -0.0898 +0.2441 +0.1367 -0.1367   (max err 0.0708)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.755% +- 0.004% [1.751%, 1.759%] (3)
+    ours Q32/R16/B8                ramp: 1.532% +- 0.003% [1.529%, 1.535%] (3)
+    ours Q64/R32/B16               g=1: 1.763% +- 0.021% [1.747%, 1.786%] (3)
+    ours Q64/R32/B16               ramp: 1.537% +- 0.006% [1.531%, 1.544%] (3)
+    ours Q256/R128/B16             g=1: 1.743% +- 0.003% [1.741%, 1.746%] (3)
+    ours Q256/R128/B16             ramp: 1.535% +- 0.003% [1.532%, 1.538%] (3)
+    direct N256/B16                g=1: 3.028% +- 0.008% [3.022%, 3.038%] (3)
+    direct N256/B16                ramp: 0.784% +- 0.008% [0.776%, 0.791%] (3)
+    direct N1024/B16               g=1: 1.542% +- 0.002% [1.540%, 1.544%] (3)
+    direct N1024/B16               ramp: 0.398% +- 0.001% [0.397%, 0.399%] (3)
+
+  summary ring 1 K2, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.759%    1.759%    1.743%    1.743%    1.743%    1.743%    1.743%    1.743%    1.743%
+      direct                 -         -         -         -    3.038%    3.038%    1.544%    1.544%    1.544%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.085 s [0.085]   2.0%: 0.085 s [0.085]   1.5%: not reached   1.0%: not reached
+      direct           3.0%: 16.823 s [4.364]   2.0%: 16.823 s [9.946]   1.5%: not reached   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.053 / 0.063 s, direct 42.058 / 50.470 s; direct/ours = 4 x 198.99 = 796.0x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.085 s, direct 4.364 s per ring; direct/ours = 4 x 51.62 = 206.5x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.053 / 0.063 s, direct 42.058 / 50.470 s; direct/ours = 4 x 198.99 = 796.0x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.085 s, direct 9.946 s per ring; direct/ours = 4 x 117.64 = 470.6x
+
+  summary ring 1 K2, ramp (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.529%    1.529%    1.529%    1.529%    1.529%    1.529%    1.529%    1.529%    1.529%
+      direct                 -         -         -         -    0.791%    0.791%    0.399%    0.399%    0.399%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.089 s [0.089]   2.0%: 0.089 s [0.089]   1.5%: not reached   1.0%: not reached
+      direct           3.0%: 4.255 s [4.255]   2.0%: 4.255 s [4.255]   1.5%: 4.255 s [4.255]   1.0%: 4.255 s [4.255]
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.055 / 0.066 s, direct 10.639 / 12.766 s; direct/ours = 4 x 48.04 = 192.2x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.089 s, direct 4.255 s per ring; direct/ours = 4 x 48.04 = 192.2x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.055 / 0.066 s, direct 10.639 / 12.766 s; direct/ours = 4 x 48.04 = 192.2x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.089 s, direct 4.255 s per ring; direct/ours = 4 x 48.04 = 192.2x
+
+=== ring 1, K3 ===
+  reference gate_cache\ref_check4_ring1_K3.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 31316 points, 801689600 walks counted of 801689600, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 477.879 s
+  ring 1 K3, g = 1: reference noise floor (its batch s.e.): H RMS 0.000% (max 0.000%) of 2g; grad s.e. RMS / grad RMS 96.83%;
+    energy over the ring minus the eps-tube 0.00000 +- 0.00000, within 0.1 of the crack-face lines -0.00000 +- 0.00000
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.012 s: shared by both methods, timed for neither
+  31309 points in the 8 tets + 7 vertex probes; tets cut by the crack: 1 1 1 1 1 1 1 0
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      0.87    29.5    0.159    0.015    0.173 |  1.088  1.087   9.93  0.012 |     nan     nan   6.756 | +29277990627215392381318973129490432.00 15244352567704278026012084666368.00 | 0.2269 0.0004
+    ours Q64/R32/B16               g=1      1.74    59.0    0.324    0.027    0.351 |  1.088  1.088   9.94  0.008 |     nan     nan   6.733 | +29270625799949067421672516855267328.00 12364706219966014716851599179776.00 | 0.2271 0.0002
+    ours Q256/R128/B16             g=1      6.97   236.1    1.321    0.027    1.348 |  1.089  1.089   9.94  0.004 |     nan     nan   6.715 | +29280726426515143975350474586980352.00 5013345389522794061904778100736.00 | 0.2273 0.0001
+    direct N256/B16                g=1      8.02   320.0    3.102    0.004    3.106 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +2355.63 1955.66 | 0.0000 0.0000
+    direct N1024/B16               g=1     32.07  1280.5   12.230    0.002   12.233 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +161.20  676.24 | 0.0000 0.0000
+    ours Q32/R16/B8 s1             g=1      0.87    29.5    0.182    0.016    0.198 |  1.090  1.090   9.95  0.012 |     nan     nan   6.756 | +29281798010132880669390393082642432.00 12800834663435170289957853986816.00 | 0.2274 0.0004
+    ours Q64/R32/B16 s1            g=1      1.74    59.0    0.328    0.029    0.357 |  1.089  1.089   9.94  0.009 |     nan     nan   6.733 | +29277585780541839097619319451811840.00 11472197034698438654186726883328.00 | 0.2272 0.0002
+    ours Q256/R128/B16 s1          g=1      6.97   236.1    1.258    0.028    1.286 |  1.088  1.088   9.94  0.004 |     nan     nan   6.715 | +29277355949676739690591086280966144.00 5907055194834635595078181060608.00 | 0.2272 0.0001
+    direct N256/B16 s1             g=1      8.02   320.2    3.014    0.002    3.016 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +1515.92 1894.47 | 0.0000 0.0000
+    direct N1024/B16 s1            g=1     32.07  1280.5   11.852    0.002   11.855 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -174.49  543.67 | 0.0000 0.0000
+    ours Q32/R16/B8 s2             g=1      0.87    29.5    0.171    0.015    0.186 |  1.091  1.091   9.97  0.012 |     nan     nan   6.756 | +29281385904209009746959996098183168.00 12542080073362862551858143035392.00 | 0.2278 0.0003
+    ours Q64/R32/B16 s2            g=1      1.74    59.0    0.326    0.029    0.355 |  1.088  1.088   9.94  0.008 |     nan     nan   6.733 | +29275826651623159035142936501157888.00 9185759552573996913389100597248.00 | 0.2273 0.0002
+    ours Q256/R128/B16 s2          g=1      6.97   236.2    1.285    0.027    1.313 |  1.089  1.089   9.94  0.004 |     nan     nan   6.715 | +29276545969847819230540944895901696.00 5249024709916416417022978555904.00 | 0.2272 0.0001
+    direct N256/B16 s2             g=1      8.02   320.2    3.088    0.002    3.091 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +5182.83 11149.97 | 0.0000 0.0000
+    direct N1024/B16 s2            g=1     32.07  1280.7   12.041    0.002   12.043 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 |  +13.68  536.06 | 0.0000 0.0000
+  vertex values v0..v6 (g = 1): reference -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000
+    ours Q32/R16/B8                -1.0028 +1.0344 -1.0266 +0.7731 -1.0222 +1.0000 -0.9937   (max err 0.2269)
+    ours Q64/R32/B16               -1.0028 +1.0343 -1.0267 +0.7729 -1.0220 +1.0000 -0.9939   (max err 0.2271)
+    ours Q256/R128/B16             -1.0028 +1.0342 -1.0268 +0.7727 -1.0221 +1.0001 -0.9940   (max err 0.2273)
+    direct N256/B16                -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16               -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    ours Q32/R16/B8 s1             -1.0027 +1.0341 -1.0269 +0.7726 -1.0220 +1.0001 -0.9940   (max err 0.2274)
+    ours Q64/R32/B16 s1            -1.0028 +1.0341 -1.0268 +0.7728 -1.0220 +1.0001 -0.9941   (max err 0.2272)
+    ours Q256/R128/B16 s1          -1.0028 +1.0343 -1.0267 +0.7728 -1.0219 +1.0001 -0.9942   (max err 0.2272)
+    direct N256/B16 s1             -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 s1            -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    ours Q32/R16/B8 s2             -1.0028 +1.0344 -1.0271 +0.7722 -1.0216 +0.9999 -0.9942   (max err 0.2278)
+    ours Q64/R32/B16 s2            -1.0028 +1.0343 -1.0268 +0.7727 -1.0217 +1.0000 -0.9943   (max err 0.2273)
+    ours Q256/R128/B16 s2          -1.0028 +1.0342 -1.0268 +0.7728 -1.0220 +1.0001 -0.9941   (max err 0.2272)
+    direct N256/B16 s2             -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 s2            -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.089% +- 0.002% [1.088%, 1.091%] (3)
+    ours Q64/R32/B16               g=1: 1.088% +- 0.000% [1.088%, 1.089%] (3)
+    ours Q256/R128/B16             g=1: 1.088% +- 0.000% [1.088%, 1.089%] (3)
+    direct N256/B16                g=1: 0.000% +- 0.000% [0.000%, 0.000%] (3)
+    direct N1024/B16               g=1: 0.000% +- 0.000% [0.000%, 0.000%] (3)
+
+  summary ring 1 K3, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.088%    1.088%    1.088%    1.088%    1.088%    1.088%    1.088%    1.088%    1.088%
+      direct                 -         -         -         -    0.000%    0.000%    0.000%    0.000%    0.000%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.173 s [0.173]   2.0%: 0.173 s [0.173]   1.5%: 0.173 s [0.173]   1.0%: not reached
+      direct           3.0%: 3.106 s [3.106]   2.0%: 3.106 s [3.106]   1.5%: 3.106 s [3.106]   1.0%: 3.106 s [3.106]
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.108 / 0.130 s, direct 7.766 / 9.319 s; direct/ours = 4 x 17.93 = 71.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.173 s, direct 3.106 s per ring; direct/ours = 4 x 17.93 = 71.7x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.108 / 0.130 s, direct 7.766 / 9.319 s; direct/ours = 4 x 17.93 = 71.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.173 s, direct 3.106 s per ring; direct/ours = 4 x 17.93 = 71.7x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.108 / 0.130 s, direct 7.766 / 9.319 s; direct/ours = 4 x 17.93 = 71.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.173 s, direct 3.106 s per ring; direct/ours = 4 x 17.93 = 71.7x
+
+=== ring 2, K1 ===
+  reference gate_cache\ref_check4_ring2_K1.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  ring 2 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 15.30%;
+    energy over the ring minus the eps-tube 1.51176 +- 0.00746, within 0.1 of the crack-face lines 0.47591 +- 0.00091
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.013 s: shared by both methods, timed for neither
+  32453 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      1.43    48.8    0.272    0.017    0.290 |  1.394  1.359  13.89  0.181 |   47.77   21.12  36.690 |   +2.00    0.72 | 0.1172 0.0045
+    ours Q64/R32/B16               g=1      2.85    97.6    0.554    0.031    0.586 |  1.408  1.380  14.01  0.134 |   37.46   20.89  28.769 |   +1.91    0.63 | 0.1244 0.0035
+    ours Q256/R128/B16             g=1     11.41   390.4    2.147    0.031    2.179 |  1.397  1.373  14.06  0.066 |   28.39   21.09  21.805 |   +1.99    0.51 | 0.1229 0.0018
+    direct N256/B16                g=1      8.31   384.0    3.587    0.002    3.590 |  2.500  0.000  11.45  2.499 |  151.63    0.00 116.455 |  -31.18   31.38 | 0.1089 0.0000
+    direct N1024/B16               g=1     33.24  1535.8   14.362    0.003   14.365 |  1.280  0.122   6.06  1.250 |   82.95   22.34  63.705 |   +3.08   13.00 | 0.0341 0.0000
+    ours Q32/R16/B8 s1             g=1      1.43    48.8    0.306    0.020    0.327 |  1.395  1.358  13.92  0.198 |   50.58   21.40  38.843 |   +2.47    0.65 | 0.1252 0.0075
+    ours Q64/R32/B16 s1            g=1      2.85    97.6    0.601    0.034    0.635 |  1.386  1.354  14.01  0.164 |   39.58   21.54  30.396 |   +2.10    0.67 | 0.1264 0.0056
+    ours Q256/R128/B16 s1          g=1     11.41   390.3    2.265    0.032    2.297 |  1.385  1.361  13.91  0.071 |   28.36   21.47  21.783 |   +1.93    0.50 | 0.1237 0.0024
+    direct N256/B16 s1             g=1      8.31   383.9    3.559    0.002    3.561 |  2.482  0.000  13.40  2.501 |  162.14    0.00 124.522 |   +7.53   58.69 | 0.0772 0.0000
+    direct N1024/B16 s1            g=1     33.24  1535.7   14.445    0.002   14.448 |  1.259  0.000   5.60  1.250 |   82.06   12.87  63.023 |   +0.70    9.38 | 0.0498 0.0000
+    ours Q32/R16/B8 s2             g=1      1.43    48.8    0.283    0.017    0.300 |  1.414  1.370  14.30  0.244 |   49.32   21.06  37.877 |   +2.10    0.61 | 0.1211 0.0085
+    ours Q64/R32/B16 s2            g=1      2.85    97.6    0.562    0.034    0.595 |  1.389  1.356  13.96  0.166 |   39.07   21.04  30.009 |   +2.28    0.56 | 0.1231 0.0052
+    ours Q256/R128/B16 s2          g=1     11.41   390.3    2.203    0.033    2.236 |  1.384  1.359  13.85  0.074 |   28.22   21.31  21.672 |   +1.88    0.51 | 0.1235 0.0019
+    direct N256/B16 s2             g=1      8.31   383.8    3.762    0.003    3.765 |  2.536  0.351  10.36  2.499 |  151.70    0.00 116.511 |  -44.87   31.93 | 0.0828 0.0000
+    direct N1024/B16 s2            g=1     33.24  1535.5   14.812    0.002   14.814 |  1.286  0.169   5.73  1.250 |   75.88    0.00  58.279 |   -4.19    6.85 | 0.0387 0.0000
+  vertex values v0..v6 (g = 1): reference +0.9840 +0.7022 -0.4484 +0.0550 -0.8303 +0.8934 -0.5308
+    ours Q32/R16/B8                +0.9695 +0.6798 -0.4447 +0.0040 -0.8145 +0.7762 -0.4441   (max err 0.1172)
+    ours Q64/R32/B16               +0.9713 +0.6810 -0.4462 +0.0061 -0.8125 +0.7691 -0.4402   (max err 0.1244)
+    ours Q256/R128/B16             +0.9741 +0.6832 -0.4420 +0.0092 -0.8127 +0.7706 -0.4374   (max err 0.1229)
+    direct N256/B16                +0.9844 +0.6484 -0.4531 +0.0078 -0.8359 +0.8359 -0.4219   (max err 0.1089)
+    direct N1024/B16               +0.9824 +0.6797 -0.4531 +0.0781 -0.8477 +0.8594 -0.4980   (max err 0.0341)
+    ours Q32/R16/B8 s1             +0.9752 +0.6821 -0.4430 +0.0157 -0.8126 +0.7683 -0.4386   (max err 0.1252)
+    ours Q64/R32/B16 s1            +0.9738 +0.6802 -0.4455 +0.0110 -0.8100 +0.7671 -0.4450   (max err 0.1264)
+    ours Q256/R128/B16 s1          +0.9727 +0.6829 -0.4442 +0.0064 -0.8121 +0.7697 -0.4432   (max err 0.1237)
+    direct N256/B16 s1             +0.9844 +0.6250 -0.4609 +0.0391 -0.8438 +0.8516 -0.4922   (max err 0.0772)
+    direct N1024/B16 s1            +0.9805 +0.6523 -0.4961 +0.0859 -0.8418 +0.9121 -0.5312   (max err 0.0498)
+    ours Q32/R16/B8 s2             +0.9753 +0.6847 -0.4374 +0.0194 -0.8142 +0.7724 -0.4318   (max err 0.1211)
+    ours Q64/R32/B16 s2            +0.9754 +0.6869 -0.4380 +0.0196 -0.8134 +0.7704 -0.4365   (max err 0.1231)
+    ours Q256/R128/B16 s2          +0.9722 +0.6828 -0.4434 +0.0092 -0.8119 +0.7699 -0.4423   (max err 0.1235)
+    direct N256/B16 s2             +0.9766 +0.7656 -0.5312 +0.0859 -0.8594 +0.8359 -0.5000   (max err 0.0828)
+    direct N1024/B16 s2            +0.9883 +0.7402 -0.4375 +0.0938 -0.8535 +0.8711 -0.4961   (max err 0.0387)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.401% +- 0.012% [1.394%, 1.414%] (3)
+    ours Q64/R32/B16               g=1: 1.395% +- 0.012% [1.386%, 1.408%] (3)
+    ours Q256/R128/B16             g=1: 1.389% +- 0.007% [1.384%, 1.397%] (3)
+    direct N256/B16                g=1: 2.506% +- 0.027% [2.482%, 2.536%] (3)
+    direct N1024/B16               g=1: 1.275% +- 0.014% [1.259%, 1.286%] (3)
+
+  summary ring 2 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours                   -    1.394%    1.394%    1.394%    1.394%    1.394%    1.394%    1.394%    1.394%
+      direct                 -         -         -         -    2.500%    2.500%    1.280%    1.280%    1.280%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.290 s [0.290]   2.0%: 0.290 s [0.290]   1.5%: 0.290 s [0.290]   1.0%: not reached
+      direct           3.0%: 3.590 s [3.590]   2.0%: 14.365 s [5.700]   1.5%: 14.365 s [10.345]   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.181 / 0.217 s, direct 8.974 / 10.769 s; direct/ours = 4 x 12.39 = 49.5x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.290 s, direct 3.590 s per ring; direct/ours = 4 x 12.39 = 49.5x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.181 / 0.217 s, direct 35.912 / 43.095 s; direct/ours = 4 x 49.57 = 198.3x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.290 s, direct 5.700 s per ring; direct/ours = 4 x 19.67 = 78.7x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.181 / 0.217 s, direct 35.912 / 43.095 s; direct/ours = 4 x 49.57 = 198.3x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.290 s, direct 10.345 s per ring; direct/ours = 4 x 35.70 = 142.8x
+
+=== ring 2, K2 ===
+  reference gate_cache\ref_check4_ring2_K2.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32270 points, 826112000 walks counted of 826112000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 60.0, 685.593 s
+  ring 2 K2, g = 1: reference noise floor (its batch s.e.): H RMS 0.301% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 21.98%;
+    energy over the ring minus the eps-tube 0.89436 +- 0.00525, within 0.1 of the crack-face lines 0.27550 +- 0.00092
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.010 s: shared by both methods, timed for neither
+  32263 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 0 1 0 1 0 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      1.02    35.2    0.173    0.014    0.187 |  1.831  1.730  11.90  0.519 |   58.57   29.72  34.874 |   +9.45    0.80 | 0.0575 0.0147
+    ours Q64/R32/B16               g=1      2.05    70.4    0.364    0.026    0.390 |  1.809  1.760  11.57  0.289 |   47.80   29.66  28.458 |   +9.27    0.71 | 0.0633 0.0085
+    ours Q256/R128/B16             g=1      8.19   281.3    1.389    0.028    1.417 |  1.808  1.779  11.46  0.107 |   38.95   29.60  23.195 |   +8.92    0.63 | 0.0658 0.0034
+    direct N256/B16                g=1      8.26   495.4    4.190    0.002    4.193 |  3.035  0.238  11.48  3.011 |  226.97    0.00 135.146 |  -25.58   36.45 | 0.0948 0.0000
+    direct N1024/B16               g=1     33.04  1981.3   17.055    0.004   17.060 |  1.532  0.000   6.45  1.505 |  111.06    0.00  66.129 |   -4.86   12.31 | 0.0577 0.0000
+    ours Q32/R16/B8 s1             g=1      1.02    35.2    0.189    0.014    0.203 |  1.817  1.763  11.51  0.319 |   55.32   28.30  32.939 |   +9.46    0.75 | 0.0628 0.0076
+    ours Q64/R32/B16 s1            g=1      2.05    70.3    0.364    0.028    0.392 |  1.817  1.777  11.68  0.226 |   47.00   28.98  27.987 |   +9.19    0.69 | 0.0601 0.0062
+    ours Q256/R128/B16 s1          g=1      8.19   281.3    1.438    0.027    1.465 |  1.816  1.786  11.74  0.136 |   38.95   29.71  23.192 |   +9.08    0.62 | 0.0599 0.0033
+    direct N256/B16 s1             g=1      8.26   495.3    4.230    0.002    4.232 |  3.037  0.266  12.55  3.010 |  244.27   82.86 145.446 |  +66.29   55.97 | 0.0815 0.0000
+    direct N1024/B16 s1            g=1     33.04  1981.2   17.332    0.002   17.334 |  1.525  0.000   6.82  1.505 |  116.43   29.55  69.327 |   +7.02    9.91 | 0.0635 0.0000
+    ours Q32/R16/B8 s2             g=1      1.02    35.2    0.190    0.016    0.205 |  1.864  1.803  11.75  0.360 |   55.00   30.53  32.750 |   +9.94    1.12 | 0.0616 0.0107
+    ours Q64/R32/B16 s2            g=1      2.05    70.4    0.366    0.028    0.394 |  1.816  1.776  11.56  0.236 |   47.69   29.13  28.394 |   +8.76    0.72 | 0.0650 0.0072
+    ours Q256/R128/B16 s2          g=1      8.19   281.3    1.402    0.029    1.431 |  1.812  1.782  11.63  0.121 |   38.84   29.79  23.128 |   +9.07    0.62 | 0.0623 0.0035
+    direct N256/B16 s2             g=1      8.26   495.3    4.299    0.002    4.302 |  3.023  0.000  12.64  3.011 |  223.85    0.00 133.289 |  -15.35   62.96 | 0.1576 0.0000
+    direct N1024/B16 s2            g=1     33.04  1981.3   17.001    0.002   17.003 |  1.538  0.097   6.91  1.505 |  113.81    0.00  67.763 |   -4.19   12.09 | 0.0658 0.0000
+  vertex values v0..v6 (g = 1): reference +0.0773 +0.0560 -0.8683 -0.0634 +0.2042 +0.1373 -0.0659
+    ours Q32/R16/B8                +0.0827 +0.0438 -0.8348 -0.0174 +0.1467 +0.1402 -0.0940   (max err 0.0575)
+    ours Q64/R32/B16               +0.0815 +0.0431 -0.8366 -0.0160 +0.1410 +0.1367 -0.1058   (max err 0.0633)
+    ours Q256/R128/B16             +0.0794 +0.0415 -0.8355 -0.0178 +0.1384 +0.1350 -0.1092   (max err 0.0658)
+    direct N256/B16                +0.0703 +0.0391 -0.8672 -0.0234 +0.1094 +0.1328 -0.0312   (max err 0.0948)
+    direct N1024/B16               +0.0430 +0.0117 -0.8574 -0.0410 +0.1465 +0.0977 -0.0996   (max err 0.0577)
+    ours Q32/R16/B8 s1             +0.0806 +0.0414 -0.8327 -0.0141 +0.1414 +0.1383 -0.1123   (max err 0.0628)
+    ours Q64/R32/B16 s1            +0.0824 +0.0439 -0.8325 -0.0137 +0.1441 +0.1425 -0.1062   (max err 0.0601)
+    ours Q256/R128/B16 s1          +0.0834 +0.0455 -0.8356 -0.0140 +0.1443 +0.1374 -0.1010   (max err 0.0599)
+    direct N256/B16 s1             +0.1094 +0.1016 -0.8594 -0.1406 +0.2656 +0.2188 -0.0781   (max err 0.0815)
+    direct N1024/B16 s1            +0.0820 +0.0117 -0.8594 -0.1270 +0.1953 +0.1387 -0.0625   (max err 0.0635)
+    ours Q32/R16/B8 s2             +0.0915 +0.0548 -0.8312 -0.0036 +0.1426 +0.1505 -0.1009   (max err 0.0616)
+    ours Q64/R32/B16 s2            +0.0868 +0.0497 -0.8323 -0.0111 +0.1392 +0.1416 -0.1076   (max err 0.0650)
+    ours Q256/R128/B16 s2          +0.0843 +0.0472 -0.8342 -0.0129 +0.1419 +0.1401 -0.1053   (max err 0.0623)
+    direct N256/B16 s2             +0.1016 -0.1016 -0.9219 +0.0312 +0.1484 +0.1719 -0.1328   (max err 0.1576)
+    direct N1024/B16 s2            +0.0762 -0.0098 -0.8828 -0.0430 +0.1758 +0.1387 -0.1133   (max err 0.0658)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.837% +- 0.024% [1.817%, 1.864%] (3)
+    ours Q64/R32/B16               g=1: 1.814% +- 0.004% [1.809%, 1.817%] (3)
+    ours Q256/R128/B16             g=1: 1.812% +- 0.004% [1.808%, 1.816%] (3)
+    direct N256/B16                g=1: 3.032% +- 0.008% [3.023%, 3.037%] (3)
+    direct N1024/B16               g=1: 1.532% +- 0.007% [1.525%, 1.538%] (3)
+
+  summary ring 2 K2, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.831%    1.809%    1.809%    1.808%    1.808%    1.808%    1.808%    1.808%    1.808%
+      direct                 -         -         -         -    3.035%    3.035%    1.532%    1.532%    1.532%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.187 s [0.187]   2.0%: 0.187 s [0.187]   1.5%: not reached   1.0%: not reached
+      direct           3.0%: 17.060 s [4.294]   2.0%: 17.060 s [9.873]   1.5%: not reached   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.117 / 0.140 s, direct 42.649 / 51.179 s; direct/ours = 4 x 91.18 = 364.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.187 s, direct 4.294 s per ring; direct/ours = 4 x 22.95 = 91.8x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.117 / 0.140 s, direct 42.649 / 51.179 s; direct/ours = 4 x 91.18 = 364.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.187 s, direct 9.873 s per ring; direct/ours = 4 x 52.77 = 211.1x
+
+=== ring 2, K3 ===
+  reference gate_cache\ref_check4_ring2_K3.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 31980 points, 818688000 walks counted of 818688000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 459.217 s
+  ring 2 K3, g = 1: reference noise floor (its batch s.e.): H RMS 0.000% (max 0.000%) of 2g; grad s.e. RMS / grad RMS 100.61%;
+    energy over the ring minus the eps-tube -0.00000 +- 0.00000, within 0.1 of the crack-face lines -0.00000 +- 0.00000
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.014 s: shared by both methods, timed for neither
+  31973 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      1.40    47.4    0.247    0.016    0.264 |  1.105  1.104  10.62  0.049 |     nan     nan  11.226 | -205668939353424776210743809886126080.00 16748917932176277340183634802376704.00 | 0.2262 0.0010
+    ours Q64/R32/B16               g=1      2.81    94.7    0.514    0.033    0.546 |  1.106  1.105  10.63  0.035 |     nan     nan   9.383 | -211759721519288448961161127859847168.00 17618434147265722874086048120438784.00 | 0.2264 0.0007
+    ours Q256/R128/B16             g=1     11.23   379.0    2.031    0.035    2.066 |  1.109  1.109  10.64  0.017 |     nan     nan   7.167 | -200614308282090015775865127175192576.00 1618572350683355481214960235708416.00 | 0.2267 0.0003
+    direct N256/B16                g=1      8.19   326.6    3.076    0.003    3.079 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -1229.48 52584.49 | 0.0000 0.0000
+    direct N1024/B16               g=1     32.75  1306.3   12.326    0.002   12.328 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -570.83 1314.53 | 0.0000 0.0000
+    ours Q32/R16/B8 s1             g=1      1.40    47.4    0.263    0.018    0.281 |  1.110  1.109  10.60  0.050 |     nan     nan  12.666 | -221289891329909913294567123206537216.00 12335859588197352802053632523501568.00 | 0.2259 0.0013
+    ours Q64/R32/B16 s1            g=1      2.81    94.7    0.514    0.033    0.547 |  1.110  1.109  10.61  0.035 |     nan     nan   9.453 | -209967866830280348907853429795192832.00 6506718611139187529180774769098752.00 | 0.2262 0.0008
+    ours Q256/R128/B16 s1          g=1     11.23   379.0    1.997    0.032    2.029 |  1.112  1.112  10.66  0.017 |     nan     nan   7.186 | -201219945861043141383527826769051648.00 1438971956102560948291320089149440.00 | 0.2271 0.0003
+    direct N256/B16 s1             g=1      8.19   326.6    3.029    0.003    3.031 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +13710.43 19807.60 | 0.0000 0.0000
+    direct N1024/B16 s1            g=1     32.75  1306.2   12.334    0.002   12.336 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -176.71 1254.72 | 0.0000 0.0000
+    ours Q32/R16/B8 s2             g=1      1.40    47.3    0.267    0.016    0.284 |  1.111  1.109  10.67  0.050 |     nan     nan  10.192 | -196385988280734685627218654645977088.00 8844023987193197247855569479401472.00 | 0.2273 0.0011
+    ours Q64/R32/B16 s2            g=1      2.81    94.7    0.513    0.034    0.547 |  1.109  1.108  10.65  0.034 |     nan     nan   8.683 | -196287091073943270928234066936332288.00 4989101680407496119135358941134848.00 | 0.2268 0.0007
+    ours Q256/R128/B16 s2          g=1     11.23   379.0    2.062    0.033    2.095 |  1.110  1.110  10.66  0.017 |     nan     nan   7.083 | -200285249428522988917387482164625408.00 959209423279146799067879576698880.00 | 0.2271 0.0003
+    direct N256/B16 s2             g=1      8.19   326.6    3.026    0.003    3.029 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -9051.72 11822.69 | 0.0000 0.0000
+    direct N1024/B16 s2            g=1     32.75  1306.2   12.401    0.003   12.403 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -884.92 1223.12 | 0.0000 0.0000
+  vertex values v0..v6 (g = 1): reference +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000
+    ours Q32/R16/B8                +0.9974 +1.0343 -1.0254 +0.7738 -1.0240 +1.0004 -0.9950   (max err 0.2262)
+    ours Q64/R32/B16               +0.9974 +1.0341 -1.0248 +0.7736 -1.0240 +1.0003 -0.9957   (max err 0.2264)
+    ours Q256/R128/B16             +0.9975 +1.0345 -1.0251 +0.7733 -1.0245 +1.0003 -0.9961   (max err 0.2267)
+    direct N256/B16                +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16               +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    ours Q32/R16/B8 s1             +0.9973 +1.0344 -1.0259 +0.7741 -1.0250 +1.0001 -0.9951   (max err 0.2259)
+    ours Q64/R32/B16 s1            +0.9975 +1.0337 -1.0258 +0.7738 -1.0250 +1.0005 -0.9958   (max err 0.2262)
+    ours Q256/R128/B16 s1          +0.9974 +1.0346 -1.0253 +0.7729 -1.0247 +1.0006 -0.9960   (max err 0.2271)
+    direct N256/B16 s1             +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 s1            +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    ours Q32/R16/B8 s2             +0.9970 +1.0346 -1.0241 +0.7727 -1.0235 +1.0003 -0.9967   (max err 0.2273)
+    ours Q64/R32/B16 s2            +0.9972 +1.0340 -1.0245 +0.7732 -1.0239 +1.0004 -0.9963   (max err 0.2268)
+    ours Q256/R128/B16 s2          +0.9975 +1.0341 -1.0247 +0.7729 -1.0244 +1.0004 -0.9960   (max err 0.2271)
+    direct N256/B16 s2             +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 s2            +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+  spread over 3 seed sets (H RMS / 2g: mean, sd, min, max):
+    ours Q32/R16/B8                g=1: 1.109% +- 0.003% [1.105%, 1.111%] (3)
+    ours Q64/R32/B16               g=1: 1.108% +- 0.002% [1.106%, 1.110%] (3)
+    ours Q256/R128/B16             g=1: 1.110% +- 0.001% [1.109%, 1.112%] (3)
+    direct N256/B16                g=1: 0.000% +- 0.000% [0.000%, 0.000%] (3)
+    direct N1024/B16               g=1: 0.000% +- 0.000% [0.000%, 0.000%] (3)
+
+  summary ring 2 K3, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours                   -    1.105%    1.105%    1.105%    1.105%    1.105%    1.105%    1.105%    1.105%
+      direct                 -         -         -         -    0.000%    0.000%    0.000%    0.000%    0.000%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.264 s [0.264]   2.0%: 0.264 s [0.264]   1.5%: 0.264 s [0.264]   1.0%: not reached
+      direct           3.0%: 3.079 s [3.079]   2.0%: 3.079 s [3.079]   1.5%: 3.079 s [3.079]   1.0%: 3.079 s [3.079]
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.165 / 0.198 s, direct 7.697 / 9.237 s; direct/ours = 4 x 11.68 = 46.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.264 s, direct 3.079 s per ring; direct/ours = 4 x 11.68 = 46.7x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.165 / 0.198 s, direct 7.697 / 9.237 s; direct/ours = 4 x 11.68 = 46.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.264 s, direct 3.079 s per ring; direct/ours = 4 x 11.68 = 46.7x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.165 / 0.198 s, direct 7.697 / 9.237 s; direct/ours = 4 x 11.68 = 46.7x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.264 s, direct 3.079 s per ring; direct/ours = 4 x 11.68 = 46.7x
+
+--ring-bench total 377.9 s; 120 rows written to ring_perf/final_seeds_rows.csv

@@ -1,0 +1,27 @@
+config,g,family,kind,budget_or_threshold,value,label,interpolated_time
+ring 2 K1,g1,ours-loose,equal_time,0.25,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,0.5,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,1,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,2,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,5,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,10,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,30,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,60,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_time,120,0.0138757,"ours Q32/R16/B8 shell 1e-04",
+ring 2 K1,g1,direct-loose,equal_time,0.25,,"",
+ring 2 K1,g1,direct-loose,equal_time,0.5,,"",
+ring 2 K1,g1,direct-loose,equal_time,1,,"",
+ring 2 K1,g1,direct-loose,equal_time,2,,"",
+ring 2 K1,g1,direct-loose,equal_time,5,0.0251476,"direct N256/B16 shell 1e-04",
+ring 2 K1,g1,direct-loose,equal_time,10,0.0251476,"direct N256/B16 shell 1e-04",
+ring 2 K1,g1,direct-loose,equal_time,30,0.0251476,"direct N256/B16 shell 1e-04",
+ring 2 K1,g1,direct-loose,equal_time,60,0.0251476,"direct N256/B16 shell 1e-04",
+ring 2 K1,g1,direct-loose,equal_time,120,0.0251476,"direct N256/B16 shell 1e-04",
+ring 2 K1,g1,ours-loose,equal_accuracy,0.03,0.188177,"ours Q32/R16/B8 shell 1e-04",0.188177
+ring 2 K1,g1,ours-loose,equal_accuracy,0.02,0.188177,"ours Q32/R16/B8 shell 1e-04",0.188177
+ring 2 K1,g1,ours-loose,equal_accuracy,0.015,0.188177,"ours Q32/R16/B8 shell 1e-04",0.188177
+ring 2 K1,g1,ours-loose,equal_accuracy,0.01,,"",
+ring 2 K1,g1,direct-loose,equal_accuracy,0.03,2.49055,"direct N256/B16 shell 1e-04",2.49055
+ring 2 K1,g1,direct-loose,equal_accuracy,0.02,,"",
+ring 2 K1,g1,direct-loose,equal_accuracy,0.015,,"",
+ring 2 K1,g1,direct-loose,equal_accuracy,0.01,,"",

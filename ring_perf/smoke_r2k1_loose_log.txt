@@ -1,0 +1,29 @@
+--ring-bench: 2026-11-03 18:09:52; 16 hardware threads (TBB default arena)
+output: ring_perf/smoke_r2k1_loose_rows.csv, ring_perf/smoke_r2k1_loose_summary.csv, ring_perf/smoke_r2k1_loose_log.txt
+settings: walk stop distance 0.0001 sqrt(2) (both methods; the reference's: 1e-6) [LOOSE: biased, opt-in]; step function: lean (solveMultiLean, the same walks without box and face tests); repeats 3 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 32/16/8 64/32/16; direct (N/B): 256/16; current (N/B):
+
+=== ring 2, K1 ===
+  reference gate_cache\ref_check4_ring2_K1.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  ring 2 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 15.30%;
+    energy over the ring minus the eps-tube 1.51176 +- 0.00746, within 0.1 of the crack-face lines 0.47591 +- 0.00091
+  32453 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      1.43    27.3    0.173    0.015    0.188 |  1.388  1.352  13.88  0.188 |   45.56   21.22  34.993 |   +2.01    0.73 | 0.1177 0.0051
+    ours Q64/R32/B16 shell 1e-04   g=1      2.85    54.6    0.349    0.032    0.382 |  1.407  1.378  14.00  0.135 |   36.37   20.97  27.931 |   +1.90    0.62 | 0.1248 0.0035
+    direct N256/B16 shell 1e-04    g=1      8.31   257.2    2.510   -0.020    2.491 |  2.515  0.143  12.25  2.498 |  173.91   74.00 133.568 |  +43.68   56.62 | 0.0750 0.0000
+  vertex values v0..v6 (g = 1): reference +0.9840 +0.7022 -0.4484 +0.0550 -0.8303 +0.8934 -0.5308
+    ours Q32/R16/B8 shell 1e-04    +0.9700 +0.6807 -0.4443 +0.0051 -0.8145 +0.7757 -0.4445   (max err 0.1177)
+    ours Q64/R32/B16 shell 1e-04   +0.9715 +0.6814 -0.4461 +0.0061 -0.8124 +0.7687 -0.4405   (max err 0.1248)
+    direct N256/B16 shell 1e-04    +0.9766 +0.7422 -0.5234 +0.0859 -0.7734 +0.9141 -0.5312   (max err 0.0750)
+
+  summary ring 2 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%
+      direct-loose           -         -         -         -    2.515%    2.515%    2.515%    2.515%    2.515%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.188 s [0.188]   2.0%: 0.188 s [0.188]   1.5%: 0.188 s [0.188]   1.0%: not reached
+      direct-loose     3.0%: 2.491 s [2.491]   2.0%: not reached   1.5%: not reached   1.0%: not reached
+
+--ring-bench total 9.5 s; 3 rows written to ring_perf/smoke_r2k1_loose_rows.csv

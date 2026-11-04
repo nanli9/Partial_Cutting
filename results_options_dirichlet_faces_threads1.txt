@@ -1,0 +1,1231 @@
+Exact walk reuse under an advancing cut: options 1, 3, 2a, 2b and the control 3q compared (--compare-options)
+date: 2026-10-31 23:10:15; hardware threads: 16; TBB threads used: 1 (--threads)
+CPU: Intel(R) Core(TM) Ultra 9 386H; 16 cores, 4 of efficiency class 1, 12 of efficiency class 0; 16 logical processors; L3 18 MiB
+samples: 3 per run (--repeat), each a complete run with every check: totals are medians [min, max] over the
+samples, and a ratio whose range contains 1 is marked 'tie'; the tables show the first sample
+tet faces: DIRICHLET, H = 0 (experiment --dirichlet-faces: a different PDE)
+Options (all exact: the same estimator, walk for walk):
+  1  frozen seeds, full recompute: a same-seed solve keeping only the sums (solveSums), no per-walk state
+  3  seed replay (Saeed's layout, WalkCache::advance(Incremental), its production path): bbox test, replay
+     from the seed under the old cut to the first ball the strip enters, resume there
+  3q control, not one of the options asked about: option 3's replay and resume, but only for the walks popped
+     from 2b's queue; the walks accumulate their keys as they run, so nothing per step is stored. It separates
+     what 2b gains by its tighter filter from what it gains by storing every step.
+  2a every step stored (centre, key, flags): the same bbox test, then the stored balls are tested exactly
+     (stripDist2(c_k) < key2_k, runWalk's own stop test) and the walk resumes from the stored step: no replay
+  2b as 2a, but the candidates are popped from a queue sorted by each walk's entry front min_k s*_k (the
+     front position at which the known future cut surface first enters one of its balls, lowered by margins)
+  All run the one step function runWalk; value updates (g type (b)) and sums use the same code, in walk order.
+Timing: steady_clock wall time of each option's update call, same thread count, back to back, in a random
+order per step (fixed seed; the last column of the step table). Option 1 is a full recompute. Not timed: the
+brute-force ball test before the updates (on the reference's recorded paths, so it warms no option's data) and
+the reference solves after them (a same-seed full solve with per-walk entries, which is option 1 with its walks
+kept, and one that records every path). 'updates' totals leave out each option's initial solve; 'setup +
+updates' include it (option 1's: its first full recompute). The ratios depend on the machine and on the thread
+count (--threads): compare runs at several thread counts before generalizing them.
+Checks at every step: every option's per-walk entries (box, landing point, value, steps, side, status, w)
+bitwise equal to option 1's same-seed walks; 2a/2b's stored paths bitwise equal to a fresh recorded solve;
+sums of 3q/2a/2b bitwise equal to option 3's (same code, same walks); H and grad H of every option within a
+worst-case round-off bound of option 1's (H exactly for g = 1; the bound is derived in estimateCheck, and a
+wrong value update or sum shows up far above it); the re-walked set of every option equal to the brute-force
+ball test; 2b soundness: no walk whose stored ball the strip enters is left unpopped; 3q's keys, pops and
+queue bitwise equal to 2b's.
+
+=== (i) lattice sweep t = 0.20 -> 1.00 in 16 steps: lattice k = 12, 455 points (165 with grad H), N = 256, seed tag 600 (the validation sweep's) ===
+
+-- (a) g=1 --
+[sample 1 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.173 s
+setup (each option's own same-seed initial solve): 1 0.168 s (sums only), 3 0.173 s, 3q 0.181 s (+ keys while walking, queue), 2a 0.200 s (recording every step), 2b 0.213 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.2500  0.0600 |   3.73%    8.53%    3.73%    0.00% |  0.1806  0.0390  0.0163  0.0212  0.0193 |  4.63x 11.06x  8.52x  9.38x |  0.370 | 2a 3q 1 3 2b
+   2  0.3000  0.0600 |   4.43%   10.34%    4.43%    0.00% |  0.1822  0.0479  0.0216  0.0266  0.0242 |  3.81x  8.42x  6.85x  7.53x |  0.382 | 1 2b 3q 2a 3
+   3  0.3500  0.0600 |   4.99%   11.70%    4.99%    0.00% |  0.1895  0.0547  0.0238  0.0293  0.0267 |  3.46x  7.97x  6.47x  7.09x |  0.430 | 2a 3q 3 2b 1
+   4  0.4000  0.0600 |   5.40%   13.41%    5.40%    0.00% |  0.2017  0.0693  0.0305  0.0371  0.0371 |  2.91x  6.61x  5.44x  5.43x |  0.452 | 2a 3q 3 2b 1
+   5  0.4500  0.0600 |   5.58%   13.67%    5.58%    0.00% |  0.2122  0.0761  0.0327  0.0440  0.0384 |  2.79x  6.49x  4.82x  5.52x |  0.464 | 2b 3q 1 3 2a
+   6  0.5000  0.0600 |   5.63%   14.38%    5.63%    0.00% |  0.2123  0.0819  0.0338  0.0431  0.0368 |  2.59x  6.28x  4.93x  5.77x |  0.469 | 3 2a 1 2b 3q
+   7  0.5500  0.0600 |   5.57%   14.17%    6.02%    0.45% |  0.2034  0.0725  0.0352  0.0458  0.0403 |  2.81x  5.78x  4.44x  5.05x |  0.457 | 1 3 2b 2a 3q
+   8  0.6000  0.0600 |   5.23%   13.48%    5.23%    0.00% |  0.2234  0.0763  0.0307  0.0420  0.0350 |  2.93x  7.27x  5.32x  6.38x |  0.487 | 1 2b 2a 3q 3
+   9  0.6500  0.0600 |   4.54%   12.51%    4.54%    0.00% |  0.2266  0.0746  0.0279  0.0378  0.0305 |  3.04x  8.12x  6.00x  7.42x |  0.496 | 3q 2a 2b 1 3
+  10  0.7000  0.0600 |   3.82%   10.65%    3.82%    0.00% |  0.2286  0.0641  0.0232  0.0343  0.0265 |  3.57x  9.86x  6.67x  8.63x |  0.498 | 2a 3q 1 2b 3
+  11  0.7500  0.0600 |   2.95%    8.63%    2.95%    0.00% |  0.2257  0.0517  0.0173  0.0239  0.0197 |  4.37x 13.08x  9.46x 11.45x |  0.492 | 3 3q 2a 2b 1
+  12  0.8000  0.0600 |   2.22%    6.61%    2.22%    0.00% |  0.2331  0.0392  0.0122  0.0188  0.0139 |  5.95x 19.06x 12.37x 16.71x |  0.513 | 1 2b 2a 3 3q
+  13  0.8500  0.0590 |   1.45%    4.85%    1.45%    0.00% |  0.2389  0.0306  0.0078  0.0141  0.0092 |  7.80x 30.72x 16.94x 25.90x |  0.515 | 1 2a 2b 3q 3
+  14  0.9000  0.0450 |   0.94%    3.01%    0.94%    0.00% |  0.2400  0.0182  0.0042  0.0075  0.0053 | 13.16x 56.82x 31.92x 45.64x |  0.517 | 3q 1 2a 3 2b
+  15  0.9500  0.0270 |   0.33%    1.39%    0.33%    0.00% |  0.2375  0.0089  0.0013  0.0034  0.0017 | 26.58x 176.64x 70.69x 141.49x |  0.510 | 2b 3q 2a 1 3
+  16  1.0000  0.0090 |   0.22%    0.62%    0.22%    0.00% |  0.2430  0.0037  0.0006  0.0018  0.0008 | 66.32x 399.22x 136.61x 313.40x |  0.531 | 3 3q 2a 1 2b
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 3.4e-13 3.4e-13 3.4e-13 3.4e-13 | 0 0 0 0 | 0 | 0 0 | 0 5595 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 4.0e-13 4.0e-13 4.0e-13 4.0e-13 | 0 0 0 0 | 0 | 0 0 | 0 6877 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 7.1e-13 7.1e-13 7.1e-13 7.1e-13 | 0 0 0 0 | 0 | 0 0 | 0 7820 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 7.1e-13 7.1e-13 7.1e-13 7.1e-13 | 0 0 0 0 | 0 | 0 0 | 0 9325 | 0 0 0
+   5 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 9.1e-13 9.1e-13 9.1e-13 9.1e-13 | 0 0 0 0 | 0 | 0 1 | 0 9428 | 0 0 0
+   6 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.8e-12 1.8e-12 1.8e-12 1.8e-12 | 0 0 0 0 | 0 | 0 0 | 0 10182 | 0 0 0
+   7 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.5e-12 1.5e-12 1.5e-12 1.5e-12 | 0 0 0 0 | 0 | 0 527 | 0 10020 | 0 0 0
+   8 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 9603 | 0 0 0
+   9 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 9280 | 0 0 0
+  10 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 7952 | 0 0 0
+  11 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 6616 | 0 0 0
+  12 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 5114 | 0 0 0
+  13 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 3963 | 0 0 0
+  14 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 2409 | 0 0 0
+  15 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 1238 | 0 0 0
+  16 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 467 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0009  replay+resume+new 0.0379                       values 0.0000 sums 0.0003               | replayed 137952 (prefixes 11167, bbox false positives 126785), new 86336
+      opt 3q pop 0.0000  replay+resume+new 0.0156 (keys inside)         values 0.0000 sums 0.0002  queue 0.0005 | replayed 11167 (prefixes 11167, false alarms 0), new 86336, keys 29722
+      opt 2a box 0.0010  test 0.0035  resume 0.0010  new 0.0154               values 0.0000 sums 0.0003               | balls 147888, new 86336
+      opt 2b pop 0.0000  test 0.0011  resume 0.0011  new 0.0156  keys 0.0007  values 0.0000 sums 0.0002  queue 0.0005 | balls 15508, new 86336, keys 29722
+      update temporaries (MiB): 3 0.09, 3q 0.10, 2a 0.52, 2b 0.54
+   2  opt 3  box 0.0009  replay+resume+new 0.0466                       values 0.0000 sums 0.0003               | replayed 168727 (prefixes 14217, bbox false positives 154510), new 105758
+      opt 3q pop 0.0000  replay+resume+new 0.0209 (keys inside)         values 0.0000 sums 0.0002  queue 0.0004 | replayed 14217 (prefixes 14217, false alarms 0), new 105758, keys 40182
+      opt 2a box 0.0010  test 0.0044  resume 0.0011  new 0.0196               values 0.0000 sums 0.0004               | balls 180768, new 105758
+      opt 2b pop 0.0001  test 0.0012  resume 0.0014  new 0.0197  keys 0.0012  values 0.0000 sums 0.0002  queue 0.0004 | balls 19381, new 105758, keys 40182
+      update temporaries (MiB): 3 0.09, 3q 0.12, 2a 0.61, 2b 0.63
+   3  opt 3  box 0.0010  replay+resume+new 0.0535                       values 0.0000 sums 0.0003               | replayed 192942 (prefixes 15570, bbox false positives 177372), new 118987
+      opt 3q pop 0.0000  replay+resume+new 0.0230 (keys inside)         values 0.0000 sums 0.0002  queue 0.0005 | replayed 15570 (prefixes 15570, false alarms 0), new 118987, keys 47322
+      opt 2a box 0.0011  test 0.0054  resume 0.0015  new 0.0210               values 0.0000 sums 0.0003               | balls 206571, new 118987
+      opt 2b pop 0.0000  test 0.0012  resume 0.0013  new 0.0220  keys 0.0013  values 0.0000 sums 0.0003  queue 0.0005 | balls 21379, new 118987, keys 47322
+      update temporaries (MiB): 3 0.14, 3q 0.13, 2a 0.72, 2b 0.73
+   4  opt 3  box 0.0012  replay+resume+new 0.0676                       values 0.0000 sums 0.0005               | replayed 224327 (prefixes 16482, bbox false positives 207845), new 130397
+      opt 3q pop 0.0000  replay+resume+new 0.0293 (keys inside)         values 0.0000 sums 0.0004  queue 0.0007 | replayed 16482 (prefixes 16482, false alarms 0), new 130397, keys 55390
+      opt 2a box 0.0011  test 0.0062  resume 0.0016  new 0.0277               values 0.0000 sums 0.0005               | balls 239946, new 130397
+      opt 2b pop 0.0000  test 0.0019  resume 0.0022  new 0.0297  keys 0.0021  values 0.0000 sums 0.0004  queue 0.0007 | balls 22776, new 130397, keys 55390
+      update temporaries (MiB): 3 0.14, 3q 0.14, 2a 0.77, 2b 0.78
+   5  opt 3  box 0.0015  replay+resume+new 0.0740                       values 0.0000 sums 0.0006               | replayed 227848 (prefixes 17995, bbox false positives 209853), new 135843
+      opt 3q pop 0.0000  replay+resume+new 0.0315 (keys inside)         values 0.0000 sums 0.0004  queue 0.0007 | replayed 18011 (prefixes 17995, false alarms 16), new 135843, keys 58844
+      opt 2a box 0.0016  test 0.0095  resume 0.0020  new 0.0304               values 0.0000 sums 0.0005               | balls 243775, new 135843
+      opt 2b pop 0.0001  test 0.0020  resume 0.0017  new 0.0314  keys 0.0021  values 0.0000 sums 0.0004  queue 0.0007 | balls 24511, new 135843, keys 58844
+      update temporaries (MiB): 3 0.14, 3q 0.15, 2a 0.79, 2b 0.81
+   6  opt 3  box 0.0012  replay+resume+new 0.0801                       values 0.0000 sums 0.0005               | replayed 242074 (prefixes 18967, bbox false positives 223107), new 136360
+      opt 3q pop 0.0000  replay+resume+new 0.0325 (keys inside)         values 0.0000 sums 0.0005  queue 0.0008 | replayed 18967 (prefixes 18967, false alarms 0), new 136360, keys 47510
+      opt 2a box 0.0015  test 0.0098  resume 0.0021  new 0.0291               values 0.0000 sums 0.0005               | balls 258819, new 136360
+      opt 2b pop 0.0000  test 0.0016  resume 0.0020  new 0.0299  keys 0.0020  values 0.0000 sums 0.0004  queue 0.0008 | balls 25530, new 136360, keys 47510
+      update temporaries (MiB): 3 0.14, 3q 0.15, 2a 0.80, 2b 0.81
+   7  opt 3  box 0.0012  replay+resume+new 0.0706                       values 0.0000 sums 0.0007               | replayed 236665 (prefixes 18271, bbox false positives 218394), new 137348
+      opt 3q pop 0.0000  replay+resume+new 0.0339 (keys inside)         values 0.0000 sums 0.0004  queue 0.0008 | replayed 24397 (prefixes 18271, false alarms 6126), new 137348, keys 65522
+      opt 2a box 0.0014  test 0.0102  resume 0.0023  new 0.0312               values 0.0000 sums 0.0007               | balls 253175, new 137348
+      opt 2b pop 0.0001  test 0.0027  resume 0.0022  new 0.0312  keys 0.0028  values 0.0000 sums 0.0004  queue 0.0008 | balls 31414, new 137348, keys 65522
+      update temporaries (MiB): 3 0.14, 3q 0.16, 2a 0.79, 2b 0.82
+   8  opt 3  box 0.0014  replay+resume+new 0.0745                       values 0.0000 sums 0.0004               | replayed 230591 (prefixes 15402, bbox false positives 215189), new 125600
+      opt 3q pop 0.0000  replay+resume+new 0.0294 (keys inside)         values 0.0000 sums 0.0005  queue 0.0008 | replayed 15402 (prefixes 15402, false alarms 0), new 125600, keys 59586
+      opt 2a box 0.0014  test 0.0088  resume 0.0016  new 0.0297               values 0.0000 sums 0.0005               | balls 246289, new 125600
+      opt 2b pop 0.0000  test 0.0018  resume 0.0018  new 0.0285  keys 0.0017  values 0.0000 sums 0.0004  queue 0.0008 | balls 21497, new 125600, keys 59586
+      update temporaries (MiB): 3 0.14, 3q 0.14, 2a 0.75, 2b 0.76
+   9  opt 3  box 0.0013  replay+resume+new 0.0728                       values 0.0000 sums 0.0004               | replayed 221238 (prefixes 13691, bbox false positives 207547), new 107950
+      opt 3q pop 0.0000  replay+resume+new 0.0268 (keys inside)         values 0.0000 sums 0.0004  queue 0.0007 | replayed 13691 (prefixes 13691, false alarms 0), new 107950, keys 59657
+      opt 2a box 0.0014  test 0.0092  resume 0.0019  new 0.0249               values 0.0000 sums 0.0004               | balls 235807, new 107950
+      opt 2b pop 0.0000  test 0.0014  resume 0.0018  new 0.0246  keys 0.0017  values 0.0000 sums 0.0004  queue 0.0007 | balls 18980, new 107950, keys 59657
+      update temporaries (MiB): 3 0.14, 3q 0.12, 2a 0.65, 2b 0.65
+  10  opt 3  box 0.0011  replay+resume+new 0.0626                       values 0.0000 sums 0.0004               | replayed 189165 (prefixes 10596, bbox false positives 178569), new 88723
+      opt 3q pop 0.0001  replay+resume+new 0.0221 (keys inside)         values 0.0000 sums 0.0003  queue 0.0007 | replayed 10596 (prefixes 10596, false alarms 0), new 88723, keys 45388
+      opt 2a box 0.0018  test 0.0081  resume 0.0015  new 0.0222               values 0.0000 sums 0.0006               | balls 201571, new 88723
+      opt 2b pop 0.0001  test 0.0013  resume 0.0013  new 0.0215  keys 0.0014  values 0.0000 sums 0.0003  queue 0.0006 | balls 15050, new 88723, keys 45388
+      update temporaries (MiB): 3 0.14, 3q 0.10, 2a 0.57, 2b 0.55
+  11  opt 3  box 0.0011  replay+resume+new 0.0502                       values 0.0000 sums 0.0004               | replayed 157436 (prefixes 8303, bbox false positives 149133), new 64321
+      opt 3q pop 0.0000  replay+resume+new 0.0158 (keys inside)         values 0.0000 sums 0.0004  queue 0.0011 | replayed 8303 (prefixes 8303, false alarms 0), new 64321, keys 37725
+      opt 2a box 0.0013  test 0.0061  resume 0.0009  new 0.0152               values 0.0000 sums 0.0004               | balls 167485, new 64321
+      opt 2b pop 0.0000  test 0.0013  resume 0.0011  new 0.0155  keys 0.0010  values 0.0000 sums 0.0002  queue 0.0005 | balls 11736, new 64321, keys 37725
+      update temporaries (MiB): 3 0.09, 3q 0.08, 2a 0.43, 2b 0.42
+  12  opt 3  box 0.0014  replay+resume+new 0.0374                       values 0.0000 sums 0.0004               | replayed 120788 (prefixes 6034, bbox false positives 114754), new 44289
+      opt 3q pop 0.0000  replay+resume+new 0.0115 (keys inside)         values 0.0000 sums 0.0002  queue 0.0005 | replayed 6034 (prefixes 6034, false alarms 0), new 44289, keys 28148
+      opt 2a box 0.0012  test 0.0050  resume 0.0007  new 0.0116               values 0.0000 sums 0.0003               | balls 128486, new 44289
+      opt 2b pop 0.0000  test 0.0007  resume 0.0006  new 0.0111  keys 0.0008  values 0.0000 sums 0.0002  queue 0.0005 | balls 8618, new 44289, keys 28148
+      update temporaries (MiB): 3 0.06, 3q 0.06, 2a 0.32, 2b 0.32
+  13  opt 3  box 0.0011  replay+resume+new 0.0293                       values 0.0000 sums 0.0002               | replayed 93392 (prefixes 4037, bbox false positives 89355), new 25259
+      opt 3q pop 0.0000  replay+resume+new 0.0071 (keys inside)         values 0.0000 sums 0.0002  queue 0.0005 | replayed 4037 (prefixes 4037, false alarms 0), new 25259, keys 22679
+      opt 2a box 0.0011  test 0.0049  resume 0.0004  new 0.0074               values 0.0000 sums 0.0002               | balls 99046, new 25259
+      opt 2b pop 0.0000  test 0.0006  resume 0.0004  new 0.0071  keys 0.0005  values 0.0000 sums 0.0002  queue 0.0004 | balls 5728, new 25259, keys 22679
+      update temporaries (MiB): 3 0.06, 3q 0.04, 2a 0.23, 2b 0.21
+  14  opt 3  box 0.0010  replay+resume+new 0.0170                       values 0.0000 sums 0.0002               | replayed 56774 (prefixes 2027, bbox false positives 54747), new 11888
+      opt 3q pop 0.0000  replay+resume+new 0.0035 (keys inside)         values 0.0000 sums 0.0001  queue 0.0005 | replayed 2027 (prefixes 2027, false alarms 0), new 11888, keys 12703
+      opt 2a box 0.0011  test 0.0024  resume 0.0002  new 0.0036               values 0.0000 sums 0.0002               | balls 60280, new 11888
+      opt 2b pop 0.0000  test 0.0004  resume 0.0003  new 0.0037  keys 0.0002  values 0.0000 sums 0.0001  queue 0.0004 | balls 3124, new 11888, keys 12703
+      update temporaries (MiB): 3 0.03, 3q 0.03, 2a 0.14, 2b 0.14
+  15  opt 3  box 0.0009  replay+resume+new 0.0078                       values 0.0000 sums 0.0002               | replayed 28200 (prefixes 788, bbox false positives 27412), new 2540
+      opt 3q pop 0.0000  replay+resume+new 0.0009 (keys inside)         values 0.0000 sums 0.0001  queue 0.0003 | replayed 788 (prefixes 788, false alarms 0), new 2540, keys 3691
+      opt 2a box 0.0011  test 0.0012  resume 0.0001  new 0.0009               values 0.0000 sums 0.0001               | balls 29822, new 2540
+      opt 2b pop 0.0000  test 0.0002  resume 0.0001  new 0.0009  keys 0.0001  values 0.0000 sums 0.0001  queue 0.0003 | balls 1172, new 2540, keys 3691
+      update temporaries (MiB): 3 0.02, 3q 0.01, 2a 0.05, 2b 0.05
+  16  opt 3  box 0.0009  replay+resume+new 0.0026                       values 0.0000 sums 0.0001               | replayed 10109 (prefixes 32, bbox false positives 10077), new 385
+      opt 3q pop 0.0000  replay+resume+new 0.0002 (keys inside)         values 0.0000 sums 0.0001  queue 0.0003 | replayed 32 (prefixes 32, false alarms 0), new 385, keys 677
+      opt 2a box 0.0010  test 0.0004  resume 0.0000  new 0.0002               values 0.0000 sums 0.0001               | balls 10836, new 385
+      opt 2b pop 0.0000  test 0.0001  resume 0.0000  new 0.0002  keys 0.0000  values 0.0000 sums 0.0001  queue 0.0003 | balls 292, new 385, keys 677
+      update temporaries (MiB): 3 0.01, 3q 0.01, 2a 0.03, 2b 0.03
+[sample 2 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.198 s
+setup (each option's own same-seed initial solve): 1 0.196 s (sums only), 3 0.198 s, 3q 0.211 s (+ keys while walking, queue), 2a 0.237 s (recording every step), 2b 0.257 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.197 s
+setup (each option's own same-seed initial solve): 1 0.195 s (sums only), 3 0.197 s, 3q 0.211 s (+ keys while walking, queue), 2a 0.237 s (recording every step), 2b 0.256 s (+ keys and queue); initial solves bitwise identical: yes
+(a) g=1: totals over 16 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          3.479  1.00x  |  0.0000  0.0000  0.0000   3.4787  0.0000  0.0000  0.0000  0.0000 |    1863680    1863680            0    18006561           0              0          0          0
+  3  seed replay (WalkCache::advance)      0.809  4.30x  |  0.0183  0.0000  0.0000   0.7845  0.0000  0.0000  0.0059  0.0000 |     172336      66447            0     1321984     2538228        2364649     173579          0
+  3q seed replay + front-key queue         0.319 10.90x  |  0.0005  0.0000  0.0000   0.3041  0.0000  0.0000  0.0047  0.0099 |      66975      66447            0     1321984      179721           6142     173579     614746
+  2a stored steps + bbox                   0.431  8.08x  |  0.0202  0.0952  0.0191   0.2899  0.0000  0.0000  0.0061  0.0000 |     172336      66447      2710564     1321984           0              0     173579          0
+  2b stored steps + front-key queue        0.365  9.52x  |  0.0006  0.0194  0.0192   0.2927  0.0197  0.0000  0.0045  0.0091 |      66975      66447       246696     1321984           0              0     173579     614746
+  steps run by the updates, as a share of option 1's 18006561:
+    3   21.4% = new 7.3% + replayed 14.1% (prefixes of the re-walked walks 1.0%, bbox false positives replayed
+                to the end 13.1%)
+    3q   8.3% = new 7.3% + replayed 1.0% (prefixes 1.0%, false alarms 0.0%)
+    2a, 2b 7.3% (new steps only; the stored prefixes they skip are 1.0%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 0.168 s + updates 3.479 s = 3.647 s:  1.00x vs option 1,  0.27x vs option 3; overtakes 3 for the first 0.0 advances only
+    3  setup 0.173 s + updates 0.809 s = 0.982 s:  3.72x vs option 1,  1.00x vs option 3; overtakes 1 after 0.0 advances
+    3q setup 0.181 s + updates 0.319 s = 0.501 s:  7.28x vs option 1,  1.96x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 0.200 s + updates 0.431 s = 0.630 s:  5.79x vs option 1,  1.56x vs option 3; overtakes 3 after 1.1 advances; overtakes 1 after 0.2 advances
+    2b setup 0.213 s + updates 0.365 s = 0.578 s:  6.31x vs option 1,  1.70x vs option 3; overtakes 3 after 1.4 advances; overtakes 1 after 0.2 advances
+  reference solves (validation, not part of any option): 7.583 s = same-seed full solves 3.500 s + the same recording
+  every step 4.083 s (the cost of recording paths in a full solve: +17%)
+  over the 3 samples, median [min, max]: updates: opt 1 3.513 s [3.479, 3.514] | 3 0.810 s [0.809, 0.830] 4.30x [4.23, 4.34] | 3q 0.319 s [0.318, 0.323] 10.90x [10.87, 11.06] | 2a 0.439 s [0.431, 0.458] 8.00x [7.67, 8.08] | 2b 0.382 s [0.365, 0.383] 9.20x [9.18, 9.52]; vs 3: 3q 2.55x [2.53, 2.57], 2a 1.88x [1.77, 1.89], 2b 2.17x [2.12, 2.21]
+      setup + updates: opt 1 3.709 s [3.647, 3.709] | 3 1.007 s [0.982, 1.028] 3.68x [3.61, 3.72] | 3q 0.529 s [0.501, 0.534] 7.01x [6.94, 7.28] | 2a 0.676 s [0.630, 0.695] 5.49x [5.34, 5.79] | 2b 0.639 s [0.578, 0.639] 5.81x [5.80, 6.31]; vs 3: 3q 1.92x [1.90, 1.96], 2a 1.52x [1.45, 1.56], 2b 1.61x [1.58, 1.70]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%: 16 updates: 1 3.508 s | 3 0.828 s 4.24x | 3q 0.323 s 10.86x | 2a 0.449 s 7.82x | 2b 0.379 s 9.25x; vs 3: 3q 2.56x, 2a 1.84x, 2b 2.18x
+  updates slower than option 1: 3 0 of 16, 3q 0 of 16, 2a 0 of 16, 2b 0 of 16
+  updates slower than option 3: 3q 0 of 16, 2a 0 of 16, 2b 0 of 16
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.08 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 11.1 MiB at the start; at the peak 11.1 MiB + 0.1 MiB update temporaries = 11.3 MiB (largest temporaries 0.1 MiB); OS: +11.1 MiB for configuring it and its initial solve
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 15.6 MiB at the start; at the peak 15.6 MiB + 0.2 MiB update temporaries = 15.7 MiB (largest temporaries 0.2 MiB); OS: +15.6 MiB for configuring it and its initial solve
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 1291027 at the start (11.1 per walk), 1216516 at the peak (10.4 per walk, capacity 12.4)
+               total 57.1 MiB at the start; at the peak 62.0 MiB + 0.3 MiB update temporaries = 62.3 MiB (largest temporaries 0.8 MiB);
+               stored steps at the peak: 38.3 MiB payload, 45.5 MiB allocated; OS: +64.5 MiB for configuring it and its initial solve
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 1291027 at the start (11.1 per walk), 1216516 at the peak (10.4 per walk, capacity 12.4)
+               total 61.5 MiB at the start; at the peak 66.4 MiB + 0.3 MiB update temporaries = 66.8 MiB (largest temporaries 0.8 MiB);
+               stored steps at the peak: 38.3 MiB payload, 45.5 MiB allocated; OS: +68.7 MiB for configuring it and its initial solve
+    process: the largest private-bytes sample after a step is 247.4 MiB above the run's start, against 221.0 MiB
+    computed for the four caches and the two references then (+12%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 0.0e+00/0.0e+00/0.0e+00/0.0e+00,
+  max |dG| 1.8e-12/1.8e-12/1.8e-12/1.8e-12; entered walks 199341, 2b false alarms 1584, 2a box false positives 317667 -> PASS
+
+-- (b) g=min(1,sqrt(r/L)) --
+[sample 1 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.197 s
+setup (each option's own same-seed initial solve): 1 0.198 s (sums only), 3 0.197 s, 3q 0.211 s (+ keys while walking, queue), 2a 0.238 s (recording every step), 2b 0.256 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.2500  0.0600 |   3.73%    8.53%    3.73%    0.00% |  0.2000  0.0447  0.0212  0.0301  0.0237 |  4.47x  9.44x  6.65x  8.43x |  0.432 | 2b 1 2a 3q 3
+   2  0.3000  0.0600 |   4.43%   10.34%    4.43%    0.00% |  0.1982  0.0536  0.0264  0.0348  0.0321 |  3.70x  7.50x  5.69x  6.16x |  0.442 | 2a 2b 1 3 3q
+   3  0.3500  0.0600 |   4.99%   11.70%    4.99%    0.00% |  0.1928  0.0646  0.0298  0.0384  0.0346 |  2.98x  6.46x  5.03x  5.57x |  0.439 | 3q 1 2b 2a 3
+   4  0.4000  0.0600 |   5.40%   13.41%    5.40%    0.00% |  0.2097  0.0733  0.0328  0.0446  0.0372 |  2.86x  6.39x  4.71x  5.64x |  0.452 | 3 1 3q 2a 2b
+   5  0.4500  0.0600 |   5.58%   13.67%    5.58%    0.00% |  0.2074  0.0771  0.0346  0.0444  0.0414 |  2.69x  6.00x  4.67x  5.01x |  0.467 | 2a 3 2b 3q 1
+   6  0.5000  0.0600 |   5.63%   14.38%    5.63%    0.00% |  0.2118  0.0828  0.0342  0.0478  0.0410 |  2.56x  6.18x  4.43x  5.16x |  0.474 | 3q 2b 1 2a 3
+   7  0.5500  0.0600 |   5.57%   14.17%    6.02%    0.45% |  0.2099  0.0823  0.0361  0.0475  0.0401 |  2.55x  5.82x  4.42x  5.23x |  0.468 | 3q 1 2b 2a 3
+   8  0.6000  0.0600 |   5.23%   13.48%    5.23%    0.00% |  0.2232  0.0743  0.0331  0.0447  0.0376 |  3.00x  6.73x  4.99x  5.93x |  0.490 | 3q 2b 3 1 2a
+   9  0.6500  0.0600 |   4.54%   12.51%    4.54%    0.00% |  0.2244  0.0755  0.0299  0.0409  0.0340 |  2.97x  7.52x  5.49x  6.60x |  0.495 | 3q 2a 2b 3 1
+  10  0.7000  0.0600 |   3.82%   10.65%    3.82%    0.00% |  0.2307  0.0643  0.0251  0.0325  0.0293 |  3.59x  9.19x  7.10x  7.88x |  0.501 | 3q 3 2a 1 2b
+  11  0.7500  0.0600 |   2.95%    8.63%    2.95%    0.00% |  0.2288  0.0540  0.0185  0.0268  0.0221 |  4.24x 12.39x  8.53x 10.38x |  0.496 | 3 2a 3q 2b 1
+  12  0.8000  0.0600 |   2.22%    6.61%    2.22%    0.00% |  0.2351  0.0414  0.0148  0.0212  0.0170 |  5.68x 15.89x 11.10x 13.83x |  0.512 | 3q 2a 2b 3 1
+  13  0.8500  0.0590 |   1.45%    4.85%    1.45%    0.00% |  0.2362  0.0322  0.0080  0.0150  0.0120 |  7.34x 29.45x 15.70x 19.67x |  0.517 | 3q 1 2b 3 2a
+  14  0.9000  0.0450 |   0.94%    3.01%    0.94%    0.00% |  0.2402  0.0204  0.0068  0.0090  0.0074 | 11.75x 35.51x 26.61x 32.55x |  0.521 | 1 3q 3 2a 2b
+  15  0.9500  0.0270 |   0.33%    1.39%    0.33%    0.00% |  0.2384  0.0112  0.0036  0.0056  0.0046 | 21.34x 65.96x 42.21x 51.87x |  0.517 | 1 2b 3 3q 2a
+  16  1.0000  0.0090 |   0.22%    0.62%    0.22%    0.00% |  0.2414  0.0045  0.0024  0.0042  0.0019 | 53.90x 102.05x 57.67x 124.30x |  0.529 | 2b 3 3q 2a 1
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.4e-16 1.4e-16 1.4e-16 1.4e-16 | 3.4e-13 3.4e-13 3.4e-13 3.4e-13 | 0 0 0 0 | 0 | 0 0 | 0 5595 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 3.9e-16 3.9e-16 3.9e-16 3.9e-16 | 5.7e-13 5.7e-13 5.7e-13 5.7e-13 | 0 0 0 0 | 0 | 0 0 | 0 6877 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 3.9e-16 3.9e-16 3.9e-16 3.9e-16 | 5.1e-13 5.1e-13 5.1e-13 5.1e-13 | 0 0 0 0 | 0 | 0 0 | 0 7820 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 6.7e-16 6.7e-16 6.7e-16 6.7e-16 | 1.1e-12 1.1e-12 1.1e-12 1.1e-12 | 0 0 0 0 | 0 | 0 0 | 0 9325 | 0 0 0
+   5 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 9.4e-16 9.4e-16 9.4e-16 9.4e-16 | 1.4e-12 1.4e-12 1.4e-12 1.4e-12 | 0 0 0 0 | 0 | 0 1 | 0 9428 | 0 0 0
+   6 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 9.4e-16 9.4e-16 9.4e-16 9.4e-16 | 1.4e-12 1.4e-12 1.4e-12 1.4e-12 | 0 0 0 0 | 0 | 0 0 | 0 10182 | 0 0 0
+   7 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 2.4e-12 2.4e-12 2.4e-12 2.4e-12 | 0 0 0 0 | 0 | 0 527 | 0 10020 | 0 0 0
+   8 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 8.3e-16 8.3e-16 8.3e-16 8.3e-16 | 1.4e-12 1.4e-12 1.4e-12 1.4e-12 | 0 0 0 0 | 0 | 0 0 | 0 9603 | 0 0 0
+   9 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 7.8e-16 7.8e-16 7.8e-16 7.8e-16 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 9280 | 0 0 0
+  10 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 2.5e-12 2.5e-12 2.5e-12 2.5e-12 | 0 0 0 0 | 0 | 0 0 | 0 7952 | 0 0 0
+  11 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 3.4e-12 3.4e-12 3.4e-12 3.4e-12 | 0 0 0 0 | 0 | 0 0 | 0 6616 | 0 0 0
+  12 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.7e-15 1.7e-15 1.7e-15 1.7e-15 | 3.6e-12 3.6e-12 3.6e-12 3.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 5114 | 0 0 0
+  13 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 3.9e-12 3.9e-12 3.9e-12 3.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 3963 | 0 0 0
+  14 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.1e-15 1.1e-15 1.1e-15 1.1e-15 | 3.9e-12 3.9e-12 3.9e-12 3.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 2409 | 0 0 0
+  15 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 4.5e-12 4.5e-12 4.5e-12 4.5e-12 | 0 0 0 0 | 0 | 0 0 | 0 1238 | 0 0 0
+  16 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.1e-15 1.1e-15 1.1e-15 1.1e-15 | 5.1e-12 5.1e-12 5.1e-12 5.1e-12 | 0 0 0 0 | 0 | 0 0 | 0 467 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0011  replay+resume+new 0.0418                       values 0.0014 sums 0.0004               | replayed 137952 (prefixes 11167, bbox false positives 126785), new 86336
+      opt 3q pop 0.0000  replay+resume+new 0.0188 (keys inside)         values 0.0014 sums 0.0003  queue 0.0006 | replayed 11167 (prefixes 11167, false alarms 0), new 86336, keys 29722
+      opt 2a box 0.0018  test 0.0058  resume 0.0013  new 0.0193               values 0.0014 sums 0.0004               | balls 147888, new 86336
+      opt 2b pop 0.0000  test 0.0009  resume 0.0011  new 0.0183  keys 0.0012  values 0.0013 sums 0.0003  queue 0.0006 | balls 15508, new 86336, keys 29722
+      update temporaries (MiB): 3 0.09, 3q 0.10, 2a 0.52, 2b 0.54
+   2  opt 3  box 0.0009  replay+resume+new 0.0509                       values 0.0014 sums 0.0005               | replayed 168727 (prefixes 14217, bbox false positives 154510), new 105758
+      opt 3q pop 0.0000  replay+resume+new 0.0236 (keys inside)         values 0.0015 sums 0.0006  queue 0.0007 | replayed 14217 (prefixes 14217, false alarms 0), new 105758, keys 40182
+      opt 2a box 0.0013  test 0.0067  resume 0.0016  new 0.0230               values 0.0015 sums 0.0006               | balls 180768, new 105758
+      opt 2b pop 0.0000  test 0.0019  resume 0.0018  new 0.0238  keys 0.0019  values 0.0015 sums 0.0005  queue 0.0007 | balls 19381, new 105758, keys 40182
+      update temporaries (MiB): 3 0.09, 3q 0.12, 2a 0.61, 2b 0.63
+   3  opt 3  box 0.0011  replay+resume+new 0.0616                       values 0.0014 sums 0.0006               | replayed 192942 (prefixes 15570, bbox false positives 177372), new 118987
+      opt 3q pop 0.0000  replay+resume+new 0.0264 (keys inside)         values 0.0021 sums 0.0005  queue 0.0007 | replayed 15570 (prefixes 15570, false alarms 0), new 118987, keys 47322
+      opt 2a box 0.0014  test 0.0081  resume 0.0017  new 0.0253               values 0.0014 sums 0.0005               | balls 206571, new 118987
+      opt 2b pop 0.0001  test 0.0018  resume 0.0019  new 0.0263  keys 0.0020  values 0.0014 sums 0.0005  queue 0.0007 | balls 21379, new 118987, keys 47322
+      update temporaries (MiB): 3 0.14, 3q 0.13, 2a 0.72, 2b 0.73
+   4  opt 3  box 0.0012  replay+resume+new 0.0700                       values 0.0014 sums 0.0007               | replayed 224327 (prefixes 16482, bbox false positives 207845), new 130397
+      opt 3q pop 0.0001  replay+resume+new 0.0298 (keys inside)         values 0.0014 sums 0.0007  queue 0.0009 | replayed 16482 (prefixes 16482, false alarms 0), new 130397, keys 55390
+      opt 2a box 0.0016  test 0.0091  resume 0.0020  new 0.0300               values 0.0014 sums 0.0005               | balls 239946, new 130397
+      opt 2b pop 0.0001  test 0.0018  resume 0.0017  new 0.0289  keys 0.0020  values 0.0014 sums 0.0005  queue 0.0008 | balls 22776, new 130397, keys 55390
+      update temporaries (MiB): 3 0.14, 3q 0.14, 2a 0.77, 2b 0.78
+   5  opt 3  box 0.0012  replay+resume+new 0.0737                       values 0.0014 sums 0.0006               | replayed 227848 (prefixes 17995, bbox false positives 209853), new 135843
+      opt 3q pop 0.0000  replay+resume+new 0.0317 (keys inside)         values 0.0015 sums 0.0006  queue 0.0008 | replayed 18011 (prefixes 17995, false alarms 16), new 135843, keys 58844
+      opt 2a box 0.0015  test 0.0093  resume 0.0019  new 0.0296               values 0.0015 sums 0.0006               | balls 243775, new 135843
+      opt 2b pop 0.0000  test 0.0021  resume 0.0021  new 0.0316  keys 0.0026  values 0.0016 sums 0.0007  queue 0.0007 | balls 24511, new 135843, keys 58844
+      update temporaries (MiB): 3 0.14, 3q 0.15, 2a 0.79, 2b 0.81
+   6  opt 3  box 0.0012  replay+resume+new 0.0794                       values 0.0015 sums 0.0007               | replayed 242074 (prefixes 18967, bbox false positives 223107), new 136360
+      opt 3q pop 0.0000  replay+resume+new 0.0313 (keys inside)         values 0.0015 sums 0.0006  queue 0.0008 | replayed 18967 (prefixes 18967, false alarms 0), new 136360, keys 47510
+      opt 2a box 0.0014  test 0.0102  resume 0.0021  new 0.0318               values 0.0015 sums 0.0007               | balls 258819, new 136360
+      opt 2b pop 0.0001  test 0.0024  resume 0.0024  new 0.0311  keys 0.0021  values 0.0015 sums 0.0006  queue 0.0008 | balls 25530, new 136360, keys 47510
+      update temporaries (MiB): 3 0.14, 3q 0.15, 2a 0.80, 2b 0.81
+   7  opt 3  box 0.0014  replay+resume+new 0.0787                       values 0.0015 sums 0.0007               | replayed 236665 (prefixes 18271, bbox false positives 218394), new 137348
+      opt 3q pop 0.0000  replay+resume+new 0.0330 (keys inside)         values 0.0015 sums 0.0007  queue 0.0008 | replayed 24397 (prefixes 18271, false alarms 6126), new 137348, keys 65522
+      opt 2a box 0.0014  test 0.0096  resume 0.0021  new 0.0316               values 0.0020 sums 0.0007               | balls 253175, new 137348
+      opt 2b pop 0.0001  test 0.0016  resume 0.0015  new 0.0305  keys 0.0034  values 0.0017 sums 0.0006  queue 0.0008 | balls 31414, new 137348, keys 65522
+      update temporaries (MiB): 3 0.14, 3q 0.16, 2a 0.79, 2b 0.82
+   8  opt 3  box 0.0009  replay+resume+new 0.0719                       values 0.0010 sums 0.0005               | replayed 230591 (prefixes 15402, bbox false positives 215189), new 125600
+      opt 3q pop 0.0000  replay+resume+new 0.0304 (keys inside)         values 0.0015 sums 0.0006  queue 0.0007 | replayed 15402 (prefixes 15402, false alarms 0), new 125600, keys 59586
+      opt 2a box 0.0014  test 0.0094  resume 0.0018  new 0.0299               values 0.0015 sums 0.0007               | balls 246289, new 125600
+      opt 2b pop 0.0001  test 0.0016  resume 0.0017  new 0.0301  keys 0.0020  values 0.0013 sums 0.0004  queue 0.0005 | balls 21497, new 125600, keys 59586
+      update temporaries (MiB): 3 0.14, 3q 0.14, 2a 0.75, 2b 0.76
+   9  opt 3  box 0.0012  replay+resume+new 0.0720                       values 0.0016 sums 0.0007               | replayed 221238 (prefixes 13691, bbox false positives 207547), new 107950
+      opt 3q pop 0.0000  replay+resume+new 0.0268 (keys inside)         values 0.0016 sums 0.0007  queue 0.0007 | replayed 13691 (prefixes 13691, false alarms 0), new 107950, keys 59657
+      opt 2a box 0.0014  test 0.0090  resume 0.0016  new 0.0260               values 0.0018 sums 0.0009               | balls 235807, new 107950
+      opt 2b pop 0.0001  test 0.0020  resume 0.0020  new 0.0256  keys 0.0015  values 0.0015 sums 0.0006  queue 0.0007 | balls 18980, new 107950, keys 59657
+      update temporaries (MiB): 3 0.14, 3q 0.12, 2a 0.65, 2b 0.65
+  10  opt 3  box 0.0011  replay+resume+new 0.0608                       values 0.0017 sums 0.0007               | replayed 189165 (prefixes 10596, bbox false positives 178569), new 88723
+      opt 3q pop 0.0000  replay+resume+new 0.0222 (keys inside)         values 0.0016 sums 0.0006  queue 0.0006 | replayed 10596 (prefixes 10596, false alarms 0), new 88723, keys 45388
+      opt 2a box 0.0014  test 0.0073  resume 0.0012  new 0.0204               values 0.0015 sums 0.0007               | balls 201571, new 88723
+      opt 2b pop 0.0001  test 0.0017  resume 0.0012  new 0.0220  keys 0.0014  values 0.0016 sums 0.0006  queue 0.0006 | balls 15050, new 88723, keys 45388
+      update temporaries (MiB): 3 0.14, 3q 0.10, 2a 0.57, 2b 0.55
+  11  opt 3  box 0.0011  replay+resume+new 0.0501                       values 0.0019 sums 0.0009               | replayed 157436 (prefixes 8303, bbox false positives 149133), new 64321
+      opt 3q pop 0.0000  replay+resume+new 0.0153 (keys inside)         values 0.0018 sums 0.0007  queue 0.0006 | replayed 8303 (prefixes 8303, false alarms 0), new 64321, keys 37725
+      opt 2a box 0.0013  test 0.0064  resume 0.0010  new 0.0158               values 0.0017 sums 0.0007               | balls 167485, new 64321
+      opt 2b pop 0.0000  test 0.0012  resume 0.0011  new 0.0158  keys 0.0011  values 0.0016 sums 0.0007  queue 0.0006 | balls 11736, new 64321, keys 37725
+      update temporaries (MiB): 3 0.09, 3q 0.08, 2a 0.43, 2b 0.42
+  12  opt 3  box 0.0010  replay+resume+new 0.0382                       values 0.0016 sums 0.0006               | replayed 120788 (prefixes 6034, bbox false positives 114754), new 44289
+      opt 3q pop 0.0000  replay+resume+new 0.0116 (keys inside)         values 0.0021 sums 0.0006  queue 0.0005 | replayed 6034 (prefixes 6034, false alarms 0), new 44289, keys 28148
+      opt 2a box 0.0012  test 0.0050  resume 0.0008  new 0.0118               values 0.0018 sums 0.0006               | balls 128486, new 44289
+      opt 2b pop 0.0000  test 0.0007  resume 0.0006  new 0.0118  keys 0.0010  values 0.0017 sums 0.0006  queue 0.0005 | balls 8618, new 44289, keys 28148
+      update temporaries (MiB): 3 0.06, 3q 0.06, 2a 0.32, 2b 0.32
+  13  opt 3  box 0.0010  replay+resume+new 0.0287                       values 0.0017 sums 0.0007               | replayed 93392 (prefixes 4037, bbox false positives 89355), new 25259
+      opt 3q pop 0.0000  replay+resume+new 0.0057 (keys inside)         values 0.0013 sums 0.0006  queue 0.0005 | replayed 4037 (prefixes 4037, false alarms 0), new 25259, keys 22679
+      opt 2a box 0.0012  test 0.0040  resume 0.0004  new 0.0070               values 0.0017 sums 0.0006               | balls 99046, new 25259
+      opt 2b pop 0.0000  test 0.0010  resume 0.0005  new 0.0073  keys 0.0004  values 0.0017 sums 0.0006  queue 0.0004 | balls 5728, new 25259, keys 22679
+      update temporaries (MiB): 3 0.06, 3q 0.04, 2a 0.23, 2b 0.21
+  14  opt 3  box 0.0010  replay+resume+new 0.0170                       values 0.0018 sums 0.0006               | replayed 56774 (prefixes 2027, bbox false positives 54747), new 11888
+      opt 3q pop 0.0000  replay+resume+new 0.0036 (keys inside)         values 0.0020 sums 0.0007  queue 0.0004 | replayed 2027 (prefixes 2027, false alarms 0), new 11888, keys 12703
+      opt 2a box 0.0011  test 0.0024  resume 0.0002  new 0.0038               values 0.0010 sums 0.0004               | balls 60280, new 11888
+      opt 2b pop 0.0000  test 0.0004  resume 0.0003  new 0.0037  keys 0.0002  values 0.0018 sums 0.0006  queue 0.0004 | balls 3124, new 11888, keys 12703
+      update temporaries (MiB): 3 0.03, 3q 0.03, 2a 0.14, 2b 0.14
+  15  opt 3  box 0.0010  replay+resume+new 0.0078                       values 0.0018 sums 0.0006               | replayed 28200 (prefixes 788, bbox false positives 27412), new 2540
+      opt 3q pop 0.0000  replay+resume+new 0.0009 (keys inside)         values 0.0018 sums 0.0006  queue 0.0003 | replayed 788 (prefixes 788, false alarms 0), new 2540, keys 3691
+      opt 2a box 0.0011  test 0.0012  resume 0.0001  new 0.0009               values 0.0018 sums 0.0006               | balls 29822, new 2540
+      opt 2b pop 0.0000  test 0.0002  resume 0.0001  new 0.0009  keys 0.0001  values 0.0020 sums 0.0008  queue 0.0005 | balls 1172, new 2540, keys 3691
+      update temporaries (MiB): 3 0.02, 3q 0.01, 2a 0.05, 2b 0.05
+  16  opt 3  box 0.0007  replay+resume+new 0.0022                       values 0.0011 sums 0.0004               | replayed 10109 (prefixes 32, bbox false positives 10077), new 385
+      opt 3q pop 0.0000  replay+resume+new 0.0002 (keys inside)         values 0.0012 sums 0.0006  queue 0.0003 | replayed 32 (prefixes 32, false alarms 0), new 385, keys 677
+      opt 2a box 0.0011  test 0.0004  resume 0.0000  new 0.0002               values 0.0018 sums 0.0006               | balls 10836, new 385
+      opt 2b pop 0.0000  test 0.0000  resume 0.0000  new 0.0002  keys 0.0000  values 0.0011 sums 0.0004  queue 0.0002 | balls 292, new 385, keys 677
+      update temporaries (MiB): 3 0.01, 3q 0.01, 2a 0.03, 2b 0.03
+[sample 2 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.199 s
+setup (each option's own same-seed initial solve): 1 0.196 s (sums only), 3 0.199 s, 3q 0.204 s (+ keys while walking, queue), 2a 0.233 s (recording every step), 2b 0.260 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.2000: 455 points, 116480 walks counted of 116480, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 10.1, 0.197 s
+setup (each option's own same-seed initial solve): 1 0.191 s (sums only), 3 0.197 s, 3q 0.211 s (+ keys while walking, queue), 2a 0.227 s (recording every step), 2b 0.251 s (+ keys and queue); initial solves bitwise identical: yes
+(b) g=min(1,sqrt(r/L)): totals over 16 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          3.528  1.00x  |  0.0000  0.0000  0.0000   3.5283  0.0000  0.0000  0.0000  0.0000 |    1863680    1863680            0    18006561           0              0          0          0
+  3  seed replay (WalkCache::advance)      0.856  4.12x  |  0.0171  0.0000  0.0000   0.8050  0.0000  0.0240  0.0098  0.0000 |     172336      66447            0     1321984     2538228        2364649     173579          0
+  3q seed replay + front-key queue         0.357  9.88x  |  0.0005  0.0000  0.0000   0.3113  0.0000  0.0256  0.0098  0.0100 |      66975      66447            0     1321984      179721           6142     173579     614746
+  2a stored steps + bbox                   0.487  7.24x  |  0.0216  0.1039  0.0199   0.3064  0.0000  0.0254  0.0098  0.0000 |     172336      66447      2710564     1321984           0              0     173579          0
+  2b stored steps + front-key queue        0.416  8.48x  |  0.0007  0.0213  0.0201   0.3078  0.0228  0.0246  0.0091  0.0094 |      66975      66447       246696     1321984           0              0     173579     614746
+  steps run by the updates, as a share of option 1's 18006561:
+    3   21.4% = new 7.3% + replayed 14.1% (prefixes of the re-walked walks 1.0%, bbox false positives replayed
+                to the end 13.1%)
+    3q   8.3% = new 7.3% + replayed 1.0% (prefixes 1.0%, false alarms 0.0%)
+    2a, 2b 7.3% (new steps only; the stored prefixes they skip are 1.0%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 0.198 s + updates 3.528 s = 3.726 s:  1.00x vs option 1,  0.28x vs option 3; overtakes 3 never
+    3  setup 0.197 s + updates 0.856 s = 1.053 s:  3.54x vs option 1,  1.00x vs option 3; overtakes 1 from the start
+    3q setup 0.211 s + updates 0.357 s = 0.568 s:  6.56x vs option 1,  1.85x vs option 3; overtakes 3 after 0.5 advances; overtakes 1 after 0.1 advances
+    2a setup 0.238 s + updates 0.487 s = 0.726 s:  5.13x vs option 1,  1.45x vs option 3; overtakes 3 after 1.8 advances; overtakes 1 after 0.2 advances
+    2b setup 0.256 s + updates 0.416 s = 0.672 s:  5.54x vs option 1,  1.57x vs option 3; overtakes 3 after 2.1 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 7.752 s = same-seed full solves 3.531 s + the same recording
+  every step 4.220 s (the cost of recording paths in a full solve: +20%)
+  over the 3 samples, median [min, max]: updates: opt 1 3.522 s [3.521, 3.528] | 3 0.856 s [0.852, 0.865] 4.12x [4.07, 4.13] | 3q 0.356 s [0.352, 0.357] 9.89x [9.88, 10.01] | 2a 0.478 s [0.477, 0.487] 7.37x [7.24, 7.39] | 2b 0.418 s [0.416, 0.419] 8.43x [8.40, 8.48]; vs 3: 3q 2.42x [2.40, 2.43], 2a 1.79x [1.76, 1.81], 2b 2.06x [2.04, 2.06]
+      setup + updates: opt 1 3.718 s [3.713, 3.726] | 3 1.053 s [1.051, 1.062] 3.54x [3.50, 3.54] | 3q 0.567 s [0.556, 0.568] 6.56x [6.55, 6.69] | 2a 0.710 s [0.706, 0.726] 5.24x [5.13, 5.26] | 2b 0.672 s [0.670, 0.678] 5.54x [5.48, 5.54]; vs 3: 3q 1.87x [1.85, 1.89], 2a 1.48x [1.45, 1.51], 2b 1.57x [1.55, 1.59]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%: 16 updates: 1 3.528 s | 3 0.863 s 4.09x | 3q 0.354 s 9.97x | 2a 0.484 s 7.29x | 2b 0.420 s 8.41x; vs 3: 3q 2.44x, 2a 1.78x, 2b 2.06x
+  updates slower than option 1: 3 0 of 16, 3q 0 of 16, 2a 0 of 16, 2b 0 of 16
+  updates slower than option 3: 3q 0 of 16, 2a 0 of 16, 2b 0 of 16
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.08 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 11.1 MiB at the start; at the peak 11.1 MiB + 0.1 MiB update temporaries = 11.3 MiB (largest temporaries 0.1 MiB); OS: +11.1 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 15.6 MiB at the start; at the peak 15.6 MiB + 0.2 MiB update temporaries = 15.7 MiB (largest temporaries 0.2 MiB); OS: +15.7 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 1291027 at the start (11.1 per walk), 1216516 at the peak (10.4 per walk, capacity 12.4)
+               total 57.1 MiB at the start; at the peak 62.0 MiB + 0.3 MiB update temporaries = 62.3 MiB (largest temporaries 0.8 MiB);
+               stored steps at the peak: 38.3 MiB payload, 45.5 MiB allocated; OS: +65.5 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 1291027 at the start (11.1 per walk), 1216516 at the peak (10.4 per walk, capacity 12.4)
+               total 61.5 MiB at the start; at the peak 66.4 MiB + 0.3 MiB update temporaries = 66.8 MiB (largest temporaries 0.8 MiB);
+               stored steps at the peak: 38.3 MiB payload, 45.5 MiB allocated; OS: +67.4 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 247.1 MiB above the run's start, against 221.0 MiB
+    computed for the four caches and the two references then (+12%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 1.7e-15/1.7e-15/1.7e-15/1.7e-15,
+  max |dG| 5.1e-12/5.1e-12/5.1e-12/5.1e-12; entered walks 199341, 2b false alarms 1584, 2a box false positives 317667 -> PASS
+
+=== (ii) check 3's schedule: full solve at t = 0.5, then 4 steps of dt = 1/8, 1/16, 1/32, 1/64 (one run per dt);
+    default scene: lattice k = 12 + slice (res 64): 1936 points (165 with grad H), N = 256, check 3's seeds (tag 800) ===
+
+-- (a) g=1, dt = 1/8 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.231 s
+setup (each option's own same-seed initial solve): 1 1.233 s (sums only), 3 1.231 s, 3q 1.291 s (+ keys while walking, queue), 2a 1.434 s (recording every step), 2b 1.532 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.6250  0.1500 |  10.34%   22.82%   10.67%    0.33% |  1.2438  0.4963  0.2311  0.2949  0.2831 |  2.51x  5.38x  4.22x  4.39x |  2.661 | 1 2b 3q 2a 3
+   2  0.7500  0.1500 |   7.88%   18.94%    7.88%    0.00% |  1.2298  0.4146  0.1786  0.2381  0.2068 |  2.97x  6.89x  5.17x  5.95x |  2.682 | 2b 3 2a 3q 1
+   3  0.8750  0.1437 |   4.69%   12.49%    4.69%    0.00% |  1.2117  0.2827  0.1009  0.1345  0.1217 |  4.29x 12.01x  9.01x  9.95x |  2.640 | 2a 3q 2b 1 3
+   4  1.0000  0.0562 |   1.44%    5.08%    1.44%    0.00% |  1.2803  0.1046  0.0269  0.0453  0.0302 | 12.24x 47.59x 28.25x 42.38x |  2.745 | 2b 1 2a 3 3q
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 1626 | 0 61868 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 54820 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 38694 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 18050 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0065  replay+resume+new 0.4871                       values 0.0000 sums 0.0026               | replayed 1473521 (prefixes 116268, bbox false positives 1357253), new 1062558
+      opt 3q pop 0.0002  replay+resume+new 0.2212 (keys inside)         values 0.0000 sums 0.0024  queue 0.0072 | replayed 143267 (prefixes 116268, false alarms 26999), new 1062558, keys 735537
+      opt 2a box 0.0072  test 0.0573  resume 0.0141  new 0.2130               values 0.0000 sums 0.0031               | balls 1586637, new 1062558
+      opt 2b pop 0.0005  test 0.0160  resume 0.0162  new 0.2212  keys 0.0195  values 0.0000 sums 0.0024  queue 0.0070 | balls 196141, new 1062558, keys 735537
+      update temporaries (MiB): 3 1.05, 3q 1.21, 2a 6.12, 2b 6.37
+   2  opt 3  box 0.0050  replay+resume+new 0.4072                       values 0.0000 sums 0.0023               | replayed 1306255 (prefixes 93563, bbox false positives 1212692), new 785964
+      opt 3q pop 0.0002  replay+resume+new 0.1716 (keys inside)         values 0.0000 sums 0.0028  queue 0.0041 | replayed 93563 (prefixes 93563, false alarms 0), new 785964, keys 599974
+      opt 2a box 0.0061  test 0.0541  resume 0.0115  new 0.1633               values 0.0000 sums 0.0028               | balls 1400110, new 785964
+      opt 2b pop 0.0002  test 0.0088  resume 0.0121  new 0.1639  keys 0.0145  values 0.0000 sums 0.0020  queue 0.0051 | balls 132598, new 785964, keys 599974
+      update temporaries (MiB): 3 1.05, 3q 0.89, 2a 4.77, 2b 4.78
+   3  opt 3  box 0.0049  replay+resume+new 0.2762                       values 0.0000 sums 0.0017               | replayed 915293 (prefixes 58726, bbox false positives 856567), new 419505
+      opt 3q pop 0.0001  replay+resume+new 0.0961 (keys inside)         values 0.0000 sums 0.0013  queue 0.0033 | replayed 58726 (prefixes 58726, false alarms 0), new 419505, keys 410118
+      opt 2a box 0.0041  test 0.0353  resume 0.0064  new 0.0870               values 0.0000 sums 0.0015               | balls 977213, new 419505
+      opt 2b pop 0.0002  test 0.0080  resume 0.0073  new 0.0915  keys 0.0089  values 0.0000 sums 0.0015  queue 0.0041 | balls 81952, new 419505, keys 410118
+      update temporaries (MiB): 3 0.70, 3q 0.53, 2a 2.92, 2b 2.87
+   4  opt 3  box 0.0042  replay+resume+new 0.0993                       values 0.0000 sums 0.0010               | replayed 411055 (prefixes 21490, bbox false positives 389565), new 102559
+      opt 3q pop 0.0001  replay+resume+new 0.0241 (keys inside)         values 0.0000 sums 0.0006  queue 0.0020 | replayed 21490 (prefixes 21490, false alarms 0), new 102559, keys 131183
+      opt 2a box 0.0046  test 0.0152  resume 0.0024  new 0.0223               values 0.0000 sums 0.0008               | balls 436239, new 102559
+      opt 2b pop 0.0001  test 0.0021  resume 0.0021  new 0.0208  keys 0.0026  values 0.0000 sums 0.0007  queue 0.0019 | balls 28624, new 102559, keys 131183
+      update temporaries (MiB): 3 0.21, 3q 0.16, 2a 0.92, 2b 0.88
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.229 s
+setup (each option's own same-seed initial solve): 1 1.233 s (sums only), 3 1.229 s, 3q 1.289 s (+ keys while walking, queue), 2a 1.432 s (recording every step), 2b 1.532 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.244 s
+setup (each option's own same-seed initial solve): 1 1.239 s (sums only), 3 1.244 s, 3q 1.322 s (+ keys while walking, queue), 2a 1.462 s (recording every step), 2b 1.544 s (+ keys and queue); initial solves bitwise identical: yes
+(a) g=1: totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          4.966  1.00x  |  0.0000  0.0000  0.0000   4.9656  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29088706           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.298  3.83x  |  0.0206  0.0000  0.0000   1.2698  0.0000  0.0000  0.0076  0.0000 |     294075     120643            0     2370586     4106124        3816077     290047          0
+  3q seed replay + front-key queue         0.538  9.24x  |  0.0006  0.0000  0.0000   0.5131  0.0000  0.0000  0.0072  0.0166 |     122269     120643            0     2370586      317046          26999     290047    1876812
+  2a stored steps + bbox                   0.713  6.97x  |  0.0220  0.1619  0.0345   0.4857  0.0000  0.0000  0.0082  0.0000 |     294075     120643      4400199     2370586           0              0     290047          0
+  2b stored steps + front-key queue        0.642  7.74x  |  0.0010  0.0349  0.0379   0.4973  0.0455  0.0000  0.0066  0.0181 |     122269     120643       439315     2370586           0              0     290047    1876812
+  steps run by the updates, as a share of option 1's 29088706:
+    3   22.3% = new 8.1% + replayed 14.1% (prefixes of the re-walked walks 1.0%, bbox false positives replayed
+                to the end 13.1%)
+    3q   9.2% = new 8.1% + replayed 1.1% (prefixes 1.0%, false alarms 0.1%)
+    2a, 2b 8.1% (new steps only; the stored prefixes they skip are 1.0%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.233 s + updates 4.966 s = 6.198 s:  1.00x vs option 1,  0.41x vs option 3; overtakes 3 never
+    3  setup 1.231 s + updates 1.298 s = 2.529 s:  2.45x vs option 1,  1.00x vs option 3; overtakes 1 from the start
+    3q setup 1.291 s + updates 0.538 s = 1.829 s:  3.39x vs option 1,  1.38x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.434 s + updates 0.713 s = 2.147 s:  2.89x vs option 1,  1.18x vs option 3; overtakes 3 after 1.4 advances; overtakes 1 after 0.2 advances
+    2b setup 1.532 s + updates 0.642 s = 2.174 s:  2.85x vs option 1,  1.16x vs option 3; overtakes 3 after 1.8 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 10.728 s = same-seed full solves 4.972 s + the same recording
+  every step 5.756 s (the cost of recording paths in a full solve: +16%)
+  over the 3 samples, median [min, max]: updates: opt 1 4.966 s [4.769, 5.077] | 3 1.296 s [1.234, 1.298] 3.86x [3.83, 3.92] | 3q 0.538 s [0.518, 0.540] 9.24x [9.21, 9.40] | 2a 0.713 s [0.702, 0.714] 6.97x [6.79, 7.11] | 2b 0.642 s [0.638, 0.652] 7.74x [7.32, 7.96]; vs 3: 3q 2.40x [2.38, 2.42], 2a 1.81x [1.76, 1.82], 2b 2.02x [1.89, 2.03]
+      setup + updates: opt 1 6.198 s [6.002, 6.316] | 3 2.529 s [2.463, 2.539] 2.45x [2.44, 2.49] | 3q 1.829 s [1.807, 1.862] 3.39x [3.32, 3.39] | 2a 2.147 s [2.134, 2.177] 2.89x [2.81, 2.90] | 2b 2.183 s [2.174, 2.184] 2.85x [2.75, 2.89]; vs 3: 3q 1.36x [1.36, 1.38], 2a 1.17x [1.15, 1.18], 2b 1.16x [1.13, 1.16]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 4.966 s | 3 1.292 s 3.84x | 3q 0.534 s 9.29x | 2a 0.706 s 7.03x | 2b 0.639 s 7.77x; vs 3: 3q 2.42x, 2a 1.83x, 2b 2.02x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +40.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 1.2 MiB update temporaries = 61.1 MiB (largest temporaries 1.2 MiB); OS: +60.1 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7721217 at the peak (15.6 per walk, capacity 16.7)
+               total 312.9 MiB at the start; at the peak 324.8 MiB + 2.9 MiB update temporaries = 327.7 MiB (largest temporaries 6.1 MiB);
+               stored steps at the peak: 243.0 MiB payload, 261.1 MiB allocated; OS: +340.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7721217 at the peak (15.6 per walk, capacity 16.7)
+               total 331.8 MiB at the start; at the peak 343.7 MiB + 2.9 MiB update temporaries = 346.6 MiB (largest temporaries 6.4 MiB);
+               stored steps at the peak: 243.0 MiB payload, 261.1 MiB allocated; OS: +353.6 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 1201.3 MiB above the run's start, against 1117.3 MiB
+    computed for the four caches and the two references then (+8%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 0.0e+00/0.0e+00/0.0e+00/0.0e+00,
+  max |dG| 2.9e-12/2.9e-12/2.9e-12/2.9e-12; entered walks 361929, 2b false alarms 4878, 2a box false positives 520296 -> PASS
+
+-- (a) g=1, dt = 1/16 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.243 s
+setup (each option's own same-seed initial solve): 1 1.245 s (sums only), 3 1.243 s, 3q 1.316 s (+ keys while walking, queue), 2a 1.446 s (recording every step), 2b 1.565 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5625  0.0750 |   8.24%   20.81%    8.57%    0.33% |  1.2515  0.4595  0.2050  0.2498  0.2318 |  2.72x  6.10x  5.01x  5.40x |  2.683 | 3 3q 2a 1 2b
+   2  0.6250  0.0750 |   7.47%   19.72%    7.47%    0.00% |  1.2618  0.4317  0.1815  0.2414  0.2073 |  2.92x  6.95x  5.23x  6.09x |  3.004 | 2b 3 1 2a 3q
+   3  0.6875  0.0750 |   6.56%   17.64%    6.56%    0.00% |  1.3515  0.4268  0.1707  0.2201  0.1969 |  3.17x  7.92x  6.14x  6.86x |  2.712 | 3q 1 2a 2b 3
+   4  0.7500  0.0750 |   5.26%   14.92%    5.26%    0.00% |  1.3255  0.3426  0.1290  0.1785  0.1487 |  3.87x 10.28x  7.42x  8.92x |  2.826 | 1 2b 3 2a 3q
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 1640 | 0 62314 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 60737 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 54938 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.9e-12 2.9e-12 2.9e-12 2.9e-12 | 0 0 0 0 | 0 | 0 0 | 0 47839 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0057  replay+resume+new 0.4510                       values 0.0000 sums 0.0028               | replayed 1487164 (prefixes 107768, bbox false positives 1379396), new 876956
+      opt 3q pop 0.0002  replay+resume+new 0.1977 (keys inside)         values 0.0000 sums 0.0020  queue 0.0051 | replayed 135095 (prefixes 107768, false alarms 27327), new 876956, keys 462711
+      opt 2a box 0.0058  test 0.0530  resume 0.0127  new 0.1750               values 0.0000 sums 0.0032               | balls 1590309, new 876956
+      opt 2b pop 0.0006  test 0.0142  resume 0.0143  new 0.1808  keys 0.0134  values 0.0000 sums 0.0023  queue 0.0058 | balls 177566, new 876956, keys 462711
+      update temporaries (MiB): 3 1.05, 3q 0.97, 2a 4.97, 2b 5.02
+   2  opt 3  box 0.0056  replay+resume+new 0.4238                       values 0.0000 sums 0.0023               | replayed 1443342 (prefixes 97703, bbox false positives 1345639), new 795265
+      opt 3q pop 0.0002  replay+resume+new 0.1744 (keys inside)         values 0.0000 sums 0.0021  queue 0.0047 | replayed 97703 (prefixes 97703, false alarms 0), new 795265, keys 406820
+      opt 2a box 0.0068  test 0.0559  resume 0.0117  new 0.1639               values 0.0000 sums 0.0030               | balls 1541093, new 795265
+      opt 2b pop 0.0003  test 0.0083  resume 0.0101  new 0.1683  keys 0.0120  values 0.0000 sums 0.0024  queue 0.0056 | balls 134717, new 795265, keys 406820
+      update temporaries (MiB): 3 1.05, 3q 0.85, 2a 4.60, 2b 4.55
+   3  opt 3  box 0.0052  replay+resume+new 0.4195                       values 0.0000 sums 0.0019               | replayed 1310698 (prefixes 87780, bbox false positives 1222918), new 685727
+      opt 3q pop 0.0001  replay+resume+new 0.1648 (keys inside)         values 0.0000 sums 0.0017  queue 0.0040 | replayed 87780 (prefixes 87780, false alarms 0), new 685727, keys 377255
+      opt 2a box 0.0070  test 0.0527  resume 0.0101  new 0.1480               values 0.0000 sums 0.0023               | balls 1398138, new 685727
+      opt 2b pop 0.0003  test 0.0082  resume 0.0094  new 0.1548  keys 0.0143  values 0.0000 sums 0.0021  queue 0.0078 | balls 120282, new 685727, keys 377255
+      update temporaries (MiB): 3 0.70, 3q 0.74, 2a 3.97, 2b 4.03
+   4  opt 3  box 0.0042  replay+resume+new 0.3363                       values 0.0000 sums 0.0020               | replayed 1140269 (prefixes 74398, bbox false positives 1065871), new 540144
+      opt 3q pop 0.0001  replay+resume+new 0.1231 (keys inside)         values 0.0000 sums 0.0016  queue 0.0040 | replayed 74398 (prefixes 74398, false alarms 0), new 540144, keys 322038
+      opt 2a box 0.0061  test 0.0457  resume 0.0085  new 0.1162               values 0.0000 sums 0.0019               | balls 1214192, new 540144
+      opt 2b pop 0.0003  test 0.0093  resume 0.0082  new 0.1191  keys 0.0064  values 0.0000 sums 0.0014  queue 0.0037 | balls 100482, new 540144, keys 322038
+      update temporaries (MiB): 3 0.70, 3q 0.60, 2a 3.23, 2b 3.19
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.251 s
+setup (each option's own same-seed initial solve): 1 1.248 s (sums only), 3 1.251 s, 3q 1.331 s (+ keys while walking, queue), 2a 1.441 s (recording every step), 2b 1.565 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.316 s
+setup (each option's own same-seed initial solve): 1 1.313 s (sums only), 3 1.316 s, 3q 1.407 s (+ keys while walking, queue), 2a 1.535 s (recording every step), 2b 1.664 s (+ keys and queue); initial solves bitwise identical: yes
+(a) g=1: totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.190  1.00x  |  0.0000  0.0000  0.0000   5.1903  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29380509           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.661  3.13x  |  0.0206  0.0000  0.0000   1.6306  0.0000  0.0000  0.0090  0.0000 |     362259     136431            0     2898092     5381473        5013824     367649          0
+  3q seed replay + front-key queue         0.686  7.56x  |  0.0006  0.0000  0.0000   0.6600  0.0000  0.0000  0.0074  0.0178 |     138071     136431            0     2898092      394976          27327     367649    1568824
+  2a stored steps + bbox                   0.890  5.83x  |  0.0257  0.2073  0.0429   0.6031  0.0000  0.0000  0.0102  0.0000 |     362259     136431      5743732     2898092           0              0     367649          0
+  2b stored steps + front-key queue        0.785  6.61x  |  0.0015  0.0400  0.0419   0.6230  0.0461  0.0000  0.0082  0.0230 |     138071     136431       533047     2898092           0              0     367649    1568824
+  steps run by the updates, as a share of option 1's 29380509:
+    3   28.2% = new 9.9% + replayed 18.3% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 17.1%)
+    3q  11.2% = new 9.9% + replayed 1.3% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.9% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.245 s + updates 5.190 s = 6.435 s:  1.00x vs option 1,  0.45x vs option 3; overtakes 3 never
+    3  setup 1.243 s + updates 1.661 s = 2.904 s:  2.22x vs option 1,  1.00x vs option 3; overtakes 1 from the start
+    3q setup 1.316 s + updates 0.686 s = 2.002 s:  3.21x vs option 1,  1.45x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.446 s + updates 0.890 s = 2.336 s:  2.75x vs option 1,  1.24x vs option 3; overtakes 3 after 1.1 advances; overtakes 1 after 0.2 advances
+    2b setup 1.565 s + updates 0.785 s = 2.350 s:  2.74x vs option 1,  1.24x vs option 3; overtakes 3 after 1.5 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 11.225 s = same-seed full solves 5.179 s + the same recording
+  every step 6.046 s (the cost of recording paths in a full solve: +17%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.308 s [5.190, 5.468] | 3 1.722 s [1.661, 1.777] 3.08x [3.08, 3.13] | 3q 0.687 s [0.686, 0.724] 7.56x [7.55, 7.73] | 2a 0.905 s [0.890, 0.931] 5.87x [5.83, 5.87] | 2b 0.792 s [0.785, 0.831] 6.61x [6.58, 6.71]; vs 3: 3q 2.45x [2.42, 2.51], 2a 1.90x [1.87, 1.91], 2b 2.14x [2.12, 2.18]
+      setup + updates: opt 1 6.556 s [6.435, 6.781] | 3 2.974 s [2.904, 3.093] 2.20x [2.19, 2.22] | 3q 2.018 s [2.002, 2.132] 3.21x [3.18, 3.25] | 2a 2.346 s [2.336, 2.466] 2.75x [2.75, 2.80] | 2b 2.356 s [2.350, 2.495] 2.74x [2.72, 2.78]; vs 3: 3q 1.45x [1.45, 1.47], 2a 1.25x [1.24, 1.27], 2b 1.24x [1.24, 1.26]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.343 s | 3 1.726 s 3.10x | 3q 0.695 s 7.69x | 2a 0.910 s 5.87x | 2b 0.799 s 6.69x; vs 3: 3q 2.48x, 2a 1.90x, 2b 2.16x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +39.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 1.0 MiB update temporaries = 60.9 MiB (largest temporaries 1.0 MiB); OS: +60.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7794279 at the peak (15.7 per walk, capacity 16.8)
+               total 312.9 MiB at the start; at the peak 326.0 MiB + 3.2 MiB update temporaries = 329.2 MiB (largest temporaries 5.0 MiB);
+               stored steps at the peak: 245.3 MiB payload, 262.3 MiB allocated; OS: +337.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7794279 at the peak (15.7 per walk, capacity 16.8)
+               total 331.8 MiB at the start; at the peak 344.9 MiB + 3.2 MiB update temporaries = 348.1 MiB (largest temporaries 5.0 MiB);
+               stored steps at the peak: 245.3 MiB payload, 262.3 MiB allocated; OS: +353.4 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 1201.6 MiB above the run's start, against 1121.9 MiB
+    computed for the four caches and the two references then (+7%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 0.0e+00/0.0e+00/0.0e+00/0.0e+00,
+  max |dG| 2.9e-12/2.9e-12/2.9e-12/2.9e-12; entered walks 409293, 2b false alarms 4920, 2a box false positives 677484 -> PASS
+
+-- (a) g=1, dt = 1/32 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.337 s
+setup (each option's own same-seed initial solve): 1 1.326 s (sums only), 3 1.337 s, 3q 1.439 s (+ keys while walking, queue), 2a 1.493 s (recording every step), 2b 1.670 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5312  0.0375 |   6.99%   19.64%    7.33%    0.34% |  1.3744  0.4873  0.1932  0.2481  0.2131 |  2.82x  7.11x  5.54x  6.45x |  2.945 | 2b 3q 1 2a 3
+   2  0.5625  0.0375 |   6.89%   19.23%    6.89%    0.00% |  1.4158  0.4976  0.1951  0.2499  0.2153 |  2.85x  7.26x  5.67x  6.57x |  3.041 | 3q 2a 3 1 2b
+   3  0.5938  0.0375 |   6.40%   18.68%    6.40%    0.00% |  1.4369  0.4919  0.1810  0.2414  0.2058 |  2.92x  7.94x  5.95x  6.98x |  3.065 | 1 2a 2b 3 3q
+   4  0.6250  0.0375 |   6.29%   17.98%    6.29%    0.00% |  1.5016  0.4741  0.1814  0.2410  0.2016 |  3.17x  8.28x  6.23x  7.45x |  3.133 | 1 2a 3q 3 2b
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 1663 | 0 62676 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 1 | 0 61162 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 0 | 0 60817 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 0 | 0 57956 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0059  replay+resume+new 0.4780                       values 0.0000 sums 0.0032               | replayed 1495947 (prefixes 102820, bbox false positives 1393127), new 768749
+      opt 3q pop 0.0002  replay+resume+new 0.1862 (keys inside)         values 0.0000 sums 0.0022  queue 0.0045 | replayed 130670 (prefixes 102820, false alarms 27850), new 768749, keys 299708
+      opt 2a box 0.0079  test 0.0577  resume 0.0107  new 0.1689               values 0.0000 sums 0.0027               | balls 1593278, new 768749
+      opt 2b pop 0.0003  test 0.0122  resume 0.0120  new 0.1694  keys 0.0116  values 0.0000 sums 0.0028  queue 0.0044 | balls 166988, new 768749, keys 299708
+      update temporaries (MiB): 3 1.05, 3q 0.83, 2a 4.38, 2b 4.32
+   2  opt 3  box 0.0060  replay+resume+new 0.4892                       values 0.0000 sums 0.0024               | replayed 1460962 (prefixes 95496, bbox false positives 1365466), new 753541
+      opt 3q pop 0.0002  replay+resume+new 0.1878 (keys inside)         values 0.0000 sums 0.0022  queue 0.0049 | replayed 95522 (prefixes 95496, false alarms 26), new 753541, keys 291405
+      opt 2a box 0.0075  test 0.0584  resume 0.0112  new 0.1700               values 0.0000 sums 0.0026               | balls 1556276, new 753541
+      opt 2b pop 0.0003  test 0.0110  resume 0.0125  new 0.1717  keys 0.0118  values 0.0000 sums 0.0022  queue 0.0055 | balls 129675, new 753541, keys 291405
+      update temporaries (MiB): 3 1.05, 3q 0.78, 2a 4.33, 2b 4.22
+   3  opt 3  box 0.0062  replay+resume+new 0.4829                       values 0.0000 sums 0.0027               | replayed 1449026 (prefixes 92082, bbox false positives 1356944), new 708873
+      opt 3q pop 0.0002  replay+resume+new 0.1745 (keys inside)         values 0.0000 sums 0.0020  queue 0.0043 | replayed 92082 (prefixes 92082, false alarms 0), new 708873, keys 243856
+      opt 2a box 0.0071  test 0.0597  resume 0.0098  new 0.1618               values 0.0000 sums 0.0028               | balls 1541584, new 708873
+      opt 2b pop 0.0002  test 0.0111  resume 0.0119  new 0.1645  keys 0.0111  values 0.0000 sums 0.0024  queue 0.0043 | balls 123823, new 708873, keys 243856
+      update temporaries (MiB): 3 1.05, 3q 0.73, 2a 4.10, 2b 3.95
+   4  opt 3  box 0.0063  replay+resume+new 0.4653                       values 0.0000 sums 0.0024               | replayed 1379119 (prefixes 85812, bbox false positives 1293307), new 683198
+      opt 3q pop 0.0001  replay+resume+new 0.1747 (keys inside)         values 0.0000 sums 0.0022  queue 0.0042 | replayed 85812 (prefixes 85812, false alarms 0), new 683198, keys 277018
+      opt 2a box 0.0071  test 0.0566  resume 0.0104  new 0.1641               values 0.0000 sums 0.0025               | balls 1468245, new 683198
+      opt 2b pop 0.0002  test 0.0108  resume 0.0110  new 0.1622  keys 0.0106  values 0.0000 sums 0.0020  queue 0.0044 | balls 116982, new 683198, keys 277018
+      update temporaries (MiB): 3 0.70, 3q 0.71, 2a 3.86, 2b 3.88
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.358 s
+setup (each option's own same-seed initial solve): 1 1.372 s (sums only), 3 1.358 s, 3q 1.449 s (+ keys while walking, queue), 2a 1.530 s (recording every step), 2b 1.719 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.373 s
+setup (each option's own same-seed initial solve): 1 1.370 s (sums only), 3 1.373 s, 3q 1.462 s (+ keys while walking, queue), 2a 1.619 s (recording every step), 2b 1.697 s (+ keys and queue); initial solves bitwise identical: yes
+(a) g=1: totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.729  1.00x  |  0.0000  0.0000  0.0000   5.7287  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29547276           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.951  2.94x  |  0.0243  0.0000  0.0000   1.9154  0.0000  0.0000  0.0108  0.0000 |     374329     131718            0     2914361     5785054        5408844     376210          0
+  3q seed replay + front-key queue         0.751  7.63x  |  0.0007  0.0000  0.0000   0.7233  0.0000  0.0000  0.0087  0.0179 |     133382     131718            0     2914361      404086          27876     376210    1111987
+  2a stored steps + bbox                   0.980  5.84x  |  0.0296  0.2324  0.0421   0.6647  0.0000  0.0000  0.0106  0.0000 |     374329     131718      6159383     2914361           0              0     376210          0
+  2b stored steps + front-key queue        0.836  6.85x  |  0.0011  0.0451  0.0475   0.6678  0.0451  0.0000  0.0095  0.0186 |     133382     131718       537468     2914361           0              0     376210    1111987
+  steps run by the updates, as a share of option 1's 29547276:
+    3   29.4% = new 9.9% + replayed 19.6% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 18.3%)
+    3q  11.2% = new 9.9% + replayed 1.4% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.9% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.326 s + updates 5.729 s = 7.055 s:  1.00x vs option 1,  0.47x vs option 3; overtakes 3 for the first 0.0 advances only
+    3  setup 1.337 s + updates 1.951 s = 3.288 s:  2.15x vs option 1,  1.00x vs option 3; overtakes 1 after 0.0 advances
+    3q setup 1.439 s + updates 0.751 s = 2.190 s:  3.22x vs option 1,  1.50x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.493 s + updates 0.980 s = 2.473 s:  2.85x vs option 1,  1.33x vs option 3; overtakes 3 after 0.6 advances; overtakes 1 after 0.1 advances
+    2b setup 1.670 s + updates 0.836 s = 2.506 s:  2.82x vs option 1,  1.31x vs option 3; overtakes 3 after 1.2 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 12.185 s = same-seed full solves 5.718 s + the same recording
+  every step 6.467 s (the cost of recording paths in a full solve: +13%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.717 s [5.640, 5.729] | 3 1.951 s [1.928, 1.968] 2.93x [2.90, 2.94] | 3q 0.744 s [0.732, 0.751] 7.68x [7.63, 7.71] | 2a 0.980 s [0.967, 0.990] 5.83x [5.78, 5.84] | 2b 0.831 s [0.824, 0.836] 6.85x [6.84, 6.88]; vs 3: 3q 2.63x [2.60, 2.64], 2a 1.99x [1.99, 1.99], 2b 2.34x [2.33, 2.37]
+      setup + updates: opt 1 7.055 s [7.009, 7.090] | 3 3.301 s [3.288, 3.326] 2.13x [2.12, 2.15] | 3q 2.193 s [2.190, 2.194] 3.22x [3.20, 3.23] | 2a 2.519 s [2.473, 2.586] 2.81x [2.71, 2.85] | 2b 2.521 s [2.506, 2.550] 2.78x [2.78, 2.82]; vs 3: 3q 1.50x [1.50, 1.52], 2a 1.32x [1.28, 1.33], 2b 1.31x [1.30, 1.31]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.698 s | 3 1.953 s 2.92x | 3q 0.741 s 7.69x | 2a 0.982 s 5.80x | 2b 0.829 s 6.87x; vs 3: 3q 2.64x, 2a 1.99x, 2b 2.36x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +37.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 0.8 MiB update temporaries = 60.8 MiB (largest temporaries 0.8 MiB); OS: +56.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7856486 at the peak (15.9 per walk, capacity 16.6)
+               total 312.9 MiB at the start; at the peak 322.8 MiB + 3.9 MiB update temporaries = 326.6 MiB (largest temporaries 4.4 MiB);
+               stored steps at the peak: 247.3 MiB payload, 259.0 MiB allocated; OS: +60.6 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7856486 at the peak (15.9 per walk, capacity 16.6)
+               total 331.8 MiB at the start; at the peak 341.7 MiB + 3.9 MiB update temporaries = 345.5 MiB (largest temporaries 4.3 MiB);
+               stored steps at the peak: 247.3 MiB payload, 259.0 MiB allocated; OS: +344.4 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 904.5 MiB above the run's start, against 1117.4 MiB
+    computed for the four caches and the two references then (-19%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 0.0e+00/0.0e+00/0.0e+00/0.0e+00,
+  max |dG| 2.7e-12/2.7e-12/2.7e-12/2.7e-12; entered walks 395154, 2b false alarms 4992, 2a box false positives 727833 -> PASS
+
+-- (a) g=1, dt = 1/64 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.375 s
+setup (each option's own same-seed initial solve): 1 1.369 s (sums only), 3 1.375 s, 3q 1.464 s (+ keys while walking, queue), 2a 1.568 s (recording every step), 2b 1.708 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5156  0.0188 |   6.36%   19.05%    6.70%    0.34% |  1.4053  0.4833  0.1870  0.2339  0.1956 |  2.91x  7.52x  6.01x  7.18x |  2.962 | 3 2b 2a 1 3q
+   2  0.5312  0.0188 |   6.34%   18.79%    6.34%    0.00% |  1.3932  0.4783  0.1831  0.2382  0.1987 |  2.91x  7.61x  5.85x  7.01x |  2.982 | 3q 2a 2b 3 1
+   3  0.5469  0.0187 |   6.28%   18.63%    6.28%    0.00% |  1.3912  0.4790  0.1742  0.2352  0.1924 |  2.90x  7.99x  5.92x  7.23x |  2.991 | 2b 3q 1 2a 3
+   4  0.5625  0.0188 |   6.16%   18.53%    6.16%    0.00% |  1.4727  0.4810  0.1764  0.2345  0.1941 |  3.06x  8.35x  6.28x  7.59x |  3.095 | 2b 1 2a 3 3q
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 1690 | 0 62888 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.6e-12 2.6e-12 2.6e-12 2.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 61705 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 1 | 0 61218 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 0.0e+00 0.0e+00 0.0e+00 0.0e+00 | 2.7e-12 2.7e-12 2.7e-12 2.7e-12 | 0 0 0 0 | 0 | 0 0 | 0 61275 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0071  replay+resume+new 0.4736                       values 0.0000 sums 0.0025               | replayed 1501464 (prefixes 99287, bbox false positives 1402177), new 704998
+      opt 3q pop 0.0002  replay+resume+new 0.1797 (keys inside)         values 0.0000 sums 0.0026  queue 0.0044 | replayed 127662 (prefixes 99287, false alarms 28375), new 704998, keys 221985
+      opt 2a box 0.0077  test 0.0559  resume 0.0103  new 0.1571               values 0.0000 sums 0.0026               | balls 1595857, new 704998
+      opt 2b pop 0.0004  test 0.0114  resume 0.0115  new 0.1555  keys 0.0099  values 0.0000 sums 0.0023  queue 0.0044 | balls 160857, new 704998, keys 221985
+      update temporaries (MiB): 3 1.05, 3q 0.76, 2a 4.08, 2b 3.96
+   2  opt 3  box 0.0056  replay+resume+new 0.4700                       values 0.0000 sums 0.0026               | replayed 1477051 (prefixes 94688, bbox false positives 1382363), new 711596
+      opt 3q pop 0.0002  replay+resume+new 0.1769 (keys inside)         values 0.0000 sums 0.0020  queue 0.0039 | replayed 94688 (prefixes 94688, false alarms 0), new 711596, keys 201665
+      opt 2a box 0.0073  test 0.0584  resume 0.0114  new 0.1582               values 0.0000 sums 0.0026               | balls 1570166, new 711596
+      opt 2b pop 0.0003  test 0.0102  resume 0.0114  new 0.1599  keys 0.0099  values 0.0000 sums 0.0021  queue 0.0046 | balls 126098, new 711596, keys 201665
+      update temporaries (MiB): 3 1.05, 3q 0.72, 2a 4.07, 2b 3.91
+   3  opt 3  box 0.0056  replay+resume+new 0.4709                       values 0.0000 sums 0.0025               | replayed 1462914 (prefixes 92588, bbox false positives 1370326), new 703557
+      opt 3q pop 0.0002  replay+resume+new 0.1671 (keys inside)         values 0.0000 sums 0.0022  queue 0.0046 | replayed 92614 (prefixes 92588, false alarms 26), new 703557, keys 200108
+      opt 2a box 0.0069  test 0.0588  resume 0.0114  new 0.1548               values 0.0000 sums 0.0029               | balls 1555232, new 703557
+      opt 2b pop 0.0003  test 0.0105  resume 0.0109  new 0.1541  keys 0.0103  values 0.0000 sums 0.0021  queue 0.0040 | balls 123715, new 703557, keys 200108
+      update temporaries (MiB): 3 1.05, 3q 0.71, 2a 4.04, 2b 3.87
+   4  opt 3  box 0.0058  replay+resume+new 0.4733                       values 0.0000 sums 0.0019               | replayed 1461083 (prefixes 90129, bbox false positives 1370954), new 681525
+      opt 3q pop 0.0001  replay+resume+new 0.1710 (keys inside)         values 0.0000 sums 0.0019  queue 0.0034 | replayed 90129 (prefixes 90129, false alarms 0), new 681525, keys 210387
+      opt 2a box 0.0068  test 0.0560  resume 0.0101  new 0.1589               values 0.0000 sums 0.0024               | balls 1552902, new 681525
+      opt 2b pop 0.0003  test 0.0100  resume 0.0114  new 0.1557  keys 0.0104  values 0.0000 sums 0.0020  queue 0.0039 | balls 120673, new 681525, keys 210387
+      update temporaries (MiB): 3 0.70, 3q 0.70, 2a 3.81, 2b 3.81
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.372 s
+setup (each option's own same-seed initial solve): 1 1.361 s (sums only), 3 1.372 s, 3q 1.456 s (+ keys while walking, queue), 2a 1.546 s (recording every step), 2b 1.723 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.379 s
+setup (each option's own same-seed initial solve): 1 1.388 s (sums only), 3 1.379 s, 3q 1.466 s (+ keys while walking, queue), 2a 1.532 s (recording every step), 2b 1.700 s (+ keys and queue); initial solves bitwise identical: yes
+(a) g=1: totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.662  1.00x  |  0.0000  0.0000  0.0000   5.6624  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29622470           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.922  2.95x  |  0.0240  0.0000  0.0000   1.8878  0.0000  0.0000  0.0095  0.0000 |     371645     124559            0     2801676     5902512        5525820     376692          0
+  3q seed replay + front-key queue         0.721  7.86x  |  0.0007  0.0000  0.0000   0.6948  0.0000  0.0000  0.0086  0.0164 |     126250     124559            0     2801676      405093          28401     376692     834145
+  2a stored steps + bbox                   0.942  6.01x  |  0.0288  0.2291  0.0432   0.6291  0.0000  0.0000  0.0105  0.0000 |     371645     124559      6274157     2801676           0              0     376692          0
+  2b stored steps + front-key queue        0.781  7.25x  |  0.0012  0.0421  0.0452   0.6251  0.0406  0.0000  0.0086  0.0169 |     126250     124559       531343     2801676           0              0     376692     834145
+  steps run by the updates, as a share of option 1's 29622470:
+    3   29.4% = new 9.5% + replayed 19.9% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 18.7%)
+    3q  10.8% = new 9.5% + replayed 1.4% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.5% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.369 s + updates 5.662 s = 7.032 s:  1.00x vs option 1,  0.47x vs option 3; overtakes 3 for the first 0.0 advances only
+    3  setup 1.375 s + updates 1.922 s = 3.297 s:  2.13x vs option 1,  1.00x vs option 3; overtakes 1 after 0.0 advances
+    3q setup 1.464 s + updates 0.721 s = 2.185 s:  3.22x vs option 1,  1.51x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.568 s + updates 0.942 s = 2.510 s:  2.80x vs option 1,  1.31x vs option 3; overtakes 3 after 0.8 advances; overtakes 1 after 0.2 advances
+    2b setup 1.708 s + updates 0.781 s = 2.489 s:  2.83x vs option 1,  1.32x vs option 3; overtakes 3 after 1.2 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 12.030 s = same-seed full solves 5.667 s + the same recording
+  every step 6.363 s (the cost of recording paths in a full solve: +12%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.662 s [5.630, 5.689] | 3 1.922 s [1.922, 1.926] 2.95x [2.92, 2.96] | 3q 0.708 s [0.707, 0.721] 7.96x [7.86, 8.04] | 2a 0.942 s [0.932, 0.946] 6.02x [6.01, 6.04] | 2b 0.781 s [0.776, 0.790] 7.25x [7.20, 7.25]; vs 3: 3q 2.72x [2.67, 2.72], 2a 2.04x [2.03, 2.07], 2b 2.46x [2.43, 2.48]
+      setup + updates: opt 1 7.032 s [6.991, 7.077] | 3 3.298 s [3.297, 3.302] 2.13x [2.12, 2.14] | 3q 2.174 s [2.164, 2.185] 3.23x [3.22, 3.26] | 2a 2.478 s [2.478, 2.510] 2.82x [2.80, 2.86] | 2b 2.490 s [2.489, 2.499] 2.83x [2.80, 2.84]; vs 3: 3q 1.52x [1.51, 1.52], 2a 1.33x [1.31, 1.33], 2b 1.32x [1.32, 1.33]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.648 s | 3 1.923 s 2.94x | 3q 0.710 s 7.95x | 2a 0.941 s 6.00x | 2b 0.781 s 7.23x; vs 3: 3q 2.71x, 2a 2.04x, 2b 2.46x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +40.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 0.8 MiB update temporaries = 60.7 MiB (largest temporaries 0.8 MiB); OS: +60.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7887767 at the peak (15.9 per walk, capacity 16.4)
+               total 312.9 MiB at the start; at the peak 319.5 MiB + 3.8 MiB update temporaries = 323.3 MiB (largest temporaries 4.1 MiB);
+               stored steps at the peak: 248.2 MiB payload, 255.8 MiB allocated; OS: +351.1 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7887767 at the peak (15.9 per walk, capacity 16.4)
+               total 331.8 MiB at the start; at the peak 338.4 MiB + 3.8 MiB update temporaries = 342.2 MiB (largest temporaries 4.0 MiB);
+               stored steps at the peak: 248.2 MiB payload, 255.8 MiB allocated; OS: +347.2 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 1196.4 MiB above the run's start, against 1111.9 MiB
+    computed for the four caches and the two references then (+8%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 0.0e+00/0.0e+00/0.0e+00/0.0e+00,
+  max |dG| 2.7e-12/2.7e-12/2.7e-12/2.7e-12; entered walks 373677, 2b false alarms 5073, 2a box false positives 741258 -> PASS
+
+-- (b) g=min(1,sqrt(r/L)), dt = 1/8 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.357 s
+setup (each option's own same-seed initial solve): 1 1.364 s (sums only), 3 1.357 s, 3q 1.448 s (+ keys while walking, queue), 2a 1.513 s (recording every step), 2b 1.688 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.6250  0.1500 |  10.34%   22.82%   10.67%    0.33% |  1.3803  0.5491  0.2723  0.3260  0.3071 |  2.51x  5.07x  4.23x  4.49x |  2.954 | 3 2a 2b 3q 1
+   2  0.7500  0.1500 |   7.88%   18.94%    7.88%    0.00% |  1.4002  0.4727  0.2034  0.2607  0.2306 |  2.96x  6.88x  5.37x  6.07x |  2.981 | 3q 2b 3 2a 1
+   3  0.8750  0.1437 |   4.69%   12.49%    4.69%    0.00% |  1.4037  0.3257  0.1209  0.1634  0.1392 |  4.31x 11.61x  8.59x 10.09x |  2.966 | 3 2b 1 2a 3q
+   4  1.0000  0.0562 |   1.44%    5.08%    1.44%    0.00% |  1.4367  0.1288  0.0408  0.0577  0.0461 | 11.15x 35.21x 24.91x 31.17x |  3.062 | 2a 2b 3q 1 3
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 1.8e-12 1.8e-12 1.8e-12 1.8e-12 | 0 0 0 0 | 0 | 0 1626 | 0 61868 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 2.5e-12 2.5e-12 2.5e-12 2.5e-12 | 0 0 0 0 | 0 | 0 0 | 0 54820 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.9e-15 1.9e-15 1.9e-15 1.9e-15 | 4.1e-12 4.1e-12 4.1e-12 4.1e-12 | 0 0 0 0 | 0 | 0 0 | 0 38694 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 6.4e-12 6.4e-12 6.4e-12 6.4e-12 | 0 0 0 0 | 0 | 0 0 | 0 18050 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0066  replay+resume+new 0.5319                       values 0.0066 sums 0.0040               | replayed 1473521 (prefixes 116268, bbox false positives 1357253), new 1062558
+      opt 3q pop 0.0002  replay+resume+new 0.2546 (keys inside)         values 0.0068 sums 0.0037  queue 0.0069 | replayed 143267 (prefixes 116268, false alarms 26999), new 1062558, keys 735537
+      opt 2a box 0.0076  test 0.0598  resume 0.0129  new 0.2342               values 0.0071 sums 0.0041               | balls 1586637, new 1062558
+      opt 2b pop 0.0005  test 0.0141  resume 0.0160  new 0.2413  keys 0.0189  values 0.0058 sums 0.0038  queue 0.0063 | balls 196141, new 1062558, keys 735537
+      update temporaries (MiB): 3 1.05, 3q 1.21, 2a 6.12, 2b 6.37
+   2  opt 3  box 0.0055  replay+resume+new 0.4551                       values 0.0076 sums 0.0044               | replayed 1306255 (prefixes 93563, bbox false positives 1212692), new 785964
+      opt 3q pop 0.0002  replay+resume+new 0.1870 (keys inside)         values 0.0069 sums 0.0041  queue 0.0052 | replayed 93563 (prefixes 93563, false alarms 0), new 785964, keys 599974
+      opt 2a box 0.0073  test 0.0522  resume 0.0107  new 0.1785               values 0.0076 sums 0.0041               | balls 1400110, new 785964
+      opt 2b pop 0.0003  test 0.0110  resume 0.0118  new 0.1765  keys 0.0160  values 0.0066 sums 0.0031  queue 0.0051 | balls 132598, new 785964, keys 599974
+      update temporaries (MiB): 3 1.05, 3q 0.89, 2a 4.77, 2b 4.78
+   3  opt 3  box 0.0059  replay+resume+new 0.3085                       values 0.0074 sums 0.0037               | replayed 915293 (prefixes 58726, bbox false positives 856567), new 419505
+      opt 3q pop 0.0001  replay+resume+new 0.1060 (keys inside)         values 0.0075 sums 0.0036  queue 0.0036 | replayed 58726 (prefixes 58726, false alarms 0), new 419505, keys 410118
+      opt 2a box 0.0063  test 0.0422  resume 0.0074  new 0.0960               values 0.0073 sums 0.0039               | balls 977213, new 419505
+      opt 2b pop 0.0002  test 0.0082  resume 0.0079  new 0.0981  keys 0.0097  values 0.0081 sums 0.0036  queue 0.0032 | balls 81952, new 419505, keys 410118
+      update temporaries (MiB): 3 0.70, 3q 0.53, 2a 2.92, 2b 2.87
+   4  opt 3  box 0.0045  replay+resume+new 0.1120                       values 0.0084 sums 0.0039               | replayed 411055 (prefixes 21490, bbox false positives 389565), new 102559
+      opt 3q pop 0.0001  replay+resume+new 0.0270 (keys inside)         values 0.0079 sums 0.0034  queue 0.0024 | replayed 21490 (prefixes 21490, false alarms 0), new 102559, keys 131183
+      opt 2a box 0.0050  test 0.0149  resume 0.0021  new 0.0238               values 0.0081 sums 0.0037               | balls 436239, new 102559
+      opt 2b pop 0.0001  test 0.0023  resume 0.0027  new 0.0242  keys 0.0029  values 0.0078 sums 0.0038  queue 0.0022 | balls 28624, new 102559, keys 131183
+      update temporaries (MiB): 3 0.21, 3q 0.16, 2a 0.92, 2b 0.88
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.382 s
+setup (each option's own same-seed initial solve): 1 1.428 s (sums only), 3 1.382 s, 3q 1.472 s (+ keys while walking, queue), 2a 1.605 s (recording every step), 2b 1.713 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.374 s
+setup (each option's own same-seed initial solve): 1 1.355 s (sums only), 3 1.374 s, 3q 1.451 s (+ keys while walking, queue), 2a 1.523 s (recording every step), 2b 1.689 s (+ keys and queue); initial solves bitwise identical: yes
+(b) g=min(1,sqrt(r/L)): totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.621  1.00x  |  0.0000  0.0000  0.0000   5.6209  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29088706           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.476  3.81x  |  0.0226  0.0000  0.0000   1.4075  0.0000  0.0301  0.0160  0.0000 |     294075     120643            0     2370586     4106124        3816077     290047          0
+  3q seed replay + front-key queue         0.637  8.82x  |  0.0006  0.0000  0.0000   0.5746  0.0000  0.0290  0.0148  0.0180 |     122269     120643            0     2370586      317046          26999     290047    1876812
+  2a stored steps + bbox                   0.808  6.96x  |  0.0262  0.1691  0.0331   0.5325  0.0000  0.0301  0.0158  0.0000 |     294075     120643      4400199     2370586           0              0     290047          0
+  2b stored steps + front-key queue        0.723  7.77x  |  0.0011  0.0355  0.0383   0.5401  0.0476  0.0283  0.0144  0.0169 |     122269     120643       439315     2370586           0              0     290047    1876812
+  steps run by the updates, as a share of option 1's 29088706:
+    3   22.3% = new 8.1% + replayed 14.1% (prefixes of the re-walked walks 1.0%, bbox false positives replayed
+                to the end 13.1%)
+    3q   9.2% = new 8.1% + replayed 1.1% (prefixes 1.0%, false alarms 0.1%)
+    2a, 2b 8.1% (new steps only; the stored prefixes they skip are 1.0%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.364 s + updates 5.621 s = 6.985 s:  1.00x vs option 1,  0.41x vs option 3; overtakes 3 never
+    3  setup 1.357 s + updates 1.476 s = 2.834 s:  2.47x vs option 1,  1.00x vs option 3; overtakes 1 from the start
+    3q setup 1.448 s + updates 0.637 s = 2.086 s:  3.35x vs option 1,  1.36x vs option 3; overtakes 3 after 0.4 advances; overtakes 1 after 0.1 advances
+    2a setup 1.513 s + updates 0.808 s = 2.321 s:  3.01x vs option 1,  1.22x vs option 3; overtakes 3 after 0.9 advances; overtakes 1 after 0.1 advances
+    2b setup 1.688 s + updates 0.723 s = 2.411 s:  2.90x vs option 1,  1.18x vs option 3; overtakes 3 after 1.8 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 11.962 s = same-seed full solves 5.646 s + the same recording
+  every step 6.316 s (the cost of recording paths in a full solve: +12%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.673 s [5.621, 5.751] | 3 1.500 s [1.476, 1.508] 3.81x [3.78, 3.81] | 3q 0.650 s [0.637, 0.652] 8.82x [8.70, 8.85] | 2a 0.811 s [0.808, 0.825] 6.97x [6.96, 6.99] | 2b 0.752 s [0.723, 0.757] 7.60x [7.55, 7.77]; vs 3: 3q 2.32x [2.30, 2.32], 2a 1.83x [1.83, 1.85], 2b 2.00x [1.99, 2.04]
+      setup + updates: opt 1 7.102 s [6.985, 7.105] | 3 2.882 s [2.834, 2.882] 2.47x [2.46, 2.47] | 3q 2.102 s [2.086, 2.124] 3.35x [3.34, 3.38] | 2a 2.347 s [2.321, 2.416] 3.01x [2.94, 3.03] | 2b 2.445 s [2.411, 2.465] 2.90x [2.88, 2.91]; vs 3: 3q 1.36x [1.36, 1.37], 2a 1.22x [1.19, 1.23], 2b 1.18x [1.17, 1.18]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.666 s | 3 1.496 s 3.79x | 3q 0.645 s 8.78x | 2a 0.812 s 6.98x | 2b 0.741 s 7.65x; vs 3: 3q 2.32x, 2a 1.84x, 2b 2.02x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +37.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 1.2 MiB update temporaries = 61.1 MiB (largest temporaries 1.2 MiB); OS: +56.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7721217 at the peak (15.6 per walk, capacity 16.7)
+               total 312.9 MiB at the start; at the peak 324.8 MiB + 2.9 MiB update temporaries = 327.7 MiB (largest temporaries 6.1 MiB);
+               stored steps at the peak: 243.0 MiB payload, 261.1 MiB allocated; OS: +60.6 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7721217 at the peak (15.6 per walk, capacity 16.7)
+               total 331.8 MiB at the start; at the peak 343.7 MiB + 2.9 MiB update temporaries = 346.6 MiB (largest temporaries 6.4 MiB);
+               stored steps at the peak: 243.0 MiB payload, 261.1 MiB allocated; OS: +287.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 848.8 MiB above the run's start, against 1117.3 MiB
+    computed for the four caches and the two references then (-24%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 1.9e-15/1.9e-15/1.9e-15/1.9e-15,
+  max |dG| 6.4e-12/6.4e-12/6.4e-12/6.4e-12; entered walks 361929, 2b false alarms 4878, 2a box false positives 520296 -> PASS
+
+-- (b) g=min(1,sqrt(r/L)), dt = 1/16 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.406 s
+setup (each option's own same-seed initial solve): 1 1.387 s (sums only), 3 1.406 s, 3q 1.492 s (+ keys while walking, queue), 2a 1.631 s (recording every step), 2b 1.770 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5625  0.0750 |   8.24%   20.81%    8.57%    0.33% |  1.4214  0.5351  0.2387  0.2851  0.2585 |  2.66x  5.95x  4.99x  5.50x |  3.096 | 3q 2a 2b 3 1
+   2  0.6250  0.0750 |   7.47%   19.72%    7.47%    0.00% |  1.4454  0.5200  0.2146  0.2766  0.2523 |  2.78x  6.73x  5.23x  5.73x |  3.096 | 3q 1 2a 3 2b
+   3  0.6875  0.0750 |   6.56%   17.64%    6.56%    0.00% |  1.4450  0.4805  0.1882  0.2393  0.2140 |  3.01x  7.68x  6.04x  6.75x |  3.098 | 1 3q 3 2a 2b
+   4  0.7500  0.0750 |   5.26%   14.92%    5.26%    0.00% |  1.5219  0.4087  0.1586  0.2121  0.1828 |  3.72x  9.60x  7.18x  8.32x |  3.206 | 3 2b 2a 3q 1
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 1640 | 0 62314 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.9e-15 1.9e-15 1.9e-15 1.9e-15 | 2.2e-12 2.2e-12 2.2e-12 2.2e-12 | 0 0 0 0 | 0 | 0 0 | 0 60737 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.1e-15 1.1e-15 1.1e-15 1.1e-15 | 2.8e-12 2.8e-12 2.8e-12 2.8e-12 | 0 0 0 0 | 0 | 0 0 | 0 54938 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 2.2e-15 2.2e-15 2.2e-15 2.2e-15 | 2.3e-12 2.3e-12 2.3e-12 2.3e-12 | 0 0 0 0 | 0 | 0 0 | 0 47839 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0062  replay+resume+new 0.5176                       values 0.0072 sums 0.0040               | replayed 1487164 (prefixes 107768, bbox false positives 1379396), new 876956
+      opt 3q pop 0.0002  replay+resume+new 0.2219 (keys inside)         values 0.0072 sums 0.0035  queue 0.0060 | replayed 135095 (prefixes 107768, false alarms 27327), new 876956, keys 462711
+      opt 2a box 0.0071  test 0.0601  resume 0.0120  new 0.1957               values 0.0064 sums 0.0037               | balls 1590309, new 876956
+      opt 2b pop 0.0005  test 0.0119  resume 0.0136  new 0.2013  keys 0.0148  values 0.0066 sums 0.0038  queue 0.0056 | balls 177566, new 876956, keys 462711
+      update temporaries (MiB): 3 1.05, 3q 0.97, 2a 4.97, 2b 5.02
+   2  opt 3  box 0.0058  replay+resume+new 0.5032                       values 0.0077 sums 0.0032               | replayed 1443342 (prefixes 97703, bbox false positives 1345639), new 795265
+      opt 3q pop 0.0001  replay+resume+new 0.1980 (keys inside)         values 0.0071 sums 0.0044  queue 0.0050 | replayed 97703 (prefixes 97703, false alarms 0), new 795265, keys 406820
+      opt 2a box 0.0067  test 0.0596  resume 0.0117  new 0.1868               values 0.0076 sums 0.0040               | balls 1541093, new 795265
+      opt 2b pop 0.0005  test 0.0128  resume 0.0129  new 0.1927  keys 0.0151  values 0.0080 sums 0.0042  queue 0.0059 | balls 134717, new 795265, keys 406820
+      update temporaries (MiB): 3 1.05, 3q 0.85, 2a 4.60, 2b 4.55
+   3  opt 3  box 0.0065  replay+resume+new 0.4611                       values 0.0089 sums 0.0040               | replayed 1310698 (prefixes 87780, bbox false positives 1222918), new 685727
+      opt 3q pop 0.0001  replay+resume+new 0.1725 (keys inside)         values 0.0072 sums 0.0040  queue 0.0044 | replayed 87780 (prefixes 87780, false alarms 0), new 685727, keys 377255
+      opt 2a box 0.0067  test 0.0528  resume 0.0098  new 0.1577               values 0.0079 sums 0.0041               | balls 1398138, new 685727
+      opt 2b pop 0.0003  test 0.0104  resume 0.0121  new 0.1615  keys 0.0133  values 0.0073 sums 0.0041  queue 0.0049 | balls 120282, new 685727, keys 377255
+      update temporaries (MiB): 3 0.70, 3q 0.74, 2a 3.97, 2b 4.03
+   4  opt 3  box 0.0054  replay+resume+new 0.3907                       values 0.0085 sums 0.0039               | replayed 1140269 (prefixes 74398, bbox false positives 1065871), new 540144
+      opt 3q pop 0.0001  replay+resume+new 0.1411 (keys inside)         values 0.0088 sums 0.0039  queue 0.0045 | replayed 74398 (prefixes 74398, false alarms 0), new 540144, keys 322038
+      opt 2a box 0.0069  test 0.0500  resume 0.0089  new 0.1332               values 0.0081 sums 0.0046               | balls 1214192, new 540144
+      opt 2b pop 0.0002  test 0.0089  resume 0.0096  new 0.1361  keys 0.0112  values 0.0081 sums 0.0041  queue 0.0044 | balls 100482, new 540144, keys 322038
+      update temporaries (MiB): 3 0.70, 3q 0.60, 2a 3.23, 2b 3.19
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.428 s
+setup (each option's own same-seed initial solve): 1 1.413 s (sums only), 3 1.428 s, 3q 1.524 s (+ keys while walking, queue), 2a 1.598 s (recording every step), 2b 1.746 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.409 s
+setup (each option's own same-seed initial solve): 1 1.402 s (sums only), 3 1.409 s, 3q 1.489 s (+ keys while walking, queue), 2a 1.573 s (recording every step), 2b 1.700 s (+ keys and queue); initial solves bitwise identical: yes
+(b) g=min(1,sqrt(r/L)): totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.834  1.00x  |  0.0000  0.0000  0.0000   5.8337  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29380509           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.944  3.00x  |  0.0239  0.0000  0.0000   1.8726  0.0000  0.0323  0.0151  0.0000 |     362259     136431            0     2898092     5381473        5013824     367649          0
+  3q seed replay + front-key queue         0.800  7.29x  |  0.0006  0.0000  0.0000   0.7334  0.0000  0.0302  0.0157  0.0199 |     138071     136431            0     2898092      394976          27327     367649    1568824
+  2a stored steps + bbox                   1.013  5.76x  |  0.0274  0.2226  0.0424   0.6734  0.0000  0.0300  0.0164  0.0000 |     362259     136431      5743732     2898092           0              0     367649          0
+  2b stored steps + front-key queue        0.908  6.43x  |  0.0015  0.0439  0.0483   0.6916  0.0543  0.0299  0.0162  0.0208 |     138071     136431       533047     2898092           0              0     367649    1568824
+  steps run by the updates, as a share of option 1's 29380509:
+    3   28.2% = new 9.9% + replayed 18.3% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 17.1%)
+    3q  11.2% = new 9.9% + replayed 1.3% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.9% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.387 s + updates 5.834 s = 7.221 s:  1.00x vs option 1,  0.46x vs option 3; overtakes 3 for the first 0.0 advances only
+    3  setup 1.406 s + updates 1.944 s = 3.351 s:  2.16x vs option 1,  1.00x vs option 3; overtakes 1 after 0.0 advances
+    3q setup 1.492 s + updates 0.800 s = 2.292 s:  3.15x vs option 1,  1.46x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.631 s + updates 1.013 s = 2.644 s:  2.73x vs option 1,  1.27x vs option 3; overtakes 3 after 1.0 advances; overtakes 1 after 0.2 advances
+    2b setup 1.770 s + updates 0.908 s = 2.678 s:  2.70x vs option 1,  1.25x vs option 3; overtakes 3 after 1.4 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 12.496 s = same-seed full solves 5.916 s + the same recording
+  every step 6.579 s (the cost of recording paths in a full solve: +11%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.834 s [5.823, 5.855] | 3 1.944 s [1.938, 1.945] 3.00x [3.00, 3.01] | 3q 0.797 s [0.795, 0.800] 7.30x [7.29, 7.36] | 2a 1.020 s [1.013, 1.026] 5.71x [5.71, 5.76] | 2b 0.895 s [0.894, 0.908] 6.52x [6.43, 6.54]; vs 3: 3q 2.43x [2.43, 2.45], 2a 1.90x [1.90, 1.92], 2b 2.17x [2.14, 2.17]
+      setup + updates: opt 1 7.226 s [7.221, 7.268] | 3 3.351 s [3.348, 3.373] 2.16x [2.15, 2.16] | 3q 2.292 s [2.286, 2.319] 3.15x [3.13, 3.16] | 2a 2.624 s [2.593, 2.644] 2.77x [2.73, 2.79] | 2b 2.641 s [2.594, 2.678] 2.75x [2.70, 2.79]; vs 3: 3q 1.46x [1.45, 1.46], 2a 1.29x [1.27, 1.29], 2b 1.28x [1.25, 1.29]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.829 s | 3 1.941 s 3.00x | 3q 0.798 s 7.30x | 2a 1.019 s 5.72x | 2b 0.896 s 6.51x; vs 3: 3q 2.43x, 2a 1.90x, 2b 2.17x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +41.1 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 1.0 MiB update temporaries = 60.9 MiB (largest temporaries 1.0 MiB); OS: +60.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7794279 at the peak (15.7 per walk, capacity 16.8)
+               total 312.9 MiB at the start; at the peak 326.0 MiB + 3.2 MiB update temporaries = 329.2 MiB (largest temporaries 5.0 MiB);
+               stored steps at the peak: 245.3 MiB payload, 262.3 MiB allocated; OS: +355.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7794279 at the peak (15.7 per walk, capacity 16.8)
+               total 331.8 MiB at the start; at the peak 344.9 MiB + 3.2 MiB update temporaries = 348.1 MiB (largest temporaries 5.0 MiB);
+               stored steps at the peak: 245.3 MiB payload, 262.3 MiB allocated; OS: +345.5 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 1213.3 MiB above the run's start, against 1121.9 MiB
+    computed for the four caches and the two references then (+8%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 2.2e-15/2.2e-15/2.2e-15/2.2e-15,
+  max |dG| 2.8e-12/2.8e-12/2.8e-12/2.8e-12; entered walks 409293, 2b false alarms 4920, 2a box false positives 677484 -> PASS
+
+-- (b) g=min(1,sqrt(r/L)), dt = 1/32 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.403 s
+setup (each option's own same-seed initial solve): 1 1.399 s (sums only), 3 1.403 s, 3q 1.493 s (+ keys while walking, queue), 2a 1.590 s (recording every step), 2b 1.734 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5312  0.0375 |   6.99%   19.64%    7.33%    0.34% |  1.4377  0.5124  0.2179  0.2627  0.2304 |  2.81x  6.60x  5.47x  6.24x |  3.047 | 2a 3 1 3q 2b
+   2  0.5625  0.0375 |   6.89%   19.23%    6.89%    0.00% |  1.4676  0.5100  0.2065  0.2622  0.2328 |  2.88x  7.11x  5.60x  6.30x |  3.098 | 2a 1 3q 2b 3
+   3  0.5938  0.0375 |   6.40%   18.68%    6.40%    0.00% |  1.4517  0.5138  0.1914  0.2551  0.2107 |  2.83x  7.58x  5.69x  6.89x |  3.070 | 3q 2b 1 2a 3
+   4  0.6250  0.0375 |   6.29%   17.98%    6.29%    0.00% |  1.5105  0.4916  0.1926  0.2435  0.2146 |  3.07x  7.84x  6.20x  7.04x |  3.226 | 2a 3q 3 1 2b
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.1e-15 1.1e-15 1.1e-15 1.1e-15 | 6.8e-13 6.8e-13 6.8e-13 6.8e-13 | 0 0 0 0 | 0 | 0 1663 | 0 62676 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 9.7e-13 9.7e-13 9.7e-13 9.7e-13 | 0 0 0 0 | 0 | 0 1 | 0 61162 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.1e-15 1.1e-15 1.1e-15 1.1e-15 | 1.1e-12 1.1e-12 1.1e-12 1.1e-12 | 0 0 0 0 | 0 | 0 0 | 0 60817 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.6e-15 1.6e-15 1.6e-15 1.6e-15 | 1.6e-12 1.6e-12 1.6e-12 1.6e-12 | 0 0 0 0 | 0 | 0 0 | 0 57956 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0061  replay+resume+new 0.4952                       values 0.0071 sums 0.0040               | replayed 1495947 (prefixes 102820, bbox false positives 1393127), new 768749
+      opt 3q pop 0.0002  replay+resume+new 0.2027 (keys inside)         values 0.0071 sums 0.0034  queue 0.0044 | replayed 130670 (prefixes 102820, false alarms 27850), new 768749, keys 299708
+      opt 2a box 0.0087  test 0.0574  resume 0.0117  new 0.1734               values 0.0073 sums 0.0041               | balls 1593278, new 768749
+      opt 2b pop 0.0003  test 0.0113  resume 0.0131  new 0.1776  keys 0.0124  values 0.0071 sums 0.0034  queue 0.0049 | balls 166988, new 768749, keys 299708
+      update temporaries (MiB): 3 1.05, 3q 0.83, 2a 4.38, 2b 4.32
+   2  opt 3  box 0.0059  replay+resume+new 0.4929                       values 0.0072 sums 0.0039               | replayed 1460962 (prefixes 95496, bbox false positives 1365466), new 753541
+      opt 3q pop 0.0002  replay+resume+new 0.1910 (keys inside)         values 0.0071 sums 0.0035  queue 0.0048 | replayed 95522 (prefixes 95496, false alarms 26), new 753541, keys 291405
+      opt 2a box 0.0065  test 0.0590  resume 0.0110  new 0.1743               values 0.0073 sums 0.0039               | balls 1556276, new 753541
+      opt 2b pop 0.0003  test 0.0111  resume 0.0121  new 0.1799  keys 0.0121  values 0.0078 sums 0.0038  queue 0.0054 | balls 129675, new 753541, keys 291405
+      update temporaries (MiB): 3 1.05, 3q 0.78, 2a 4.33, 2b 4.22
+   3  opt 3  box 0.0057  replay+resume+new 0.4970                       values 0.0074 sums 0.0037               | replayed 1449026 (prefixes 92082, bbox false positives 1356944), new 708873
+      opt 3q pop 0.0001  replay+resume+new 0.1760 (keys inside)         values 0.0074 sums 0.0036  queue 0.0042 | replayed 92082 (prefixes 92082, false alarms 0), new 708873, keys 243856
+      opt 2a box 0.0080  test 0.0600  resume 0.0108  new 0.1658               values 0.0068 sums 0.0032               | balls 1541584, new 708873
+      opt 2b pop 0.0003  test 0.0113  resume 0.0128  new 0.1605  keys 0.0107  values 0.0069 sums 0.0037  queue 0.0042 | balls 123823, new 708873, keys 243856
+      update temporaries (MiB): 3 1.05, 3q 0.73, 2a 4.10, 2b 3.95
+   4  opt 3  box 0.0057  replay+resume+new 0.4748                       values 0.0070 sums 0.0041               | replayed 1379119 (prefixes 85812, bbox false positives 1293307), new 683198
+      opt 3q pop 0.0001  replay+resume+new 0.1757 (keys inside)         values 0.0076 sums 0.0040  queue 0.0050 | replayed 85812 (prefixes 85812, false alarms 0), new 683198, keys 277018
+      opt 2a box 0.0059  test 0.0565  resume 0.0101  new 0.1598               values 0.0069 sums 0.0039               | balls 1468245, new 683198
+      opt 2b pop 0.0004  test 0.0104  resume 0.0110  new 0.1656  keys 0.0117  values 0.0069 sums 0.0037  queue 0.0046 | balls 116982, new 683198, keys 277018
+      update temporaries (MiB): 3 0.70, 3q 0.71, 2a 3.86, 2b 3.88
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.405 s
+setup (each option's own same-seed initial solve): 1 1.390 s (sums only), 3 1.405 s, 3q 1.511 s (+ keys while walking, queue), 2a 1.636 s (recording every step), 2b 1.744 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.387 s
+setup (each option's own same-seed initial solve): 1 1.393 s (sums only), 3 1.387 s, 3q 1.462 s (+ keys while walking, queue), 2a 1.549 s (recording every step), 2b 1.702 s (+ keys and queue); initial solves bitwise identical: yes
+(b) g=min(1,sqrt(r/L)): totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.867  1.00x  |  0.0000  0.0000  0.0000   5.8675  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29547276           0              0          0          0
+  3  seed replay (WalkCache::advance)      2.028  2.89x  |  0.0234  0.0000  0.0000   1.9599  0.0000  0.0288  0.0156  0.0000 |     374329     131718            0     2914361     5785054        5408844     376210          0
+  3q seed replay + front-key queue         0.808  7.26x  |  0.0006  0.0000  0.0000   0.7455  0.0000  0.0292  0.0144  0.0184 |     133382     131718            0     2914361      404086          27876     376210    1111987
+  2a stored steps + bbox                   1.024  5.73x  |  0.0291  0.2329  0.0436   0.6734  0.0000  0.0283  0.0151  0.0000 |     374329     131718      6159383     2914361           0              0     376210          0
+  2b stored steps + front-key queue        0.888  6.60x  |  0.0013  0.0440  0.0490   0.6836  0.0469  0.0287  0.0146  0.0191 |     133382     131718       537468     2914361           0              0     376210    1111987
+  steps run by the updates, as a share of option 1's 29547276:
+    3   29.4% = new 9.9% + replayed 19.6% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 18.3%)
+    3q  11.2% = new 9.9% + replayed 1.4% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.9% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.399 s + updates 5.867 s = 7.267 s:  1.00x vs option 1,  0.47x vs option 3; overtakes 3 for the first 0.0 advances only
+    3  setup 1.403 s + updates 2.028 s = 3.430 s:  2.12x vs option 1,  1.00x vs option 3; overtakes 1 after 0.0 advances
+    3q setup 1.493 s + updates 0.808 s = 2.301 s:  3.16x vs option 1,  1.49x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.590 s + updates 1.024 s = 2.613 s:  2.78x vs option 1,  1.31x vs option 3; overtakes 3 after 0.7 advances; overtakes 1 after 0.2 advances
+    2b setup 1.734 s + updates 0.888 s = 2.623 s:  2.77x vs option 1,  1.31x vs option 3; overtakes 3 after 1.2 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 12.442 s = same-seed full solves 5.868 s + the same recording
+  every step 6.574 s (the cost of recording paths in a full solve: +12%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.773 s [5.751, 5.867] | 3 2.007 s [1.980, 2.028] 2.89x [2.88, 2.90] | 3q 0.785 s [0.778, 0.808] 7.36x [7.26, 7.39] | 2a 1.014 s [1.012, 1.024] 5.71x [5.67, 5.73] | 2b 0.872 s [0.861, 0.888] 6.62x [6.60, 6.68]; vs 3: 3q 2.54x [2.51, 2.56], 2a 1.98x [1.95, 1.98], 2b 2.30x [2.28, 2.30]
+      setup + updates: opt 1 7.163 s [7.143, 7.267] | 3 3.412 s [3.368, 3.430] 2.12x [2.10, 2.12] | 3q 2.295 s [2.240, 2.301] 3.16x [3.12, 3.19] | 2a 2.613 s [2.563, 2.648] 2.78x [2.71, 2.79] | 2b 2.616 s [2.563, 2.623] 2.77x [2.74, 2.79]; vs 3: 3q 1.49x [1.49, 1.50], 2a 1.31x [1.29, 1.31], 2b 1.31x [1.30, 1.31]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.773 s | 3 2.000 s 2.89x | 3q 0.788 s 7.32x | 2a 1.015 s 5.69x | 2b 0.872 s 6.62x; vs 3: 3q 2.54x, 2a 1.97x, 2b 2.29x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +37.9 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 0.8 MiB update temporaries = 60.8 MiB (largest temporaries 0.8 MiB); OS: +56.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7856486 at the peak (15.9 per walk, capacity 16.6)
+               total 312.9 MiB at the start; at the peak 322.8 MiB + 3.9 MiB update temporaries = 326.6 MiB (largest temporaries 4.4 MiB);
+               stored steps at the peak: 247.3 MiB payload, 259.0 MiB allocated; OS: +60.6 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7856486 at the peak (15.9 per walk, capacity 16.6)
+               total 331.8 MiB at the start; at the peak 341.7 MiB + 3.9 MiB update temporaries = 345.5 MiB (largest temporaries 4.3 MiB);
+               stored steps at the peak: 247.3 MiB payload, 259.0 MiB allocated; OS: +244.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 804.3 MiB above the run's start, against 1117.4 MiB
+    computed for the four caches and the two references then (-28%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 1.6e-15/1.6e-15/1.6e-15/1.6e-15,
+  max |dG| 1.6e-12/1.6e-12/1.6e-12/1.6e-12; entered walks 395154, 2b false alarms 4992, 2a box false positives 727833 -> PASS
+
+-- (b) g=min(1,sqrt(r/L)), dt = 1/64 --
+[sample 1 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.395 s
+setup (each option's own same-seed initial solve): 1 1.398 s (sums only), 3 1.395 s, 3q 1.491 s (+ keys while walking, queue), 2a 1.613 s (recording every step), 2b 1.738 s (+ keys and queue); initial solves bitwise identical: yes
+per step: the share of walks re-walked; the candidates of the bbox test (options 3 and 2a) and of the queue
+(2b and 3q: the same walks, checked); 2b/3q false alarms; the update wall times; x = option 1 time / option
+time; the reference solves (validation, untimed); the order in which the updates ran
+step       t  strip/ |     re-     cand     cand    false |   opt 1   opt 3  opt 3q  opt 2a  opt 2b |    x 3   x 3q   x 2a   x 2b |    ref | order
+                full |  walked     bbox    queue   alarms |     (s)     (s)     (s)     (s)     (s) |                             |    (s) |
+   1  0.5156  0.0188 |   6.36%   19.05%    6.70%    0.34% |  1.4186  0.4962  0.1890  0.2464  0.2070 |  2.86x  7.51x  5.76x  6.85x |  3.041 | 2a 3q 2b 1 3
+   2  0.5312  0.0188 |   6.34%   18.79%    6.34%    0.00% |  1.4352  0.5027  0.1950  0.2489  0.2097 |  2.86x  7.36x  5.77x  6.84x |  3.055 | 3 3q 2a 1 2b
+   3  0.5469  0.0187 |   6.28%   18.63%    6.28%    0.00% |  1.4481  0.5035  0.1861  0.2478  0.2099 |  2.88x  7.78x  5.84x  6.90x |  3.108 | 2a 3q 3 2b 1
+   4  0.5625  0.0188 |   6.16%   18.53%    6.16%    0.00% |  1.5133  0.4959  0.1875  0.2465  0.2151 |  3.05x  8.07x  6.14x  7.04x |  3.206 | 1 2a 3 2b 3q
+checks per step (all counts must be 0; dH, dG = max |H - H_1|, max |grad H - grad H_1| over the points;
+'> bound' = points beyond the round-off bound of estimateCheck, with H exact for g = 1):
+step | walks != opt 1 | paths | sums != 3 | > bound    | max |dH| 3 3q 2a 2b     | max |dG| 3 3q 2a 2b     | re-walked != brute | 3q keys | 2b missed, | 2a box missed, | ref: sums1,
+     | 3 3q 2a 2b     | 2a 2b | 3q 2a 2b  | 3 3q 2a 2b |                         |                         | force: 3 3q 2a 2b  | != 2b   | false al.  | box FP         | record, fallback
+   1 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 8.3e-16 8.3e-16 8.3e-16 8.3e-16 | 6.8e-13 6.8e-13 6.8e-13 6.8e-13 | 0 0 0 0 | 0 | 0 1690 | 0 62888 | 0 0 0
+   2 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.2e-15 1.2e-15 1.2e-15 1.2e-15 | 8.0e-13 8.0e-13 8.0e-13 8.0e-13 | 0 0 0 0 | 0 | 0 0 | 0 61705 | 0 0 0
+   3 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 1.1e-12 1.1e-12 1.1e-12 1.1e-12 | 0 0 0 0 | 0 | 0 1 | 0 61218 | 0 0 0
+   4 | 0 0 0 0 | 0 0 | 0 0 0 | 0 0 0 0 | 1.3e-15 1.3e-15 1.3e-15 1.3e-15 | 1.1e-12 1.1e-12 1.1e-12 1.1e-12 | 0 0 0 0 | 0 | 0 0 | 0 61275 | 0 0 0
+passes of each update (wall time, s):
+   1  opt 3  box 0.0063  replay+resume+new 0.4787                       values 0.0075 sums 0.0036               | replayed 1501464 (prefixes 99287, bbox false positives 1402177), new 704998
+      opt 3q pop 0.0001  replay+resume+new 0.1753 (keys inside)         values 0.0064 sums 0.0033  queue 0.0038 | replayed 127662 (prefixes 99287, false alarms 28375), new 704998, keys 221985
+      opt 2a box 0.0074  test 0.0592  resume 0.0115  new 0.1573               values 0.0071 sums 0.0037               | balls 1595857, new 704998
+      opt 2b pop 0.0002  test 0.0118  resume 0.0107  new 0.1595  keys 0.0093  values 0.0072 sums 0.0034  queue 0.0045 | balls 160857, new 704998, keys 221985
+      update temporaries (MiB): 3 1.05, 3q 0.76, 2a 4.08, 2b 3.96
+   2  opt 3  box 0.0059  replay+resume+new 0.4861                       values 0.0070 sums 0.0037               | replayed 1477051 (prefixes 94688, bbox false positives 1382363), new 711596
+      opt 3q pop 0.0001  replay+resume+new 0.1806 (keys inside)         values 0.0067 sums 0.0035  queue 0.0041 | replayed 94688 (prefixes 94688, false alarms 0), new 711596, keys 201665
+      opt 2a box 0.0070  test 0.0575  resume 0.0107  new 0.1627               values 0.0071 sums 0.0038               | balls 1570166, new 711596
+      opt 2b pop 0.0003  test 0.0092  resume 0.0126  new 0.1620  keys 0.0104  values 0.0073 sums 0.0036  queue 0.0040 | balls 126098, new 711596, keys 201665
+      update temporaries (MiB): 3 1.05, 3q 0.72, 2a 4.07, 2b 3.91
+   3  opt 3  box 0.0066  replay+resume+new 0.4866                       values 0.0073 sums 0.0030               | replayed 1462914 (prefixes 92588, bbox false positives 1370326), new 703557
+      opt 3q pop 0.0002  replay+resume+new 0.1705 (keys inside)         values 0.0071 sums 0.0039  queue 0.0043 | replayed 92614 (prefixes 92588, false alarms 26), new 703557, keys 200108
+      opt 2a box 0.0072  test 0.0599  resume 0.0112  new 0.1592               values 0.0064 sums 0.0037               | balls 1555232, new 703557
+      opt 2b pop 0.0003  test 0.0095  resume 0.0114  new 0.1644  keys 0.0085  values 0.0073 sums 0.0038  queue 0.0044 | balls 123715, new 703557, keys 200108
+      update temporaries (MiB): 3 1.05, 3q 0.71, 2a 4.04, 2b 3.87
+   4  opt 3  box 0.0055  replay+resume+new 0.4795                       values 0.0069 sums 0.0038               | replayed 1461083 (prefixes 90129, bbox false positives 1370954), new 681525
+      opt 3q pop 0.0002  replay+resume+new 0.1726 (keys inside)         values 0.0066 sums 0.0035  queue 0.0045 | replayed 90129 (prefixes 90129, false alarms 0), new 681525, keys 210387
+      opt 2a box 0.0070  test 0.0561  resume 0.0116  new 0.1601               values 0.0075 sums 0.0040               | balls 1552902, new 681525
+      opt 2b pop 0.0002  test 0.0105  resume 0.0108  new 0.1680  keys 0.0102  values 0.0072 sums 0.0036  queue 0.0041 | balls 120673, new 681525, keys 210387
+      update temporaries (MiB): 3 0.70, 3q 0.70, 2a 3.81, 2b 3.81
+[sample 2 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.403 s
+setup (each option's own same-seed initial solve): 1 1.420 s (sums only), 3 1.403 s, 3q 1.500 s (+ keys while walking, queue), 2a 1.552 s (recording every step), 2b 1.707 s (+ keys and queue); initial solves bitwise identical: yes
+[sample 3 of 3]
+initial full solve at t = 0.5000: 1936 points, 495616 walks counted of 495616, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 15.0, 1.415 s
+setup (each option's own same-seed initial solve): 1 1.382 s (sums only), 3 1.415 s, 3q 1.482 s (+ keys while walking, queue), 2a 1.555 s (recording every step), 2b 1.718 s (+ keys and queue); initial solves bitwise identical: yes
+(b) g=min(1,sqrt(r/L)): totals over 4 updates (s), first sample; x = option 1 time / option time
+  option                                  total    x     | filter   test    resume  new      keys    values  sums    queue  | candidates  re-walked  balls tested  new steps    replayed  (false cand.)      sum k       keys
+  1  frozen seeds, full recompute          5.815  1.00x  |  0.0000  0.0000  0.0000   5.8152  0.0000  0.0000  0.0000  0.0000 |    1982464    1982464            0    29622470           0              0          0          0
+  3  seed replay (WalkCache::advance)      1.998  2.91x  |  0.0242  0.0000  0.0000   1.9309  0.0000  0.0287  0.0141  0.0000 |     371645     124559            0     2801676     5902512        5525820     376692          0
+  3q seed replay + front-key queue         0.758  7.68x  |  0.0006  0.0000  0.0000   0.6990  0.0000  0.0267  0.0142  0.0167 |     126250     124559            0     2801676      405093          28401     376692     834145
+  2a stored steps + bbox                   0.990  5.88x  |  0.0286  0.2326  0.0450   0.6393  0.0000  0.0280  0.0152  0.0000 |     371645     124559      6274157     2801676           0              0     376692          0
+  2b stored steps + front-key queue        0.842  6.91x  |  0.0012  0.0410  0.0454   0.6539  0.0384  0.0291  0.0144  0.0170 |     126250     124559       531343     2801676           0              0     376692     834145
+  steps run by the updates, as a share of option 1's 29622470:
+    3   29.4% = new 9.5% + replayed 19.9% (prefixes of the re-walked walks 1.3%, bbox false positives replayed
+                to the end 18.7%)
+    3q  10.8% = new 9.5% + replayed 1.4% (prefixes 1.3%, false alarms 0.1%)
+    2a, 2b 9.5% (new steps only; the stored prefixes they skip are 1.3%)
+  with each option's own initial solve (setup; option 1's is its first full recompute), and when its total
+  overtakes option 3's and option 1's at this run's mean update time:
+    1  setup 1.398 s + updates 5.815 s = 7.213 s:  1.00x vs option 1,  0.47x vs option 3; overtakes 3 never
+    3  setup 1.395 s + updates 1.998 s = 3.393 s:  2.13x vs option 1,  1.00x vs option 3; overtakes 1 from the start
+    3q setup 1.491 s + updates 0.758 s = 2.249 s:  3.21x vs option 1,  1.51x vs option 3; overtakes 3 after 0.3 advances; overtakes 1 after 0.1 advances
+    2a setup 1.613 s + updates 0.990 s = 2.603 s:  2.77x vs option 1,  1.30x vs option 3; overtakes 3 after 0.9 advances; overtakes 1 after 0.2 advances
+    2b setup 1.738 s + updates 0.842 s = 2.580 s:  2.80x vs option 1,  1.32x vs option 3; overtakes 3 after 1.2 advances; overtakes 1 after 0.3 advances
+  reference solves (validation, not part of any option): 12.409 s = same-seed full solves 5.870 s + the same recording
+  every step 6.540 s (the cost of recording paths in a full solve: +11%)
+  over the 3 samples, median [min, max]: updates: opt 1 5.780 s [5.715, 5.815] | 3 1.998 s [1.985, 2.023] 2.88x [2.86, 2.91] | 3q 0.758 s [0.746, 0.769] 7.66x [7.51, 7.68] | 2a 0.989 s [0.983, 0.990] 5.85x [5.82, 5.88] | 2b 0.827 s [0.822, 0.842] 6.95x [6.91, 6.99]; vs 3: 3q 2.64x [2.63, 2.66], 2a 2.02x [2.02, 2.05], 2b 2.41x [2.37, 2.45]
+      setup + updates: opt 1 7.162 s [7.135, 7.213] | 3 3.393 s [3.387, 3.438] 2.11x [2.08, 2.13] | 3q 2.249 s [2.247, 2.251] 3.18x [3.18, 3.21] | 2a 2.544 s [2.534, 2.603] 2.82x [2.77, 2.82] | 2b 2.545 s [2.529, 2.580] 2.81x [2.80, 2.82]; vs 3: 3q 1.51x [1.51, 1.53], 2a 1.34x [1.30, 1.35], 2b 1.34x [1.32, 1.35]
+  by the share of walks re-walked in the update (per-update medians over the samples):
+     < 25%:  4 updates: 1 5.774 s | 3 1.999 s 2.89x | 3q 0.758 s 7.62x | 2a 0.987 s 5.85x | 2b 0.830 s 6.96x; vs 3: 3q 2.64x, 2a 2.03x, 2b 2.41x
+  updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  updates slower than option 3: 3q 0 of 4, 2a 0 of 4, 2b 0 of 4
+  memory (computed from sizes and capacities, without the heap's block headers; 'temporaries' = the buffers
+  an update allocates and frees, e.g. 2a/2b's resume states; OS = process private bytes):
+    option 1 : no per-walk state; per-point sums and query points 0.33 MiB
+    option 3 : 82 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 41.0 MiB at the start; at the peak 41.0 MiB + 1.1 MiB update temporaries = 42.1 MiB (largest temporaries 1.1 MiB); OS: +40.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 3q: 122 B per walk fixed (+48 B per gradient-point walk, 42240 of them)
+               total 59.9 MiB at the start; at the peak 59.9 MiB + 0.8 MiB update temporaries = 60.7 MiB (largest temporaries 0.8 MiB); OS: +60.0 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2a: 130 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7887767 at the peak (15.9 per walk, capacity 16.4)
+               total 312.9 MiB at the start; at the peak 319.5 MiB + 3.8 MiB update temporaries = 323.3 MiB (largest temporaries 4.1 MiB);
+               stored steps at the peak: 248.2 MiB payload, 255.8 MiB allocated; OS: +361.8 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    option 2b: 170 B per walk fixed (+48 B per gradient-point walk, 42240 of them); 33 B per stored step (32 centre and key + 1 flags); stored steps: 7918906 at the start (16.0 per walk), 7887767 at the peak (15.9 per walk, capacity 16.4)
+               total 331.8 MiB at the start; at the peak 338.4 MiB + 3.8 MiB update temporaries = 342.2 MiB (largest temporaries 4.0 MiB);
+               stored steps at the peak: 248.2 MiB payload, 255.8 MiB allocated; OS: +343.6 MiB for configuring it and its initial solve (may read low: the heap can reuse memory an earlier run freed)
+    process: the largest private-bytes sample after a step is 1199.9 MiB above the run's start, against 1111.9 MiB
+    computed for the four caches and the two references then (+8%: heap block headers and heap memory not
+    returned to the OS; the update temporaries are freed by then)
+  checks over the run (all samples): walks != opt 1: 3 0, 3q 0, 2a 0, 2b 0; paths: 2a 0, 2b 0;
+  sums != opt 3: 3q 0, 2a 0, 2b 0; H/grad H beyond the round-off bound: 3 0, 3q 0, 2a 0, 2b 0;
+  re-walked set != brute force: 3 0, 3q 0, 2a 0, 2b 0; 3q keys/pops/queue != 2b 0; 2b missed 0;
+  2a box missed 0; initial 0, ref 0/0, fallbacks 0; max |dH| 3/3q/2a/2b 1.3e-15/1.3e-15/1.3e-15/1.3e-15,
+  max |dG| 1.1e-12/1.1e-12/1.1e-12/1.1e-12; entered walks 373677, 2b false alarms 5073, 2a box false positives 741258 -> PASS
+
+=== Summary (wall time summed over each run's updates; x = option 1 time / option time; 'vs 3' = option 3 time /
+    option time; medians [min, max] over the samples, 'tie' where a range contains 1) ===
+(i) sweep (a): updates: opt 1 3.513 s [3.479, 3.514] | 3 0.810 s [0.809, 0.830] 4.30x [4.23, 4.34] | 3q 0.319 s [0.318, 0.323] 10.90x [10.87, 11.06] | 2a 0.439 s [0.431, 0.458] 8.00x [7.67, 8.08] | 2b 0.382 s [0.365, 0.383] 9.20x [9.18, 9.52]; vs 3: 3q 2.55x [2.53, 2.57], 2a 1.88x [1.77, 1.89], 2b 2.17x [2.12, 2.21]
+      setup + updates: opt 1 3.709 s [3.647, 3.709] | 3 1.007 s [0.982, 1.028] 3.68x [3.61, 3.72] | 3q 0.529 s [0.501, 0.534] 7.01x [6.94, 7.28] | 2a 0.676 s [0.630, 0.695] 5.49x [5.34, 5.79] | 2b 0.639 s [0.578, 0.639] 5.81x [5.80, 6.31]; vs 3: 3q 1.92x [1.90, 1.96], 2a 1.52x [1.45, 1.56], 2b 1.61x [1.58, 1.70]
+      updates slower than option 1: 3 0 of 16, 3q 0 of 16, 2a 0 of 16, 2b 0 of 16; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve]: opt 1 0.08 MiB, 3 11.3 [11.1], 3q 15.7 [15.6], 2a 62.3 [64.5], 2b 66.8 [68.7] MiB;
+      stored-step payload at the start 40.6 MiB (1291027 steps x 33 B)
+(i) sweep (b): updates: opt 1 3.522 s [3.521, 3.528] | 3 0.856 s [0.852, 0.865] 4.12x [4.07, 4.13] | 3q 0.356 s [0.352, 0.357] 9.89x [9.88, 10.01] | 2a 0.478 s [0.477, 0.487] 7.37x [7.24, 7.39] | 2b 0.418 s [0.416, 0.419] 8.43x [8.40, 8.48]; vs 3: 3q 2.42x [2.40, 2.43], 2a 1.79x [1.76, 1.81], 2b 2.06x [2.04, 2.06]
+      setup + updates: opt 1 3.718 s [3.713, 3.726] | 3 1.053 s [1.051, 1.062] 3.54x [3.50, 3.54] | 3q 0.567 s [0.556, 0.568] 6.56x [6.55, 6.69] | 2a 0.710 s [0.706, 0.726] 5.24x [5.13, 5.26] | 2b 0.672 s [0.670, 0.678] 5.54x [5.48, 5.54]; vs 3: 3q 1.87x [1.85, 1.89], 2a 1.48x [1.45, 1.51], 2b 1.57x [1.55, 1.59]
+      updates slower than option 1: 3 0 of 16, 3q 0 of 16, 2a 0 of 16, 2b 0 of 16; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.08 MiB, 3 11.3 [11.1], 3q 15.7 [15.7], 2a 62.3 [65.5], 2b 66.8 [67.4] MiB;
+      stored-step payload at the start 40.6 MiB (1291027 steps x 33 B)
+(ii) (a) dt = 1/8 : updates: opt 1 4.966 s [4.769, 5.077] | 3 1.296 s [1.234, 1.298] 3.86x [3.83, 3.92] | 3q 0.538 s [0.518, 0.540] 9.24x [9.21, 9.40] | 2a 0.713 s [0.702, 0.714] 6.97x [6.79, 7.11] | 2b 0.642 s [0.638, 0.652] 7.74x [7.32, 7.96]; vs 3: 3q 2.40x [2.38, 2.42], 2a 1.81x [1.76, 1.82], 2b 2.02x [1.89, 2.03]
+      setup + updates: opt 1 6.198 s [6.002, 6.316] | 3 2.529 s [2.463, 2.539] 2.45x [2.44, 2.49] | 3q 1.829 s [1.807, 1.862] 3.39x [3.32, 3.39] | 2a 2.147 s [2.134, 2.177] 2.89x [2.81, 2.90] | 2b 2.183 s [2.174, 2.184] 2.85x [2.75, 2.89]; vs 3: 3q 1.36x [1.36, 1.38], 2a 1.17x [1.15, 1.18], 2b 1.16x [1.13, 1.16]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [40.8], 3q 61.1 [60.1], 2a 327.7 [340.9], 2b 346.6 [353.6] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (a) dt = 1/16: updates: opt 1 5.308 s [5.190, 5.468] | 3 1.722 s [1.661, 1.777] 3.08x [3.08, 3.13] | 3q 0.687 s [0.686, 0.724] 7.56x [7.55, 7.73] | 2a 0.905 s [0.890, 0.931] 5.87x [5.83, 5.87] | 2b 0.792 s [0.785, 0.831] 6.61x [6.58, 6.71]; vs 3: 3q 2.45x [2.42, 2.51], 2a 1.90x [1.87, 1.91], 2b 2.14x [2.12, 2.18]
+      setup + updates: opt 1 6.556 s [6.435, 6.781] | 3 2.974 s [2.904, 3.093] 2.20x [2.19, 2.22] | 3q 2.018 s [2.002, 2.132] 3.21x [3.18, 3.25] | 2a 2.346 s [2.336, 2.466] 2.75x [2.75, 2.80] | 2b 2.356 s [2.350, 2.495] 2.74x [2.72, 2.78]; vs 3: 3q 1.45x [1.45, 1.47], 2a 1.25x [1.24, 1.27], 2b 1.24x [1.24, 1.26]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [39.8], 3q 60.9 [60.0], 2a 329.2 [337.9], 2b 348.1 [353.4] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (a) dt = 1/32: updates: opt 1 5.717 s [5.640, 5.729] | 3 1.951 s [1.928, 1.968] 2.93x [2.90, 2.94] | 3q 0.744 s [0.732, 0.751] 7.68x [7.63, 7.71] | 2a 0.980 s [0.967, 0.990] 5.83x [5.78, 5.84] | 2b 0.831 s [0.824, 0.836] 6.85x [6.84, 6.88]; vs 3: 3q 2.63x [2.60, 2.64], 2a 1.99x [1.99, 1.99], 2b 2.34x [2.33, 2.37]
+      setup + updates: opt 1 7.055 s [7.009, 7.090] | 3 3.301 s [3.288, 3.326] 2.13x [2.12, 2.15] | 3q 2.193 s [2.190, 2.194] 3.22x [3.20, 3.23] | 2a 2.519 s [2.473, 2.586] 2.81x [2.71, 2.85] | 2b 2.521 s [2.506, 2.550] 2.78x [2.78, 2.82]; vs 3: 3q 1.50x [1.50, 1.52], 2a 1.32x [1.28, 1.33], 2b 1.31x [1.30, 1.31]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [37.9], 3q 60.8 [56.8], 2a 326.6 [60.6], 2b 345.5 [344.4] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (a) dt = 1/64: updates: opt 1 5.662 s [5.630, 5.689] | 3 1.922 s [1.922, 1.926] 2.95x [2.92, 2.96] | 3q 0.708 s [0.707, 0.721] 7.96x [7.86, 8.04] | 2a 0.942 s [0.932, 0.946] 6.02x [6.01, 6.04] | 2b 0.781 s [0.776, 0.790] 7.25x [7.20, 7.25]; vs 3: 3q 2.72x [2.67, 2.72], 2a 2.04x [2.03, 2.07], 2b 2.46x [2.43, 2.48]
+      setup + updates: opt 1 7.032 s [6.991, 7.077] | 3 3.298 s [3.297, 3.302] 2.13x [2.12, 2.14] | 3q 2.174 s [2.164, 2.185] 3.23x [3.22, 3.26] | 2a 2.478 s [2.478, 2.510] 2.82x [2.80, 2.86] | 2b 2.490 s [2.489, 2.499] 2.83x [2.80, 2.84]; vs 3: 3q 1.52x [1.51, 1.52], 2a 1.33x [1.31, 1.33], 2b 1.32x [1.32, 1.33]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [40.8], 3q 60.7 [60.0], 2a 323.3 [351.1], 2b 342.2 [347.2] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (b) dt = 1/8 : updates: opt 1 5.673 s [5.621, 5.751] | 3 1.500 s [1.476, 1.508] 3.81x [3.78, 3.81] | 3q 0.650 s [0.637, 0.652] 8.82x [8.70, 8.85] | 2a 0.811 s [0.808, 0.825] 6.97x [6.96, 6.99] | 2b 0.752 s [0.723, 0.757] 7.60x [7.55, 7.77]; vs 3: 3q 2.32x [2.30, 2.32], 2a 1.83x [1.83, 1.85], 2b 2.00x [1.99, 2.04]
+      setup + updates: opt 1 7.102 s [6.985, 7.105] | 3 2.882 s [2.834, 2.882] 2.47x [2.46, 2.47] | 3q 2.102 s [2.086, 2.124] 3.35x [3.34, 3.38] | 2a 2.347 s [2.321, 2.416] 3.01x [2.94, 3.03] | 2b 2.445 s [2.411, 2.465] 2.90x [2.88, 2.91]; vs 3: 3q 1.36x [1.36, 1.37], 2a 1.22x [1.19, 1.23], 2b 1.18x [1.17, 1.18]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [37.9], 3q 61.1 [56.8], 2a 327.7 [60.6], 2b 346.6 [287.9] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (b) dt = 1/16: updates: opt 1 5.834 s [5.823, 5.855] | 3 1.944 s [1.938, 1.945] 3.00x [3.00, 3.01] | 3q 0.797 s [0.795, 0.800] 7.30x [7.29, 7.36] | 2a 1.020 s [1.013, 1.026] 5.71x [5.71, 5.76] | 2b 0.895 s [0.894, 0.908] 6.52x [6.43, 6.54]; vs 3: 3q 2.43x [2.43, 2.45], 2a 1.90x [1.90, 1.92], 2b 2.17x [2.14, 2.17]
+      setup + updates: opt 1 7.226 s [7.221, 7.268] | 3 3.351 s [3.348, 3.373] 2.16x [2.15, 2.16] | 3q 2.292 s [2.286, 2.319] 3.15x [3.13, 3.16] | 2a 2.624 s [2.593, 2.644] 2.77x [2.73, 2.79] | 2b 2.641 s [2.594, 2.678] 2.75x [2.70, 2.79]; vs 3: 3q 1.46x [1.45, 1.46], 2a 1.29x [1.27, 1.29], 2b 1.28x [1.25, 1.29]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [41.1], 3q 60.9 [60.0], 2a 329.2 [355.0], 2b 348.1 [345.5] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (b) dt = 1/32: updates: opt 1 5.773 s [5.751, 5.867] | 3 2.007 s [1.980, 2.028] 2.89x [2.88, 2.90] | 3q 0.785 s [0.778, 0.808] 7.36x [7.26, 7.39] | 2a 1.014 s [1.012, 1.024] 5.71x [5.67, 5.73] | 2b 0.872 s [0.861, 0.888] 6.62x [6.60, 6.68]; vs 3: 3q 2.54x [2.51, 2.56], 2a 1.98x [1.95, 1.98], 2b 2.30x [2.28, 2.30]
+      setup + updates: opt 1 7.163 s [7.143, 7.267] | 3 3.412 s [3.368, 3.430] 2.12x [2.10, 2.12] | 3q 2.295 s [2.240, 2.301] 3.16x [3.12, 3.19] | 2a 2.613 s [2.563, 2.648] 2.78x [2.71, 2.79] | 2b 2.616 s [2.563, 2.623] 2.77x [2.74, 2.79]; vs 3: 3q 1.49x [1.49, 1.50], 2a 1.31x [1.29, 1.31], 2b 1.31x [1.30, 1.31]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [37.9], 3q 60.8 [56.8], 2a 326.6 [60.6], 2b 345.5 [244.0] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+(ii) (b) dt = 1/64: updates: opt 1 5.780 s [5.715, 5.815] | 3 1.998 s [1.985, 2.023] 2.88x [2.86, 2.91] | 3q 0.758 s [0.746, 0.769] 7.66x [7.51, 7.68] | 2a 0.989 s [0.983, 0.990] 5.85x [5.82, 5.88] | 2b 0.827 s [0.822, 0.842] 6.95x [6.91, 6.99]; vs 3: 3q 2.64x [2.63, 2.66], 2a 2.02x [2.02, 2.05], 2b 2.41x [2.37, 2.45]
+      setup + updates: opt 1 7.162 s [7.135, 7.213] | 3 3.393 s [3.387, 3.438] 2.11x [2.08, 2.13] | 3q 2.249 s [2.247, 2.251] 3.18x [3.18, 3.21] | 2a 2.544 s [2.534, 2.603] 2.82x [2.77, 2.82] | 2b 2.545 s [2.529, 2.580] 2.81x [2.80, 2.82]; vs 3: 3q 1.51x [1.51, 1.53], 2a 1.34x [1.30, 1.35], 2b 1.34x [1.32, 1.35]
+      updates slower than option 1: 3 0 of 4, 3q 0 of 4, 2a 0 of 4, 2b 0 of 4; checks PASS
+      memory at the peak, allocated incl. the update's temporaries [OS for the initial solve; may read low after the process's first run, as the heap reuses memory freed by earlier runs]: opt 1 0.33 MiB, 3 42.1 [40.8], 3q 60.7 [60.0], 2a 323.3 [361.8], 2b 342.2 [343.6] MiB;
+      stored-step payload at the start 249.2 MiB (7918906 steps x 33 B)
+
+all equivalence and soundness checks: PASS (0 mismatches)
+compare-options wall time: 888.1 s

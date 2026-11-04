@@ -1,0 +1,32 @@
+--ring-bench: 2026-11-03 19:34:20; 16 hardware threads (TBB default arena)
+output: ring_perf/audit5_r2k2_rows.csv, ring_perf/audit5_r2k2_summary.csv, ring_perf/audit5_r2k2_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: lean (solveMultiLean, the same walks without box and face tests); repeats 3 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 32/16/8; direct (N/B): 1024/16; current (N/B):
+
+=== ring 2, K2 ===
+  reference gate_cache\ref_check4_ring2_K2.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32270 points, 826112000 walks counted of 826112000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 60.0, 685.593 s
+  ring 2 K2, g = 1: reference noise floor (its batch s.e.): H RMS 0.301% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 21.98%;
+    energy over the ring minus the eps-tube 0.89436 +- 0.00525, within 0.1 of the crack-face lines 0.27550 +- 0.00092
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.009 s: shared by both methods, timed for neither
+  32263 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 0 1 0 1 0 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      1.02    35.2    0.178    0.014    0.193 |  1.831  1.730  11.90  0.519 |   58.57   29.72  34.874 |   +9.45    0.80 | 0.0575 0.0147
+    direct N1024/B16               g=1     33.04  1981.3   17.157    0.002   17.159 |  1.532  0.000   6.45  1.505 |  111.06    0.00  66.129 |   -4.86   12.31 | 0.0577 0.0000
+  vertex values v0..v6 (g = 1): reference +0.0773 +0.0560 -0.8683 -0.0634 +0.2042 +0.1373 -0.0659
+    ours Q32/R16/B8                +0.0827 +0.0438 -0.8348 -0.0174 +0.1467 +0.1402 -0.0940   (max err 0.0575)
+    direct N1024/B16               +0.0430 +0.0117 -0.8574 -0.0410 +0.1465 +0.0977 -0.0996   (max err 0.0577)
+
+  summary ring 2 K2, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.831%    1.831%    1.831%    1.831%    1.831%    1.831%    1.831%    1.831%    1.831%
+      direct                 -         -         -         -         -         -    1.532%    1.532%    1.532%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.193 s [0.193]   2.0%: 0.193 s [0.193]   1.5%: not reached   1.0%: not reached
+      direct           3.0%: 17.159 s [17.159]   2.0%: 17.159 s [17.159]   1.5%: not reached   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.120 / 0.145 s, direct 42.897 / 51.477 s; direct/ours = 4 x 89.02 = 356.1x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.193 s, direct 17.159 s per ring; direct/ours = 4 x 89.02 = 356.1x
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.120 / 0.145 s, direct 42.897 / 51.477 s; direct/ours = 4 x 89.02 = 356.1x (estimate from the measured ring times)
+      same with the log-log interpolated times: ours 0.193 s, direct 17.159 s per ring; direct/ours = 4 x 89.02 = 356.1x
+
+--ring-bench total 52.1 s; 2 rows written to ring_perf/audit5_r2k2_rows.csv

@@ -1,0 +1,27 @@
+config,g,family,kind,budget_or_threshold,value,label,interpolated_time
+ring 1 K2,g1,current,equal_time,0.25,,"",
+ring 1 K2,g1,current,equal_time,0.5,,"",
+ring 1 K2,g1,current,equal_time,1,,"",
+ring 1 K2,g1,current,equal_time,2,,"",
+ring 1 K2,g1,current,equal_time,5,,"",
+ring 1 K2,g1,current,equal_time,10,,"",
+ring 1 K2,g1,current,equal_time,30,,"",
+ring 1 K2,g1,current,equal_time,60,,"",
+ring 1 K2,g1,current,equal_time,120,0.0174528,"current N2560/B64",
+ring 1 K2,g1,current,equal_accuracy,0.03,63.7341,"current N2560/B64",63.7341
+ring 1 K2,g1,current,equal_accuracy,0.02,63.7341,"current N2560/B64",63.7341
+ring 1 K2,g1,current,equal_accuracy,0.015,,"",
+ring 1 K2,g1,current,equal_accuracy,0.01,,"",
+ring 1 K2,ramp,current,equal_time,0.25,,"",
+ring 1 K2,ramp,current,equal_time,0.5,,"",
+ring 1 K2,ramp,current,equal_time,1,,"",
+ring 1 K2,ramp,current,equal_time,2,,"",
+ring 1 K2,ramp,current,equal_time,5,,"",
+ring 1 K2,ramp,current,equal_time,10,,"",
+ring 1 K2,ramp,current,equal_time,30,,"",
+ring 1 K2,ramp,current,equal_time,60,,"",
+ring 1 K2,ramp,current,equal_time,120,0.0153507,"current N2560/B64",
+ring 1 K2,ramp,current,equal_accuracy,0.03,63.7341,"current N2560/B64",63.7341
+ring 1 K2,ramp,current,equal_accuracy,0.02,63.7341,"current N2560/B64",63.7341
+ring 1 K2,ramp,current,equal_accuracy,0.015,,"",
+ring 1 K2,ramp,current,equal_accuracy,0.01,,"",

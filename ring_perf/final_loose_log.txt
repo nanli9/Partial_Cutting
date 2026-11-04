@@ -1,0 +1,192 @@
+--ring-bench: 2026-11-03 19:13:03; 16 hardware threads (TBB default arena)
+output: ring_perf/final_loose_rows.csv, ring_perf/final_loose_summary.csv, ring_perf/final_loose_log.txt
+settings: walk stop distance 0.0001 sqrt(2) (both methods; the reference's: 1e-6) [LOOSE: biased, opt-in]; step function: lean (solveMultiLean, the same walks without box and face tests); repeats 3 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 32/16/8 64/32/16; direct (N/B): 256/16 1024/16; current (N/B):
+
+=== ring 1, K1 ===
+  reference gate_cache\ref_check4_ring1_K1.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32009 points, 819430400 walks counted of 819430400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 47.2, 588.990 s
+  ring 1 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 16.82%;
+    energy over the ring minus the eps-tube 1.51485 +- 0.01243, within 0.1 of the crack-face lines 0.73121 +- 0.00114
+  ring 1 K1, ramp: reference noise floor (its batch s.e.): H RMS 0.086% (max 0.101%) of 2g; grad s.e. RMS / grad RMS 15.75%;
+    energy over the ring minus the eps-tube 0.21675 +- 0.00250, within 0.1 of the crack-face lines 0.06687 +- 0.00007
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.010 s: shared by both methods, timed for neither
+  32002 points in the 8 tets + 7 vertex probes; tets cut by the crack: 1 1 1 1 1 0 1 0
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      0.76    14.7    0.089    0.013    0.102 |  1.364  1.335  13.55  0.122 |   26.51   20.40  20.435 |   +2.39    0.82 | 0.1074 0.0056
+    ours Q32/R16/B8 shell 1e-04    ramp     0.76    14.7    0.091    0.019    0.110 |  1.162  1.158   6.46  0.041 |   40.49   36.89  11.786 |  +13.26    1.15 | 0.0789 0.0019
+    ours Q64/R32/B16 shell 1e-04   g=1      1.52    29.4    0.180    0.027    0.207 |  1.398  1.371  13.66  0.108 |   26.47   20.40  20.408 |   +2.41    0.82 | 0.1107 0.0056
+    ours Q64/R32/B16 shell 1e-04   ramp     1.52    29.4    0.185    0.035    0.220 |  1.160  1.157   6.49  0.029 |   40.26   36.86  11.719 |  +13.34    1.15 | 0.0797 0.0014
+    direct N256/B16 shell 1e-04    g=1      8.19   261.9    2.460    0.004    2.464 |  2.508  0.000  11.59  2.499 |  173.53   13.42 133.769 |  -19.14   46.18 | 0.1102 0.0000
+    direct N256/B16 shell 1e-04    ramp     8.19   261.9    2.460    0.004    2.464 |  0.860  0.000   3.60  0.859 |  177.58   77.52  51.687 |  +49.87   77.20 | 0.0329 0.0000
+    direct N1024/B16 shell 1e-04   g=1     32.78  1047.6    9.981    0.004    9.985 |  1.273  0.000   5.60  1.250 |   96.63   45.35  74.488 |   +9.55   12.98 | 0.0386 0.0000
+    direct N1024/B16 shell 1e-04   ramp    32.78  1047.6    9.981    0.004    9.985 |  0.437  0.000   1.88  0.429 |   82.16   13.35  23.915 |   -3.48   15.99 | 0.0127 0.0000
+  vertex values v0..v6 (g = 1): reference -0.6170 +0.7025 -0.4427 +0.0395 -0.8350 +0.8944 -0.5320
+    ours Q32/R16/B8 shell 1e-04    -0.6173 +0.6750 -0.4411 +0.0252 -0.8039 +0.7870 -0.4542   (max err 0.1074)
+    ours Q64/R32/B16 shell 1e-04   -0.6156 +0.6770 -0.4397 +0.0276 -0.8051 +0.7836 -0.4465   (max err 0.1107)
+    direct N256/B16 shell 1e-04    -0.6094 +0.7188 -0.4688 +0.0859 -0.8203 +0.9141 -0.4219   (max err 0.1102)
+    direct N1024/B16 shell 1e-04   -0.6230 +0.6973 -0.4570 +0.0781 -0.8125 +0.9102 -0.5176   (max err 0.0386)
+
+  summary ring 1 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.364%    1.364%    1.364%    1.364%    1.364%    1.364%    1.364%    1.364%    1.364%
+      direct-loose           -         -         -         -    2.508%    1.273%    1.273%    1.273%    1.273%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.102 s [0.102]   2.0%: 0.102 s [0.102]   1.5%: 0.102 s [0.102]   1.0%: not reached
+      direct-loose     3.0%: 2.464 s [2.464]   2.0%: 9.985 s [3.931]   1.5%: 9.985 s [7.119]   1.0%: not reached
+
+  summary ring 1 K1, ramp (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%
+      direct-loose           -         -         -         -    0.860%    0.437%    0.437%    0.437%    0.437%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.110 s [0.110]   2.0%: 0.110 s [0.110]   1.5%: 0.110 s [0.110]   1.0%: not reached
+      direct-loose     3.0%: 2.464 s [2.464]   2.0%: 2.464 s [2.464]   1.5%: 2.464 s [2.464]   1.0%: 2.464 s [2.464]
+
+=== ring 1, K2 ===
+  reference gate_cache\ref_check4_ring1_K2.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32265 points, 825984000 walks counted of 825984000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 59.9, 700.380 s
+  ring 1 K2, g = 1: reference noise floor (its batch s.e.): H RMS 0.301% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 25.99%;
+    energy over the ring minus the eps-tube 0.91960 +- 0.04610, within 0.1 of the crack-face lines 0.30924 +- 0.00089
+  ring 1 K2, ramp: reference noise floor (its batch s.e.): H RMS 0.078% (max 0.083%) of 2g; grad s.e. RMS / grad RMS 21.73%;
+    energy over the ring minus the eps-tube 0.08774 +- 0.00251, within 0.1 of the crack-face lines 0.02971 +- 0.00004
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.010 s: shared by both methods, timed for neither
+  32258 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 0 1 0 0 0 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      0.38     7.4    0.044    0.013    0.057 |  1.763  1.710  12.46  0.307 |   40.37   30.86  24.628 |   +5.49    5.01 | 0.0732 0.0094
+    ours Q32/R16/B8 shell 1e-04    ramp     0.38     7.4    0.045    0.017    0.062 |  1.530  1.527   7.18  0.063 |   62.65   58.73  11.680 |  +36.38    2.86 | 0.1468 0.0020
+    ours Q64/R32/B16 shell 1e-04   g=1      0.75    14.8    0.091    0.023    0.114 |  1.797  1.761  12.53  0.194 |   40.37   30.88  24.631 |   +5.50    5.01 | 0.0743 0.0057
+    ours Q64/R32/B16 shell 1e-04   ramp     0.75    14.8    0.090    0.030    0.119 |  1.545  1.543   7.24  0.044 |   62.63   58.72  11.676 |  +36.38    2.86 | 0.1479 0.0013
+    direct N256/B16 shell 1e-04    g=1      8.26   367.5    3.200    0.005    3.205 |  3.029  0.139  12.75  3.011 |  270.16   66.00 164.820 |   -7.39  223.12 | 0.1233 0.0000
+    direct N256/B16 shell 1e-04    ramp     8.26   367.5    3.200    0.005    3.205 |  0.783  0.000   3.59  0.779 |  223.76   50.26  41.714 |  +27.73  174.94 | 0.0359 0.0000
+    direct N1024/B16 shell 1e-04   g=1     33.04  1470.5   12.935    0.005   12.940 |  1.528  0.000   6.69  1.505 |  134.77   34.78  82.219 |  +18.34   82.30 | 0.0571 0.0000
+    direct N1024/B16 shell 1e-04   ramp    33.04  1470.5   12.935    0.005   12.940 |  0.394  0.000   1.71  0.390 |  123.49   55.82  23.021 |  +55.57   68.35 | 0.0183 0.0000
+  vertex values v0..v6 (g = 1): reference +0.0395 +0.0475 -0.8650 -0.0684 +0.2014 +0.1313 -0.0659
+    ours Q32/R16/B8 shell 1e-04    +0.0391 +0.0423 -0.8322 -0.0162 +0.1282 +0.1368 -0.1255   (max err 0.0732)
+    ours Q64/R32/B16 shell 1e-04   +0.0346 +0.0378 -0.8355 -0.0215 +0.1271 +0.1300 -0.1261   (max err 0.0743)
+    direct N256/B16 shell 1e-04    -0.0469 +0.1016 -0.8594 +0.0391 +0.0781 +0.0859 -0.0625   (max err 0.1233)
+    direct N1024/B16 shell 1e-04   -0.0176 +0.0371 -0.8633 -0.0527 +0.1660 +0.0840 -0.0566   (max err 0.0571)
+
+  summary ring 1 K2, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.763%    1.763%    1.763%    1.763%    1.763%    1.763%    1.763%    1.763%    1.763%
+      direct-loose           -         -         -         -    3.029%    3.029%    1.528%    1.528%    1.528%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.057 s [0.057]   2.0%: 0.057 s [0.057]   1.5%: not reached   1.0%: not reached
+      direct-loose     3.0%: 12.940 s [3.269]   2.0%: 12.940 s [7.474]   1.5%: not reached   1.0%: not reached
+
+  summary ring 1 K2, ramp (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.530%    1.530%    1.530%    1.530%    1.530%    1.530%    1.530%    1.530%    1.530%
+      direct-loose           -         -         -         -    0.783%    0.783%    0.394%    0.394%    0.394%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.062 s [0.062]   2.0%: 0.062 s [0.062]   1.5%: not reached   1.0%: not reached
+      direct-loose     3.0%: 3.205 s [3.205]   2.0%: 3.205 s [3.205]   1.5%: 3.205 s [3.205]   1.0%: 3.205 s [3.205]
+
+=== ring 1, K3 ===
+  reference gate_cache\ref_check4_ring1_K3.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 31316 points, 801689600 walks counted of 801689600, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 477.879 s
+  ring 1 K3, g = 1: reference noise floor (its batch s.e.): H RMS 0.000% (max 0.000%) of 2g; grad s.e. RMS / grad RMS 96.83%;
+    energy over the ring minus the eps-tube 0.00000 +- 0.00000, within 0.1 of the crack-face lines -0.00000 +- 0.00000
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.013 s: shared by both methods, timed for neither
+  31309 points in the 8 tets + 7 vertex probes; tets cut by the crack: 1 1 1 1 1 1 1 0
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      0.87    16.4    0.098    0.017    0.115 |  1.087  1.087   9.92  0.013 |     nan     nan   6.756 | +29273266046612581898138618546880512.00 15228420317180986005559718182912.00 | 0.2268 0.0004
+    ours Q64/R32/B16 shell 1e-04   g=1      1.74    32.9    0.198    0.028    0.226 |  1.087  1.087   9.93  0.008 |     nan     nan   6.732 | +29268798126747299793635865754861568.00 12180979202805583036261959991296.00 | 0.2270 0.0002
+    direct N256/B16 shell 1e-04    g=1      8.02   199.8    1.898    0.002    1.900 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +2085.02 1131.60 | 0.0000 0.0000
+    direct N1024/B16 shell 1e-04   g=1     32.07   799.3    7.639    0.002    7.641 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | -208.08  543.32 | 0.0000 0.0000
+  vertex values v0..v6 (g = 1): reference -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000
+    ours Q32/R16/B8 shell 1e-04    -1.0028 +1.0344 -1.0265 +0.7732 -1.0222 +0.9999 -0.9938   (max err 0.2268)
+    ours Q64/R32/B16 shell 1e-04   -1.0028 +1.0343 -1.0267 +0.7730 -1.0220 +0.9999 -0.9939   (max err 0.2270)
+    direct N256/B16 shell 1e-04    -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 shell 1e-04   -1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+
+  summary ring 1 K3, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.087%    1.087%    1.087%    1.087%    1.087%    1.087%    1.087%    1.087%    1.087%
+      direct-loose           -         -         -    0.000%    0.000%    0.000%    0.000%    0.000%    0.000%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.115 s [0.115]   2.0%: 0.115 s [0.115]   1.5%: 0.115 s [0.115]   1.0%: not reached
+      direct-loose     3.0%: 1.900 s [1.900]   2.0%: 1.900 s [1.900]   1.5%: 1.900 s [1.900]   1.0%: 1.900 s [1.900]
+
+=== ring 2, K1 ===
+  reference gate_cache\ref_check4_ring2_K1.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  ring 2 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 15.30%;
+    energy over the ring minus the eps-tube 1.51176 +- 0.00746, within 0.1 of the crack-face lines 0.47591 +- 0.00091
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.013 s: shared by both methods, timed for neither
+  32453 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      1.43    27.3    0.188    0.020    0.209 |  1.388  1.352  13.88  0.188 |   45.56   21.22  34.993 |   +2.01    0.73 | 0.1177 0.0051
+    ours Q64/R32/B16 shell 1e-04   g=1      2.85    54.6    0.338    0.030    0.368 |  1.407  1.378  14.00  0.135 |   36.37   20.97  27.931 |   +1.90    0.62 | 0.1248 0.0035
+    direct N256/B16 shell 1e-04    g=1      8.31   257.2    2.454    0.002    2.456 |  2.515  0.143  12.25  2.498 |  173.91   74.00 133.568 |  +43.68   56.62 | 0.0750 0.0000
+    direct N1024/B16 shell 1e-04   g=1     33.24  1029.2    9.940    0.002    9.942 |  1.268  0.000   6.44  1.249 |   74.32    0.00  57.075 |   -9.10    6.38 | 0.0640 0.0000
+  vertex values v0..v6 (g = 1): reference +0.9840 +0.7022 -0.4484 +0.0550 -0.8303 +0.8934 -0.5308
+    ours Q32/R16/B8 shell 1e-04    +0.9700 +0.6807 -0.4443 +0.0051 -0.8145 +0.7757 -0.4445   (max err 0.1177)
+    ours Q64/R32/B16 shell 1e-04   +0.9715 +0.6814 -0.4461 +0.0061 -0.8124 +0.7687 -0.4405   (max err 0.1248)
+    direct N256/B16 shell 1e-04    +0.9766 +0.7422 -0.5234 +0.0859 -0.7734 +0.9141 -0.5312   (max err 0.0750)
+    direct N1024/B16 shell 1e-04   +0.9707 +0.7324 -0.4297 +0.0469 -0.8613 +0.8965 -0.4668   (max err 0.0640)
+
+  summary ring 2 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%    1.388%
+      direct-loose           -         -         -         -    2.515%    1.268%    1.268%    1.268%    1.268%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.209 s [0.209]   2.0%: 0.209 s [0.209]   1.5%: 0.209 s [0.209]   1.0%: not reached
+      direct-loose     3.0%: 2.456 s [2.456]   2.0%: 9.942 s [3.921]   1.5%: 9.942 s [7.058]   1.0%: not reached
+
+=== ring 2, K2 ===
+  reference gate_cache\ref_check4_ring2_K2.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32270 points, 826112000 walks counted of 826112000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 60.0, 685.593 s
+  ring 2 K2, g = 1: reference noise floor (its batch s.e.): H RMS 0.301% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 21.98%;
+    energy over the ring minus the eps-tube 0.89436 +- 0.00525, within 0.1 of the crack-face lines 0.27550 +- 0.00092
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.010 s: shared by both methods, timed for neither
+  32263 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 0 1 0 1 0 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      1.02    19.8    0.111    0.014    0.125 |  1.820  1.712  11.74  0.539 |   57.08   29.30  33.990 |   +9.08    0.85 | 0.0604 0.0151
+    ours Q64/R32/B16 shell 1e-04   g=1      2.05    39.5    0.223    0.025    0.248 |  1.808  1.759  11.50  0.292 |   46.98   29.70  27.975 |   +9.27    0.68 | 0.0651 0.0084
+    direct N256/B16 shell 1e-04    g=1      8.26   367.8    3.258    0.002    3.260 |  3.020  0.000  12.52  3.010 |  228.13   27.59 135.835 |   +0.58   39.43 | 0.1084 0.0000
+    direct N1024/B16 shell 1e-04   g=1     33.04  1471.5   13.049    0.002   13.051 |  1.528  0.000   7.16  1.505 |  115.03   17.05  68.491 |   -1.05   10.92 | 0.0401 0.0000
+  vertex values v0..v6 (g = 1): reference +0.0773 +0.0560 -0.8683 -0.0634 +0.2042 +0.1373 -0.0659
+    ours Q32/R16/B8 shell 1e-04    +0.0804 +0.0428 -0.8355 -0.0197 +0.1438 +0.1382 -0.0988   (max err 0.0604)
+    ours Q64/R32/B16 shell 1e-04   +0.0804 +0.0429 -0.8365 -0.0172 +0.1392 +0.1358 -0.1077   (max err 0.0651)
+    direct N256/B16 shell 1e-04    +0.0000 +0.0781 -0.8906 -0.1719 +0.2422 +0.1172 -0.1094   (max err 0.1084)
+    direct N1024/B16 shell 1e-04   +0.0684 +0.0215 -0.8594 -0.1035 +0.1816 +0.1270 -0.0859   (max err 0.0401)
+
+  summary ring 2 K2, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.808%    1.808%    1.808%    1.808%    1.808%    1.808%    1.808%    1.808%    1.808%
+      direct-loose           -         -         -         -    3.020%    3.020%    1.528%    1.528%    1.528%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.125 s [0.125]   2.0%: 0.125 s [0.125]   1.5%: not reached   1.0%: not reached
+      direct-loose     3.0%: 13.051 s [3.304]   2.0%: 13.051 s [7.543]   1.5%: not reached   1.0%: not reached
+
+=== ring 2, K3 ===
+  reference gate_cache\ref_check4_ring2_K3.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 31980 points, 818688000 walks counted of 818688000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 459.217 s
+  ring 2 K3, g = 1: reference noise floor (its batch s.e.): H RMS 0.000% (max 0.000%) of 2g; grad s.e. RMS / grad RMS 100.61%;
+    energy over the ring minus the eps-tube -0.00000 +- 0.00000, within 0.1 of the crack-face lines -0.00000 +- 0.00000
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.014 s: shared by both methods, timed for neither
+  31973 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8 shell 1e-04    g=1      1.40    26.3    0.154    0.016    0.170 |  1.106  1.105  10.62  0.049 |     nan     nan  10.999 | -206296275672519205617094178501558272.00 14153119606355001543085667043508224.00 | 0.2263 0.0010
+    ours Q64/R32/B16 shell 1e-04   g=1      2.81    52.6    0.311    0.031    0.342 |  1.106  1.105  10.63  0.035 |     nan     nan   8.887 | -198533814150333313416016289603780608.00 8019700125433122430317446054281216.00 | 0.2264 0.0008
+    direct N256/B16 shell 1e-04    g=1      8.19   203.7    1.942    0.002    1.943 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 | +4041.47 19129.00 | 0.0000 0.0000
+    direct N1024/B16 shell 1e-04   g=1     32.75   814.7    7.886    0.002    7.888 |  0.000  0.000   0.00  0.000 |     nan     nan   0.000 |  +84.91 1142.22 | 0.0000 0.0000
+  vertex values v0..v6 (g = 1): reference +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000
+    ours Q32/R16/B8 shell 1e-04    +0.9974 +1.0344 -1.0256 +0.7737 -1.0240 +1.0005 -0.9950   (max err 0.2263)
+    ours Q64/R32/B16 shell 1e-04   +0.9975 +1.0342 -1.0246 +0.7736 -1.0241 +1.0004 -0.9957   (max err 0.2264)
+    direct N256/B16 shell 1e-04    +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+    direct N1024/B16 shell 1e-04   +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000   (max err 0.0000)
+
+  summary ring 2 K3, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-loose        1.106%    1.106%    1.106%    1.106%    1.106%    1.106%    1.106%    1.106%    1.106%
+      direct-loose           -         -         -    0.000%    0.000%    0.000%    0.000%    0.000%    0.000%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-loose       3.0%: 0.170 s [0.170]   2.0%: 0.170 s [0.170]   1.5%: 0.170 s [0.170]   1.0%: not reached
+      direct-loose     3.0%: 1.943 s [1.943]   2.0%: 1.943 s [1.943]   1.5%: 1.943 s [1.943]   1.0%: 1.943 s [1.943]
+
+--ring-bench total 240.8 s; 32 rows written to ring_perf/final_loose_rows.csv

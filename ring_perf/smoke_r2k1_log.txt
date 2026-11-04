@@ -1,0 +1,50 @@
+--ring-bench: 2026-11-03 18:07:13; 16 hardware threads (TBB default arena)
+output: ring_perf/smoke_r2k1_rows.csv, ring_perf/smoke_r2k1_summary.csv, ring_perf/smoke_r2k1_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: lean (solveMultiLean, the same walks without box and face tests); repeats 3 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 16/16/8 32/16/8 32/64/8 64/32/16 64/256/16 128/64/16 256/128/16 1024/256/16 2560/640/64; direct (N/B): 64/16 256/16 1024/16; current (N/B):
+
+=== ring 2, K1 ===
+  reference gate_cache\ref_check4_ring2_K1.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  ring 2 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 15.30%;
+    energy over the ring minus the eps-tube 1.51176 +- 0.00746, within 0.1 of the crack-face lines 0.47591 +- 0.00091
+  32453 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q16/R16/B8                g=1      0.97    33.2    0.174    0.015    0.189 |  1.442  1.365  13.88  0.392 |   48.00   20.97  36.862 |   +1.92    0.75 | 0.1240 0.0139
+    ours Q32/R16/B8                g=1      1.43    48.8    0.261    0.008    0.269 |  1.394  1.359  13.89  0.181 |   47.77   21.12  36.690 |   +2.00    0.72 | 0.1172 0.0045
+    ours Q32/R64/B8                g=1      2.98   101.6    0.513    0.018    0.531 |  1.382  1.351  13.82  0.150 |   30.86   21.12  23.702 |   +2.06    0.53 | 0.1204 0.0047
+    ours Q64/R32/B16               g=1      2.85    97.6    0.520    0.022    0.542 |  1.408  1.380  14.01  0.134 |   37.46   20.89  28.769 |   +1.91    0.63 | 0.1244 0.0035
+    ours Q64/R256/B16              g=1     10.12   343.9    1.740    0.032    1.771 |  1.394  1.368  13.96  0.092 |   27.33   21.28  20.990 |   +1.91    0.50 | 0.1244 0.0039
+    ours Q128/R64/B16              g=1      5.71   195.2    1.077    0.012    1.090 |  1.391  1.365  14.01  0.100 |   30.55   21.17  23.461 |   +2.18    0.53 | 0.1228 0.0029
+    ours Q256/R128/B16             g=1     11.41   390.4    2.153    0.019    2.172 |  1.397  1.373  14.06  0.066 |   28.39   21.09  21.805 |   +1.99    0.51 | 0.1229 0.0018
+    ours Q1024/R256/B16            g=1     37.35  1280.1    7.194   -0.036    7.158 |  1.388  1.364  13.98  0.044 |   27.29   21.29  20.958 |   +1.93    0.50 | 0.1225 0.0010
+    ours Q2560/R640/B64            g=1     93.36  3199.6   18.591   -0.406   18.185 |  1.386  1.363  13.95  0.029 |   26.71   21.34  20.513 |   +1.94    0.50 | 0.1225 0.0006
+    direct N64/B16                 g=1      2.08    96.0    0.944   -0.018    0.926 |  4.967  0.000  23.57  5.000 |  352.56    0.00 270.767 |  -15.95  239.24 | 0.1122 0.0000
+    direct N256/B16                g=1      8.31   384.0    3.679    0.003    3.681 |  2.500  0.000  11.45  2.499 |  151.63    0.00 116.455 |  -31.18   31.38 | 0.1089 0.0000
+    direct N1024/B16               g=1     33.24  1535.8   14.525   -0.076   14.449 |  1.280  0.122   6.06  1.250 |   82.95   22.34  63.705 |   +3.08   13.00 | 0.0341 0.0000
+  vertex values v0..v6 (g = 1): reference +0.9840 +0.7022 -0.4484 +0.0550 -0.8303 +0.8934 -0.5308
+    ours Q16/R16/B8                +0.9649 +0.6785 -0.4506 -0.0028 -0.8115 +0.7695 -0.4519   (max err 0.1240)
+    ours Q32/R16/B8                +0.9695 +0.6798 -0.4447 +0.0040 -0.8145 +0.7762 -0.4441   (max err 0.1172)
+    ours Q32/R64/B8                +0.9717 +0.6807 -0.4448 +0.0047 -0.8122 +0.7730 -0.4461   (max err 0.1204)
+    ours Q64/R32/B16               +0.9713 +0.6810 -0.4462 +0.0061 -0.8125 +0.7691 -0.4402   (max err 0.1244)
+    ours Q64/R256/B16              +0.9727 +0.6824 -0.4439 +0.0081 -0.8119 +0.7691 -0.4406   (max err 0.1244)
+    ours Q128/R64/B16              +0.9743 +0.6825 -0.4422 +0.0090 -0.8127 +0.7706 -0.4398   (max err 0.1228)
+    ours Q256/R128/B16             +0.9741 +0.6832 -0.4420 +0.0092 -0.8127 +0.7706 -0.4374   (max err 0.1229)
+    ours Q1024/R256/B16            +0.9740 +0.6826 -0.4420 +0.0109 -0.8123 +0.7709 -0.4391   (max err 0.1225)
+    ours Q2560/R640/B64            +0.9740 +0.6827 -0.4424 +0.0107 -0.8119 +0.7709 -0.4396   (max err 0.1225)
+    direct N64/B16                 +1.0000 +0.6250 -0.4688 +0.0625 -0.7188 +0.7812 -0.5312   (max err 0.1122)
+    direct N256/B16                +0.9844 +0.6484 -0.4531 +0.0078 -0.8359 +0.8359 -0.4219   (max err 0.1089)
+    direct N1024/B16               +0.9824 +0.6797 -0.4531 +0.0781 -0.8477 +0.8594 -0.4980   (max err 0.0341)
+
+  summary ring 2 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.442%    1.394%    1.382%    1.382%    1.382%    1.382%    1.382%    1.382%    1.382%
+      direct                 -         -    4.967%    4.967%    2.500%    2.500%    1.280%    1.280%    1.280%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.189 s [0.189]   2.0%: 0.189 s [0.189]   1.5%: 0.189 s [0.189]   1.0%: not reached
+      direct           3.0%: 3.681 s [2.552]   2.0%: 14.449 s [5.808]   1.5%: 14.449 s [10.453]   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.118 / 0.141 s, direct 9.203 / 11.043 s; direct/ours = 4 x 19.52 = 78.1x (estimate from the measured ring times)
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.118 / 0.141 s, direct 36.123 / 43.347 s; direct/ours = 4 x 76.61 = 306.5x (estimate from the measured ring times)
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.118 / 0.141 s, direct 36.123 / 43.347 s; direct/ours = 4 x 76.61 = 306.5x (estimate from the measured ring times)
+
+--ring-bench total 154.0 s; 12 rows written to ring_perf/smoke_r2k1_rows.csv

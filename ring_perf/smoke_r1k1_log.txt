@@ -1,0 +1,47 @@
+--ring-bench: 2026-11-03 18:09:47; 16 hardware threads (TBB default arena)
+output: ring_perf/smoke_r1k1_rows.csv, ring_perf/smoke_r1k1_summary.csv, ring_perf/smoke_r1k1_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: lean (solveMultiLean, the same walks without box and face tests); repeats 1 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 32/16/8 64/32/16; direct (N/B): 256/16; current (N/B):
+
+=== ring 1, K1 ===
+  reference gate_cache\ref_check4_ring1_K1.bin loaded read-only (0.2 s): N = 25600 per point in 64 batches; original run: 32009 points, 819430400 walks counted of 819430400, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 47.2, 588.990 s
+  ring 1 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 16.82%;
+    energy over the ring minus the eps-tube 1.51485 +- 0.01243, within 0.1 of the crack-face lines 0.73121 +- 0.00114
+  ring 1 K1, ramp: reference noise floor (its batch s.e.): H RMS 0.086% (max 0.101%) of 2g; grad s.e. RMS / grad RMS 15.75%;
+    energy over the ring minus the eps-tube 0.21675 +- 0.00250, within 0.1 of the crack-face lines 0.06687 +- 0.00007
+  32002 points in the 8 tets + 7 vertex probes; tets cut by the crack: 1 1 1 1 1 0 1 0
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      0.76    26.2    0.149    0.015    0.165 |  1.367  1.338  13.55  0.126 |   26.51   20.40  20.435 |   +2.39    0.82 | 0.1075 0.0056
+    ours Q32/R16/B8                ramp     0.76    26.2    0.150    0.020    0.170 |  1.162  1.158   6.47  0.040 |   40.49   36.89  11.785 |  +13.27    1.15 | 0.0791 0.0018
+    ours Q64/R32/B16               g=1      1.52    52.4    0.305    0.026    0.331 |  1.404  1.377  13.66  0.109 |   26.48   20.41  20.410 |   +2.41    0.82 | 0.1108 0.0055
+    ours Q64/R32/B16               ramp     1.52    52.4    0.310    0.033    0.342 |  1.160  1.156   6.49  0.029 |   40.26   36.86  11.718 |  +13.34    1.15 | 0.0798 0.0014
+    direct N256/B16                g=1      8.19   387.0    3.647    0.004    3.651 |  2.496  0.000  11.73  2.500 |  179.47   45.56 138.350 |  +17.02   45.96 | 0.0306 0.0000
+    direct N256/B16                ramp     8.19   387.0    3.647    0.004    3.651 |  0.859  0.000   4.02  0.860 |  165.75   44.63  48.244 |   +0.95   43.09 | 0.0359 0.0000
+  vertex values v0..v6 (g = 1): reference -0.6170 +0.7025 -0.4427 +0.0395 -0.8350 +0.8944 -0.5320
+    ours Q32/R16/B8                -0.6168 +0.6752 -0.4406 +0.0258 -0.8039 +0.7869 -0.4537   (max err 0.1075)
+    ours Q64/R32/B16               -0.6151 +0.6772 -0.4393 +0.0282 -0.8051 +0.7836 -0.4456   (max err 0.1108)
+    direct N256/B16                -0.6016 +0.6719 -0.4375 +0.0391 -0.8047 +0.8672 -0.5078   (max err 0.0306)
+
+  summary ring 1 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%    1.367%
+      direct                 -         -         -         -    2.496%    2.496%    2.496%    2.496%    2.496%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.165 s [0.165]   2.0%: 0.165 s [0.165]   1.5%: 0.165 s [0.165]   1.0%: not reached
+      direct           3.0%: 3.651 s [3.651]   2.0%: not reached   1.5%: not reached   1.0%: not reached
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.103 / 0.124 s, direct 9.127 / 10.952 s; direct/ours = 4 x 22.17 = 88.7x (estimate from the measured ring times)
+
+  summary ring 1 K1, ramp (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours              1.162%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%    1.160%
+      direct                 -         -         -         -    0.859%    0.859%    0.859%    0.859%    0.859%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours             3.0%: 0.170 s [0.170]   2.0%: 0.170 s [0.170]   1.5%: 0.170 s [0.170]   1.0%: not reached
+      direct           3.0%: 3.651 s [3.651]   2.0%: 3.651 s [3.651]   1.5%: 3.651 s [3.651]   1.0%: 3.651 s [3.651]
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 3.0%: ours 0.106 / 0.127 s, direct 9.127 / 10.952 s; direct/ours = 4 x 21.51 = 86.1x (estimate from the measured ring times)
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 2.0%: ours 0.106 / 0.127 s, direct 9.127 / 10.952 s; direct/ours = 4 x 21.51 = 86.1x (estimate from the measured ring times)
+    DERIVED per node (real mesh, n_r = 20 / 24 tets per ring, each tet in 4 rings), at 1.5%: ours 0.106 / 0.127 s, direct 9.127 / 10.952 s; direct/ours = 4 x 21.51 = 86.1x (estimate from the measured ring times)
+
+--ring-bench total 5.0 s; 6 rows written to ring_perf/smoke_r1k1_rows.csv

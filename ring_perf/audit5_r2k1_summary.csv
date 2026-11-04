@@ -1,0 +1,40 @@
+config,g,family,kind,budget_or_threshold,value,label,interpolated_time
+ring 2 K1,g1,ours,equal_time,0.25,0.0193816,"ours Q8/R8/B4",
+ring 2 K1,g1,ours,equal_time,0.5,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,1,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,2,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,5,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,10,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,30,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,60,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,ours,equal_time,120,0.0139364,"ours Q32/R16/B8",
+ring 2 K1,g1,direct,equal_time,0.25,,"",
+ring 2 K1,g1,direct,equal_time,0.5,,"",
+ring 2 K1,g1,direct,equal_time,1,,"",
+ring 2 K1,g1,direct,equal_time,2,,"",
+ring 2 K1,g1,direct,equal_time,5,0.0250011,"direct N256/B16",
+ring 2 K1,g1,direct,equal_time,10,0.0250011,"direct N256/B16",
+ring 2 K1,g1,direct,equal_time,30,0.0250011,"direct N256/B16",
+ring 2 K1,g1,direct,equal_time,60,0.0250011,"direct N256/B16",
+ring 2 K1,g1,direct,equal_time,120,0.0250011,"direct N256/B16",
+ring 2 K1,g1,current,equal_time,0.25,,"",
+ring 2 K1,g1,current,equal_time,0.5,,"",
+ring 2 K1,g1,current,equal_time,1,,"",
+ring 2 K1,g1,current,equal_time,2,,"",
+ring 2 K1,g1,current,equal_time,5,,"",
+ring 2 K1,g1,current,equal_time,10,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,30,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,60,0.0147637,"current N256/B16",
+ring 2 K1,g1,current,equal_time,120,0.0147637,"current N256/B16",
+ring 2 K1,g1,ours,equal_accuracy,0.03,0.10148,"ours Q8/R8/B4",0.10148
+ring 2 K1,g1,ours,equal_accuracy,0.02,0.10148,"ours Q8/R8/B4",0.10148
+ring 2 K1,g1,ours,equal_accuracy,0.015,0.279929,"ours Q32/R16/B8",0.223246
+ring 2 K1,g1,ours,equal_accuracy,0.01,,"",
+ring 2 K1,g1,direct,equal_accuracy,0.03,3.28062,"direct N256/B16",3.28062
+ring 2 K1,g1,direct,equal_accuracy,0.02,,"",
+ring 2 K1,g1,direct,equal_accuracy,0.015,,"",
+ring 2 K1,g1,direct,equal_accuracy,0.01,,"",
+ring 2 K1,g1,current,equal_accuracy,0.03,6.77735,"current N256/B16",6.77735
+ring 2 K1,g1,current,equal_accuracy,0.02,6.77735,"current N256/B16",6.77735
+ring 2 K1,g1,current,equal_accuracy,0.015,6.77735,"current N256/B16",6.77735
+ring 2 K1,g1,current,equal_accuracy,0.01,,"",

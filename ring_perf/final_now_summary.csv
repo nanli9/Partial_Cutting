@@ -1,0 +1,14 @@
+config,g,family,kind,budget_or_threshold,value,label,interpolated_time
+ring 2 K1,g1,current,equal_time,0.25,,"",
+ring 2 K1,g1,current,equal_time,0.5,,"",
+ring 2 K1,g1,current,equal_time,1,,"",
+ring 2 K1,g1,current,equal_time,2,,"",
+ring 2 K1,g1,current,equal_time,5,,"",
+ring 2 K1,g1,current,equal_time,10,,"",
+ring 2 K1,g1,current,equal_time,30,,"",
+ring 2 K1,g1,current,equal_time,60,,"",
+ring 2 K1,g1,current,equal_time,120,0.0139977,"current N2560/B64",
+ring 2 K1,g1,current,equal_accuracy,0.03,69.8116,"current N2560/B64",69.8116
+ring 2 K1,g1,current,equal_accuracy,0.02,69.8116,"current N2560/B64",69.8116
+ring 2 K1,g1,current,equal_accuracy,0.015,69.8116,"current N2560/B64",69.8116
+ring 2 K1,g1,current,equal_accuracy,0.01,,"",

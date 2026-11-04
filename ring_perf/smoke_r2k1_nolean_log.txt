@@ -1,0 +1,27 @@
+--ring-bench: 2026-11-03 18:15:23; 16 hardware threads (TBB default arena)
+output: ring_perf/smoke_r2k1_nolean_rows.csv, ring_perf/smoke_r2k1_nolean_summary.csv, ring_perf/smoke_r2k1_nolean_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: runWalk (solveMulti); repeats 3 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B): 32/16/8; direct (N/B): 256/16; current (N/B):
+
+=== ring 2, K1 ===
+  reference gate_cache\ref_check4_ring2_K1.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 32460 points, 830976000 walks counted of 830976000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 46.2, 569.770 s
+  ring 2 K1, g = 1: reference noise floor (its batch s.e.): H RMS 0.250% (max 0.313%) of 2g; grad s.e. RMS / grad RMS 15.30%;
+    energy over the ring minus the eps-tube 1.51176 +- 0.00746, within 0.1 of the crack-face lines 0.47591 +- 0.00091
+  32453 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    ours Q32/R16/B8                g=1      1.43    48.8    0.544    0.016    0.560 |  1.394  1.359  13.89  0.181 |   47.77   21.12  36.690 |   +2.00    0.72 | 0.1172 0.0045
+    direct N256/B16                g=1      8.31   384.0    5.022    0.002    5.024 |  2.500  0.000  11.45  2.499 |  151.63    0.00 116.455 |  -31.18   31.38 | 0.1089 0.0000
+  vertex values v0..v6 (g = 1): reference +0.9840 +0.7022 -0.4484 +0.0550 -0.8303 +0.8934 -0.5308
+    ours Q32/R16/B8                +0.9695 +0.6798 -0.4447 +0.0040 -0.8145 +0.7762 -0.4441   (max err 0.1172)
+    direct N256/B16                +0.9844 +0.6484 -0.4531 +0.0078 -0.8359 +0.8359 -0.4219   (max err 0.1089)
+
+  summary ring 2 K1, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      ours-runWalk           -         -    1.394%    1.394%    1.394%    1.394%    1.394%    1.394%    1.394%
+      direct-runWalk         -         -         -         -         -    2.500%    2.500%    2.500%    2.500%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      ours-runWalk     3.0%: 0.560 s [0.560]   2.0%: 0.560 s [0.560]   1.5%: 0.560 s [0.560]   1.0%: not reached
+      direct-runWalk   3.0%: 5.024 s [5.024]   2.0%: not reached   1.5%: not reached   1.0%: not reached
+
+--ring-bench total 17.0 s; 2 rows written to ring_perf/smoke_r2k1_nolean_rows.csv

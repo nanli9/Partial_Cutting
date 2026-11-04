@@ -8,9 +8,12 @@
 #include <cstdio>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <random>
 #include <set>
 #include <thread>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -74,7 +77,7 @@ std::string fmt3(const Vec3& v)
 bool runValidation(const GeometryConfig& cfg, const Settings& s, const std::string& resultsPath)
 {
     auto tStart = std::chrono::steady_clock::now();
-    Tet tet(cfg.tetVerts);
+    Tet tet = referenceTet();
     const double L = tet.L, eps = s.epsRel*L;
     const double tDefault = Settings{}.t;   // checks 1 and 3 use the default t, whatever the GUI shows
     const GType gTypes[2] = {GType::One, GType::SqrtFront};
@@ -115,7 +118,7 @@ bool runValidation(const GeometryConfig& cfg, const Settings& s, const std::stri
         (unsigned long long)s.seed);
     if (cutP.empty()) {
         out("ERROR: the cut is empty at t = %.2f (the plane misses the tet?); nothing to validate.\n", tDefault);
-        std::ofstream(resultsPath) << out.text;
+        writeResultsSection(resultsPath, kResultsSectionGate1, out.text);
         return false;
     }
 
@@ -339,13 +342,73 @@ bool runValidation(const GeometryConfig& cfg, const Settings& s, const std::stri
     out("\nall validation solves: %s\n", total.summary().c_str());
     out("validation wall time: %.2f s\n", sec);
 
-    std::ofstream f(resultsPath);
-    f << out.text;
-    f.close();
-    if (!f) {
+    if (!writeResultsSection(resultsPath, kResultsSectionGate1, out.text)) {
         std::fprintf(stderr, "could not write %s\n", resultsPath.c_str());
         return false;
     }
-    std::printf("written: %s\n", resultsPath.c_str());
+    std::printf("written: %s (section \"%s\")\n", resultsPath.c_str(), kResultsSectionGate1);
     return true;
+}
+
+// ---------------------------------------------------------------------------------------
+// results.txt sections
+// ---------------------------------------------------------------------------------------
+const char* const kResultsSectionGate1 = "first gate (--validate)";
+const char* const kResultsSectionReuse = "incremental walk reuse (--validate-reuse)";
+
+bool writeResultsSection(const std::string& path, const std::string& section, const std::string& text)
+{
+    const std::string beginTag = "======== BEGIN ", endTag = "======== END ", tail = " ========\n";
+    std::string old;
+    {
+        std::ifstream in(path, std::ios::binary);
+        if (in) old.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    // A checkout with core.autocrlf turns the file's LF into CRLF: parse (and rewrite) it with LF only.
+    old.erase(std::remove(old.begin(), old.end(), '\r'), old.end());
+    // the existing sections, in file order
+    std::vector<std::pair<std::string, std::string>> secs;
+    size_t pos = 0;
+    while ((pos = old.find(beginTag, pos)) != std::string::npos) {
+        size_t nameEnd = old.find(tail, pos);
+        size_t end = std::string::npos;
+        std::string name;
+        if (nameEnd != std::string::npos) {
+            name = old.substr(pos + beginTag.size(), nameEnd - pos - beginTag.size());
+            end = old.find(endTag + name + tail, nameEnd + tail.size());
+        }
+        if (end == std::string::npos) {   // never overwrite what we cannot parse: the other section would be lost
+            std::fprintf(stderr, "%s: unrecognised section markers; file left unchanged\n", path.c_str());
+            return false;
+        }
+        const size_t body = nameEnd + tail.size();
+        secs.emplace_back(name, old.substr(body, end - body));
+        pos = end + endTag.size() + name.size() + tail.size();
+    }
+    if (secs.empty() && !old.empty())
+        secs.emplace_back(kResultsSectionGate1, old);   // a file from before sections existed: all first gate
+
+    bool replaced = false;
+    for (auto& sct : secs)
+        if (sct.first == section) {
+            sct.second = text;
+            replaced = true;
+        }
+    if (!replaced) secs.emplace_back(section, text);
+
+    std::vector<std::pair<std::string, std::string>> ordered;
+    for (const char* known : {kResultsSectionGate1, kResultsSectionReuse})
+        for (const auto& sct : secs)
+            if (sct.first == known) ordered.push_back(sct);
+    for (const auto& sct : secs)
+        if (sct.first != kResultsSectionGate1 && sct.first != kResultsSectionReuse) ordered.push_back(sct);
+
+    std::ofstream f(path, std::ios::binary);
+    for (size_t k = 0; k < ordered.size(); k++) {
+        std::string body = ordered[k].second;
+        if (!body.empty() && body.back() != '\n') body += '\n';
+        f << (k ? "\n" : "") << beginTag << ordered[k].first << tail << body << endTag << ordered[k].first << tail;
+    }
+    f.close();
+    return bool(f);
 }

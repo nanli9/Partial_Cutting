@@ -124,23 +124,121 @@ std::vector<Vec3> planeTetSection(const Tet& tet, const Vec3& n, double d, const
     return pts;
 }
 
+Tet referenceTet()
+{
+    return Tet({Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0), Vec3(0, 0, 1)});
+}
+
+bool isReferenceTet(const Tet& tet)
+{
+    const Tet ref = referenceTet();
+    for (int i = 0; i < 4; i++)
+        if (tet.v[i] != ref.v[i]) return false;
+    return true;
+}
+
+XiCut pullBackCut(const GeometryConfig& cfg)
+{
+    const std::array<Vec3, 4>& X = cfg.restVerts;
+    Eigen::Matrix3d J;
+    J.col(0) = X[1] - X[0];
+    J.col(1) = X[2] - X[0];
+    J.col(2) = X[3] - X[0];
+    double Lr = 0;
+    for (int i = 0; i < 4; i++)
+        for (int j = i + 1; j < 4; j++) Lr = std::max(Lr, (X[i] - X[j]).norm());
+    if (std::fabs(J.determinant()) < 1e-12*Lr*Lr*Lr) throw std::runtime_error("degenerate rest tetrahedron");
+
+    // Rest plane p·X = |p| d_X with p = planeNormal; X = X0 + J ξ gives (Jᵀp)·ξ = |p| (d_X - n_X·X0).
+    // Written with the scale |p| / |Jᵀp| so that J = I, X0 = 0 returns the inputs bit for bit.
+    const Vec3& p = cfg.planeNormal;
+    const Vec3 nX = p.normalized();
+    const Vec3 m = J.transpose()*p;
+    XiCut xc;
+    xc.n = m.normalized();
+    xc.d = (p.norm()/m.norm())*(cfg.planeOffset - nX.dot(X[0]));
+    // X·f = X0·f + (Jᵀf)·ξ, and on the plane X·f is an increasing affine function of X·u_X
+    xc.f = J.transpose()*cfg.frontDir;
+    return xc;
+}
+
 Cut buildCut(const Tet& tet, const GeometryConfig& cfg, double t)
 {
+    if (!isReferenceTet(tet))
+        throw std::runtime_error("buildCut: H is solved in local coordinates on the reference tet; "
+                                 "a rest tet goes into GeometryConfig::restVerts");
+    const XiCut xc = pullBackCut(cfg);
+    return buildCutOnTet(tet, xc.n, xc.d, xc.f, t);
+}
+
+namespace {
+
+// The cut's frame from its plane, front direction and t (n unit; the full section not yet set)
+Cut cutFrame(const Vec3& n, double d, const Vec3& f, double L, double t)
+{
     Cut c;
-    c.n = cfg.planeNormal.normalized();
-    c.d = cfg.planeOffset;
-    c.L = tet.L;
+    c.n = n;   // unit (normalizing again could move it by an ulp)
+    c.d = d;
+    c.L = L;
     c.t = std::clamp(t, 0.0, 1.0);
-    Vec3 u = cfg.frontDir - cfg.frontDir.dot(c.n)*c.n;   // project the front direction into the plane
-    if (u.norm() < 1e-9) throw std::runtime_error("front direction is parallel to the plane normal");
+    Vec3 u = f - f.dot(c.n)*c.n;   // project the front direction into the plane
+    if (u.norm() < 1e-9*f.norm()) throw std::runtime_error("front direction is parallel to the plane normal");
     c.u = u.normalized();
     c.w = c.n.cross(c.u);
+    return c;
+}
 
+void clipAtFront(Cut& c);
+
+} // namespace
+
+Cut buildCutOnTet(const Tet& tet, const Vec3& n, double d, const Vec3& f, double t)
+{
+    Cut c = cutFrame(n, d, f, tet.L, t);
     int onPlane = 0;
     c.fullPolygon = planeTetSection(tet, c.n, c.d, c.u, &onPlane);
     c.fullIsQuad = c.fullPolygon.size() == 4 && onPlane == 0;
     if (c.fullPolygon.empty()) return c;   // the plane misses the tet
+    clipAtFront(c);
+    return c;
+}
 
+Cut buildCutOnDomain(const ConvexDomain& dom, const Vec3& n, double d, const Vec3& f, double L, double t)
+{
+    Cut c = cutFrame(n, d, f, L, t);
+    // a square of the plane larger than the domain, CCW in (u, w) and so CCW about n ((u, w, n) is right-handed),
+    // clipped by every half-space n_k·X <= c_k (Sutherland-Hodgman); clipping keeps a convex polygon's orientation
+    double R = 0;
+    for (const Vec3& p : dom.v) R = std::max(R, p.norm());
+    R = 2.0*R + 1.0;
+    const Vec3 o = c.d*c.n;
+    std::vector<Vec3> P = {o - R*c.u - R*c.w, o + R*c.u - R*c.w, o + R*c.u + R*c.w, o - R*c.u + R*c.w};
+    for (size_t k = 0; k < dom.n.size() && !P.empty(); k++) {
+        std::vector<Vec3> Q;
+        for (size_t i = 0; i < P.size(); i++) {
+            const Vec3 &a = P[i], &b = P[(i + 1)%P.size()];
+            const double fa = dom.n[k].dot(a) - dom.c[k], fb = dom.n[k].dot(b) - dom.c[k];
+            if (fa <= 0) Q.push_back(a);
+            if ((fa < 0 && fb > 0) || (fa > 0 && fb < 0)) Q.push_back(a + (fa/(fa - fb))*(b - a));
+        }
+        P.swap(Q);
+    }
+    for (size_t i = 0; i < P.size() && P.size() > 1;) {   // drop (near-)duplicates from clipping through a vertex
+        if ((P[i] - P[(i + 1)%P.size()]).norm() <= 1e-12*dom.L) P.erase(P.begin() + i);
+        else i++;
+    }
+    if (P.size() < 3) return c;   // the plane misses the domain
+    c.fullPolygon = P;
+    c.fullIsQuad = P.size() == 4;
+    clipAtFront(c);
+    return c;
+}
+
+namespace {
+
+// sMin, sMax, s, the cut polygon (the full section clipped at the front) and its triangles
+void clipAtFront(Cut& c)
+{
     c.sMin = std::numeric_limits<double>::max();
     c.sMax = -c.sMin;
     for (const Vec3& p : c.fullPolygon) {
@@ -148,7 +246,7 @@ Cut buildCut(const Tet& tet, const GeometryConfig& cfg, double t)
         c.sMax = std::max(c.sMax, p.dot(c.u));
     }
     c.s = c.t >= 1.0 ? c.sMax : c.sMin + c.t*(c.sMax - c.sMin);
-    if (c.t <= 0.0) return c;   // t = 0: no cut at all
+    if (c.t <= 0.0) return;   // t = 0: no cut at all
 
     // clip the convex section against the half-plane X·u <= s (Sutherland-Hodgman, one plane)
     std::vector<Vec3> clipped;
@@ -179,8 +277,9 @@ Cut buildCut(const Tet& tet, const GeometryConfig& cfg, double t)
         c.tris.push_back(tri);
     }
     if (c.tris.empty()) c.polygon.clear();
-    return c;
 }
+
+} // namespace
 
 double Cut::distToFrontLine(const Vec3& x) const
 {
@@ -301,26 +400,44 @@ double faceOffsetMargin(const Tet& tet)
     return 2.0*std::max(std::ldexp(1.0, -16), std::ldexp(M, -15));
 }
 
+double faceOffsetMargin(const std::vector<Vec3>& verts)
+{
+    double M = 0;
+    for (const Vec3& p : verts) M = std::max(M, p.cwiseAbs().maxCoeff());
+    return 2.0*std::max(std::ldexp(1.0, -16), std::ldexp(M, -15));
+}
+
 CutSolver::CutSolver(const Tet& tet, const Cut& cut, GType g, const WalkParams& params)
 {
     const double absorbShell = params.absorbShellRel*tet.L;
     const double margin = faceOffsetMargin(tet);
     stopDistance_ = absorbShell + margin;
-    // t = 0: there is no Dirichlet boundary, and Laplace with pure zero-Neumann data only
-    // determines H up to a constant. Nothing is built; solve() returns H = 0.
-    if (cut.empty()) return;
+    // t = 0 with every face Neumann: there is no Dirichlet boundary, and Laplace with pure zero-Neumann
+    // data only determines H up to a constant. Nothing is built; solve() returns H = 0.
+    const bool dirichletFaces = params.anyDirichletFace();
+    if (cut.empty() && !dirichletFaces) return;
 
     impl_ = std::make_unique<Impl>();
     Impl& im = *impl_;
     using zombie::Vector3;
     using zombie::Vector3i;
 
+    // reflecting: the Neumann faces (all four unless the coupling gate flags some Dirichlet); absorbing:
+    // the cut, then the Dirichlet faces (appended, so the cut's triangles keep their indices)
     std::vector<Vector3> tetV, cutV;
     std::vector<Vector3i> tetF, cutF;
     for (const Vec3& p : tet.v) tetV.push_back(p.cast<float>());
-    for (const auto& f : tet.faces) tetF.emplace_back(f[0], f[1], f[2]);
+    for (int f = 0; f < 4; f++)
+        if (params.faceBC[f] == FaceBC::Neumann) tetF.emplace_back(tet.faces[f][0], tet.faces[f][1], tet.faces[f][2]);
     for (const Vec3& p : cut.polygon) cutV.push_back(p.cast<float>());
     for (const auto& f : cut.tris) cutF.emplace_back(f[0], f[1], f[2]);
+    if (dirichletFaces) {
+        const int base = int(cutV.size());
+        for (const Vec3& p : tet.v) cutV.push_back(p.cast<float>());
+        for (int f = 0; f < 4; f++)
+            if (params.faceBC[f] == FaceBC::Dirichlet)
+                cutF.emplace_back(base + tet.faces[f][0], base + tet.faces[f][1], base + tet.faces[f][2]);
+    }
 
     // bounding box, used by Zombie's default escape test (replaced below)
     Vector3 bMin = tetV[0], bMax = tetV[0];
@@ -333,10 +450,12 @@ CutSolver::CutSolver(const Tet& tet, const Cut& cut, GType g, const WalkParams& 
     const float silhouettePrecision = 1e-3f;
     im.absorbing.buildAccelerationStructure(cutV, cutF, true, false, false);
     zombie::populateGeometricQueriesForDirichletBoundary<3>(im.absorbing, im.queries);
-    im.reflecting.buildAccelerationStructure(
-        tetV, tetF, zombie::getIgnoreCandidateSilhouetteCallback(true, silhouettePrecision), true, false, false);
-    zombie::populateGeometricQueriesForNeumannBoundary<3>(im.reflecting, zombie::getBranchTraversalWeightCallback(),
-                                                          im.queries);
+    if (!tetF.empty()) {   // all four faces Dirichlet: no reflecting boundary (Zombie's defaults: infinitely far)
+        im.reflecting.buildAccelerationStructure(
+            tetV, tetF, zombie::getIgnoreCandidateSilhouetteCallback(true, silhouettePrecision), true, false, false);
+        zombie::populateGeometricQueriesForNeumannBoundary<3>(im.reflecting, zombie::getBranchTraversalWeightCallback(),
+                                                              im.queries);
+    }
 
     // Conservative distance to the cut (see faceOffsetMargin): every ball, including one
     // centred at a pushed-off face point, then stays on its own side of the cut. Zombie uses
@@ -379,10 +498,41 @@ CutSolver::CutSolver(const Tet& tet, const Cut& cut, GType g, const WalkParams& 
     // normalAligned is true exactly when the walk ended on the n·X > d side: +g there,
     // -g on the other side. g itself is evaluated at the boundary point x. Called
     // concurrently from TBB threads; the captured cut copy is only read.
-    im.pde.dirichlet = [cut, g](const Vector3& x, bool normalAligned) -> float {
-        float gx = float(cut.g(x.cast<double>(), g));
-        return normalAligned ? gx : -gx;
-    };
+    if (!dirichletFaces && params.cutData) {
+        im.pde.dirichlet = [cut, g](const Vector3& x, bool normalAligned) -> float {
+            float gx = float(cut.g(x.cast<double>(), g));
+            return normalAligned ? gx : -gx;
+        };
+    } else {
+        // Coupling gate. x lies on the cut or on a Dirichlet face (to float round-off): the nearer of the
+        // two decides which (ties only where the cut meets a face, a set of measure zero). Face data is
+        // evaluated at x projected onto that face's plane, in double; Zombie keeps the value in float.
+        std::array<Vec3, 4> fn;
+        std::array<double, 4> fc{};
+        for (int f = 0; f < 4; f++) {
+            const auto& F = tet.faces[f];
+            fn[f] = (tet.v[F[1]] - tet.v[F[0]]).cross(tet.v[F[2]] - tet.v[F[0]]).normalized();
+            fc[f] = fn[f].dot(tet.v[F[0]]);
+        }
+        im.pde.dirichlet = [cut, g, fn, fc, bc = params.faceBC, data = params.faceData, cutData = params.cutData](
+                               const Vector3& x, bool normalAligned) -> float {
+            const Vec3 xd = x.cast<double>();
+            int face = -1;
+            double best = cut.empty() ? std::numeric_limits<double>::infinity() : cut.distToCut(xd);
+            for (int f = 0; f < 4; f++) {
+                if (bc[f] != FaceBC::Dirichlet) continue;
+                const double df = std::fabs(fn[f].dot(xd) - fc[f]);
+                if (df < best) {
+                    best = df;
+                    face = f;
+                }
+            }
+            if (face >= 0) return data ? float(data(face, xd - (fn[face].dot(xd) - fc[face])*fn[face])) : 0.0f;
+            if (!cutData) return 0.0f;
+            float gx = float(cut.g(xd, g));
+            return normalAligned ? gx : -gx;
+        };
+    }
 
     // solveDoubleSided must be true: the cut is an open two-sided surface, and with
     // false Zombie always reports normalAligned = false (H = -g everywhere, stage 1).
@@ -390,6 +540,76 @@ CutSolver::CutSolver(const Tet& tet, const Cut& cut, GType g, const WalkParams& 
                                        params.maxWalkLength, /*solveDoubleSided=*/true);
     im.settings.silhouettePrecision = silhouettePrecision;
     // source and Neumann data are zero: skip their per-step sampling (same estimate)
+    im.settings.ignoreSourceContribution = true;
+    im.settings.ignoreReflectingBoundaryContribution = true;
+}
+
+CutSolver::CutSolver(const ConvexDomain& dom, const Cut& cut, GType g, const WalkParams& params)
+{
+    if (params.usesGateFlags() || params.dirichletFaces)
+        throw std::invalid_argument("CutSolver(ConvexDomain): every face is Neumann and the cut carries +-g");
+    const double absorbShell = params.absorbShellRel*dom.L;
+    const double margin = faceOffsetMargin(dom.v);
+    stopDistance_ = absorbShell + margin;
+    if (cut.empty()) return;   // pure Neumann: H := 0 (as the tet's t = 0)
+
+    impl_ = std::make_unique<Impl>();
+    Impl& im = *impl_;
+    using zombie::Vector3;
+    using zombie::Vector3i;
+    // reflecting: the domain's boundary triangles; absorbing: the cut. The rest is the Tet constructor's setup.
+    std::vector<Vector3> domV, cutV;
+    std::vector<Vector3i> domF, cutF;
+    for (const Vec3& p : dom.v) domV.push_back(p.cast<float>());
+    for (const auto& f : dom.tris) domF.emplace_back(f[0], f[1], f[2]);
+    for (const Vec3& p : cut.polygon) cutV.push_back(p.cast<float>());
+    for (const auto& f : cut.tris) cutF.emplace_back(f[0], f[1], f[2]);
+    Vector3 bMin = domV[0], bMax = domV[0];
+    for (const Vector3& p : domV) { bMin = bMin.cwiseMin(p); bMax = bMax.cwiseMax(p); }
+    Vector3 pad = Vector3::Constant(1e-3f*float(dom.L));
+    im.queries.domainIsWatertight = false;
+    im.queries.domainMin = bMin - pad;
+    im.queries.domainMax = bMax + pad;
+    const float silhouettePrecision = 1e-3f;
+    im.absorbing.buildAccelerationStructure(cutV, cutF, true, false, false);
+    zombie::populateGeometricQueriesForDirichletBoundary<3>(im.absorbing, im.queries);
+    im.reflecting.buildAccelerationStructure(
+        domV, domF, zombie::getIgnoreCandidateSilhouetteCallback(true, silhouettePrecision), true, false, false);
+    zombie::populateGeometricQueriesForNeumannBoundary<3>(im.reflecting, zombie::getBranchTraversalWeightCallback(),
+                                                          im.queries);
+    auto exactDist = im.queries.computeDistToAbsorbingBoundary;   // the face-offset margin, as for a tet
+    im.queries.computeDistToAbsorbingBoundary = [exactDist, m = float(margin)](const Vector3& x, bool signedDist) -> float {
+        float dist = exactDist(x, signedDist);
+        float shrunk = std::max(0.0f, std::fabs(dist) - m);
+        return dist < 0.0f ? -shrunk : shrunk;
+    };
+    // escape: outside any face plane by more than 1e-4 (the tet's barycentric tolerance, as a distance)
+    std::vector<Eigen::Vector3f> pn;
+    std::vector<float> pc;
+    for (size_t k = 0; k < dom.n.size(); k++) {
+        pn.push_back(dom.n[k].cast<float>());
+        pc.push_back(float(dom.c[k]));
+    }
+    im.queries.outsideBoundingDomain = [pn, pc](const Vector3& x) -> bool {
+        for (size_t k = 0; k < pn.size(); k++)
+            if (pn[k].dot(x) - pc[k] > 1e-4f) return true;
+        return false;
+    };
+    im.pde.absorptionCoeff = 0.0f;
+    im.pde.isSourceConstant = true;
+    im.pde.areRobinConditionsPureNeumann = true;
+    im.pde.areRobinCoeffsNonnegative = true;
+    im.pde.source = [](const Vector3&) -> float { return 0.0f; };
+    im.pde.robin = [](const Vector3&, const Vector3&, bool) -> float { return 0.0f; };
+    im.pde.robinCoeff = [](const Vector3&, const Vector3&, bool) -> float { return 0.0f; };
+    im.pde.hasReflectingBoundaryConditions = [](const Vector3&) -> bool { return true; };
+    im.pde.dirichlet = [cut, g](const Vector3& x, bool normalAligned) -> float {   // ±g, as for a tet
+        float gx = float(cut.g(x.cast<double>(), g));
+        return normalAligned ? gx : -gx;
+    };
+    im.settings = zombie::WalkSettings(float(absorbShell), float(params.reflectShellRel*dom.L),
+                                       params.maxWalkLength, /*solveDoubleSided=*/true);
+    im.settings.silhouettePrecision = silhouettePrecision;
     im.settings.ignoreSourceContribution = true;
     im.settings.ignoreReflectingBoundaryContribution = true;
 }

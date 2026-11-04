@@ -1,0 +1,32 @@
+--ring-bench: 2026-11-03 19:25:22; 16 hardware threads (TBB default arena)
+output: ring_perf/final_now_c2_rows.csv, ring_perf/final_now_c2_summary.csv, ring_perf/final_now_c2_log.txt
+settings: walk stop distance 1e-06 sqrt(2) (both methods; the reference's: 1e-6); step function: lean (solveMultiLean, the same walks without box and face tests); repeats 1 (median; runs over 30 s once); seed sets 1
+  ours (nQ/nR/B):; direct (N/B):; current (N/B): 2560/64
+
+=== ring 2, K3 ===
+  reference gate_cache\ref_check4_ring2_K3.bin loaded read-only (0.1 s): N = 25600 per point in 64 batches; original run: 31980 points, 818688000 walks counted of 818688000, 0 escaped (0.000%, discarded), 0 hit the walk-length cap, mean walk length 39.9, 459.217 s
+  ring 2 K3, g = 1: reference noise floor (its batch s.e.): H RMS 0.000% (max 0.000%) of 2g; grad s.e. RMS / grad RMS 100.61%;
+    energy over the ring minus the eps-tube -0.00000 +- 0.00000, within 0.1 of the crack-face lines -0.00000 +- 0.00000
+  point sets and weights (ringTetCrack + ringPoints, 8 tets) built in 0.012 s: shared by both methods, timed for neither
+  31973 points in the 8 tets + 7 vertex probes; tets cut by the crack: 0 1 1 1 1 1 1 1
+    method                         g     walks/M moves/M  walks s   post s  total s | H RMS%   nc %  max % fld se |   grad% grad nc |grad|% |  E err%      +- |   vert   c se
+    (check 4's own setting and seeds: glue M | r, as in gate_report.md's check 4)
+      [+8.3837  -0.4522  -0.0781  +0.4588  -0.2975  +0.1501  +0.4917]  [-0.00418]
+      [-0.4522  +1.1657  +0.0000  +0.0400  +0.5579  +0.2367  +0.4317]  [+0.14070]
+      [-0.0781  +0.0000  +0.7855  +0.4249  -0.0187  +0.2624  +0.0101]  [-0.20136]
+      [+0.4588  +0.0400  +0.4249  +2.1503  +0.0000  +0.3564  +0.6017]  [+0.10786]
+      [-0.2975  +0.5579  -0.0187  +0.0000  +1.4431  +0.4594  +0.1768]  [-0.04328]
+      [+0.1501  +0.2367  +0.2624  +0.3564  +0.4594  +2.9534  +0.0000]  [+0.03227]
+      [+0.4917  +0.4317  +0.0101  +0.6017  +0.1768  +0.0000  +2.2695]  [-0.03688]
+    current N2560/B64              g=1    163.70  5524.2   66.431    0.140   66.571 |  1.111  1.110  10.66  0.043 |     nan     nan   7.841 | -200053732698522195669541352036630528.00 3755359143671668215821443767730176.00 | 0.2270 0.0005
+  vertex values v0..v6 (g = 1): reference +1.0000 +1.0000 -1.0000 +1.0000 -1.0000 +1.0000 -1.0000
+    current N2560/B64              +0.9976 +1.0348 -1.0243 +0.7730 -1.0248 +1.0002 -0.9962   (max err 0.2270)
+
+  summary ring 2 K3, g = 1 (H RMS / 2g, raw; times = medians, 16 threads)
+    equal time: the best H RMS each method reaches within the budget
+      budget (s)          0.25       0.5         1         2         5        10        30        60       120
+      current                -         -         -         -         -         -         -         -    1.111%
+    equal accuracy: the time each method needs (first measured setting at or below; [log-log interpolated])
+      current          3.0%: 66.571 s [66.571]   2.0%: 66.571 s [66.571]   1.5%: 66.571 s [66.571]   1.0%: not reached
+
+--ring-bench total 66.9 s; 1 rows written to ring_perf/final_now_c2_rows.csv
