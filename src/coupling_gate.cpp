@@ -3,6 +3,7 @@
 // sections of gate_report.md.
 #include "coupling_gate.h"
 
+#include "gate_parts.h"
 #include "walk_cache.h"
 
 #include "oneapi/tbb/parallel_for.h"
@@ -31,9 +32,11 @@
 #include <utility>
 #include <vector>
 
-namespace {
+// The file's own code is in namespace gate (gate_parts.h: the pieces xfem_mesh.cpp reuses), opened here for every block.
+using namespace gate;
 
-constexpr double kSqrt2 = 1.41421356237309504880;
+namespace gate {
+
 constexpr double kInf = std::numeric_limits<double>::infinity();
 constexpr double kTwoGMax = 2.0;   // every error and noise level is divided by 2 g_max = 2, in both g types
 
@@ -115,23 +118,7 @@ struct MdTable {
 const std::array<Vec3, 5> kGlobal = {Vec3(0, 0, 0), Vec3(1, 0, 0), Vec3(0, 1, 0), Vec3(0, 0, 1), Vec3(0, 0, -1)};
 constexpr int kFaceF = 3;   // in A and in B, F is the face opposite local vertex 3 (xi_z = 0)
 
-// One tet of the pair in its own xi frame: X = X0 + J xi, xi on the reference tet.
-struct TetFrame {
-    const char* name = "";
-    std::array<int, 4> global{};   // local vertex -> global id
-    std::array<Vec3, 4> X;         // physical vertices, local order
-    Eigen::Matrix3d J, Jinv, JinvT;
-    double detJ = 0;
-    Vec3 toX(const Vec3& xi) const { return X[0] + J*xi; }
-    Vec3 toXi(const Vec3& x) const { return Jinv*(x - X[0]); }
-    int localOf(int g) const
-    {
-        for (int k = 0; k < 4; k++)
-            if (global[k] == g) return k;
-        return -1;
-    }
-};
-
+// One tet of the pair in its own xi frame: TetFrame (gate_parts.h).
 // the frame of the tet with global vertex ids global (local order) on the vertex table verts
 TetFrame frameOn(const char* name, const std::array<int, 4>& global, const Vec3* verts)
 {
@@ -194,18 +181,7 @@ CrackSpec crackCheck3(double yf)   // plane x = 0.3, +g for x > 0.3
     return c;
 }
 
-// The crack in one tet's xi frame: cfg (restVerts = the tet's physical vertices, plane and front in X)
-// pulled back by buildCut on the reference tet, at the t that puts the front at y = yFront in X.
-struct XiCrack {
-    GeometryConfig cfg;
-    double t = 0;
-    Cut cut;            // in xi; empty without a crack or if the plane misses the tet
-    StripCut strips;    // the same cut for the own loop: one strip [sMin, s(t)]
-    Cut physFull;       // geometry only: the physical section (buildCutOnTet on the physical tet, t = 1)
-    double frontErr = 0;   // max |y - yFront| over the xi front vertices mapped to X
-    int nFront = 0;
-};
-
+// The crack in one tet's xi frame: XiCrack (gate_parts.h).
 // the vertices of a cut polygon on its front line u.x = s
 std::vector<Vec3> frontVertices(const Cut& c)
 {
@@ -325,10 +301,7 @@ Vec3 cubeToSimplex(double u1, double u2, double u3)
     return Vec3(s*t*u3, s*t*(1.0 - u3), s*(1.0 - t));
 }
 
-struct Leaf {
-    std::array<Vec3, 4> v;
-    int depth = 0;
-};
+// Leaf: gate_parts.h
 double leafVolume(const Leaf& l)
 {
     return std::fabs((l.v[1] - l.v[0]).cross(l.v[2] - l.v[0]).dot(l.v[3] - l.v[0]))/6.0;
@@ -361,17 +334,7 @@ double pointSegmentDist(const Vec3& p, const Vec3& a, const Vec3& b)
 // 8^(-(depth-2)/2)), at least mMin: the density grows by sqrt(8) per level, 8x at depth 4; c is chosen for
 // about 'target' points.
 // Without a front every leaf has depth 2 and the same m: the density is uniform. Then the points within eps
-// of the crack are dropped: the rule integrates over T minus that eps-tube.
-struct PointSet {
-    std::vector<Vec3> xi, X;     // kept points, solve frame and physical
-    std::vector<double> w;       // their weights (physical volume)
-    std::vector<Vec3> allXi;     // every generated point (before the eps drop) and its weight
-    std::vector<double> allW;
-    int nLeaves = 0, leavesByDepth[5] = {0, 0, 0, 0, 0}, pointsByDepth[5] = {0, 0, 0, 0, 0};
-    int nDropped = 0;
-    double eps = 0;
-    size_t size() const { return xi.size(); }
-};
+// of the crack are dropped: the rule integrates over T minus that eps-tube. (PointSet: gate_parts.h)
 
 PointSet volumePoints(const TetFrame& T, const XiCrack& xc, int target, double eps, int mMin)
 {
@@ -598,23 +561,7 @@ double quadratureCheck(Report& out, const TetFrame& T, const XiCrack& xc, const 
 // =====================================================================================
 // Fields and solves
 // =====================================================================================
-// One boundary-data set on a tet: +-g (or 0) on the crack, a physical function on the Dirichlet faces.
-struct FieldSpec {
-    std::string name;
-    bool crack = false;   // H = +-g on the crack (else 0)
-    GType g = GType::One;
-    std::function<double(const Vec3& X)> face;   // Dirichlet faces, physical X; empty: 0
-    // face, as a function on all of space, is harmonic (every face function of checks 0 and 1 and of the
-    // sanity tests is linear), so it is its own harmonic extension and the gradient's first ball may cross
-    // a Dirichlet face (WalkParams::oddMirrorDirichlet). false for data without a known harmonic extension.
-    bool faceHarmonic = true;
-};
-
-struct OwnRun {   // one multi-data solve of the own loop (double precision)
-    std::vector<FieldSpec> fields;
-    MultiSums sums;
-    SolveStats stats;
-};
+// One boundary-data set on a tet (FieldSpec) and one multi-data solve of the own loop (OwnRun): gate_parts.h.
 
 // The own loop's walk parameters in the gate: the first gate's, except
 //  - the termination shell is 1e-6 L instead of 1e-4 L. A walk that ends within the shell of a Dirichlet
@@ -628,7 +575,7 @@ struct OwnRun {   // one multi-data solve of the own loop (double precision)
 //    (variance ~ 1/distance, from rare walks that leave the face's neighbourhood), so the noise of S and b
 //    sits in the few points closest to a Dirichlet face and their jackknife s.e. varies several-fold
 //    between seeds (stage 1, check 0: s.e. of S_00 from 0.0023 to 0.019 over 8 seeds, true sd 0.0065).
-constexpr double kGateShellRel = 1e-6;
+// (kGateShellRel: gate_parts.h)
 WalkParams gateWalkParams(const std::array<FaceBC, 4>& bc, bool mirror, bool oddMirror)
 {
     WalkParams wp;
@@ -768,13 +715,7 @@ std::vector<double> unitCoef(int K, int k)
 // their covariance, so G uses only products of different batches: per point
 // sum_{a != b} g_a . g_b / (B (B-1)) = (T1 . T1 - T2)/(B (B-1)), T1 = sum_b g_b, T2 = sum_b g_b . g_b.
 // Standard errors: delete-one-batch jackknife over the B batches. Also the naive product of the full means
-// and the two-halves split (batches 0..B/2-1 against B/2..B-1, symmetrized) as diagnostics.
-struct Gram {
-    int Q = 0, B = 0;
-    Eigen::MatrixXd G, se, naive, halves;
-    std::vector<Eigen::MatrixXd> jack;   // delete-one-batch replicates
-};
-
+// and the two-halves split (batches 0..B/2-1 against B/2..B-1, symmetrized) as diagnostics. (Gram: gate_parts.h)
 Gram gramFromBatches(const std::vector<double>& w, int B, int Q, const std::function<void(size_t, int, Vec3*)>& grads)
 {
     Gram R;
@@ -2383,18 +2324,7 @@ RefRun runReference(Report& out, const GateParams& gp, const CrackSpec& cs, cons
     return r;
 }
 
-// A field at a set of points: its value and physical gradient, and the variances of their estimates.
-struct FieldAt {
-    std::vector<double> H, vH;
-    std::vector<Vec3> G, vG;   // vG: per component
-    void resize(size_t n)
-    {
-        H.assign(n, 0.0);
-        vH.assign(n, 0.0);
-        G.assign(n, Vec3::Zero());
-        vG.assign(n, Vec3::Zero());
-    }
-};
+// A field at a set of points, its value and physical gradient and their variances: FieldAt (gate_parts.h).
 
 // The reference (g type m) at its points [off, off + n): H and its variance from comboH, grad H = the mean of the
 // batch gradients (U is solved in X: physical) and its variance from their spread.
@@ -4645,34 +4575,26 @@ FaceFn ringJ(const RingCrack& rc, GType gt)
 // One ring tet's crack: the xi cut (pulled back from X by buildCut on the reference tet) at the t that puts the front at
 // O's front u.X = s, and the xi frame with that front line also where it lies outside the tet (gFront: the crack data's
 // g is measured from it, in xi). lines: the crack's segments on the tet's faces (faceLines) and its front segment (front),
-// in X: the point set is refined around both.
-struct RingTetCrack {
-    XiCrack xc;          // cfg, t (clamped to [0, 1]), cut, strips, physFull, frontErr, nFront
-    double tRaw = -1;    // the front's t in this tet's extent along u, unclamped (<= 0: the crack misses the tet)
-    bool plane = false;  // the plane meets the tet
-    Cut gFront;          // the xi frame with s_xi of O's front (the affine map keeps t, also outside [0, 1])
-    Cut phys;            // the tet's crack in X (buildCutOnTet on the physical tet at t): geometry only
-    std::vector<std::array<Vec3, 2>> faceLines;
-    std::vector<std::array<Vec3, 2>> front;   // 0 or 1 segment
-    bool cut() const { return !xc.cut.empty(); }
-};
-RingTetCrack ringTetCrack(const TetFrame& T, const RingCrack& rc)
+// in X: the point set is refined around both. (RingTetCrack: gate_parts.h; tetCrackAt is the body, for any plane and front
+// line, which xfem_mesh.cpp calls with each mesh tet's own.)
+RingTetCrack ringTetCrack(const TetFrame& T, const RingCrack& rc) { return tetCrackAt(T, rc.n, rc.d, rc.f, rc.cutO.s, rc.cutO.u); }
+RingTetCrack tetCrackAt(const TetFrame& T, const Vec3& n, double d, const Vec3& f, double s, const Vec3& u)
 {
     RingTetCrack r;
     XiCrack& x = r.xc;
     x.cfg.restVerts = T.X;
-    x.cfg.planeNormal = rc.n;
-    x.cfg.planeOffset = rc.d;
-    x.cfg.frontDir = rc.f;
-    x.physFull = buildCutOnTet(Tet(T.X), rc.n, rc.d, rc.f, 1.0);
+    x.cfg.planeNormal = n;
+    x.cfg.planeOffset = d;
+    x.cfg.frontDir = f;
+    x.physFull = buildCutOnTet(Tet(T.X), n, d, f, 1.0);
     if (x.physFull.fullPolygon.size() < 3) return r;   // the plane misses this tet
     r.plane = true;
-    r.tRaw = (rc.cutO.s - x.physFull.sMin)/(x.physFull.sMax - x.physFull.sMin);
+    r.tRaw = (s - x.physFull.sMin)/(x.physFull.sMax - x.physFull.sMin);
     x.t = std::clamp(r.tRaw, 0.0, 1.0);
     x.cut = buildCut(referenceTet(), x.cfg, x.t);
     x.strips = StripCut(referenceTet(), x.cfg);
     x.strips.addStrip(x.strips.sOf(x.t));
-    r.phys = buildCutOnTet(Tet(T.X), rc.n, rc.d, rc.f, x.t);
+    r.phys = buildCutOnTet(Tet(T.X), n, d, f, x.t);
     const Cut& fr = x.strips.frame();
     r.gFront = x.strips.frontCut(x.strips.nStrips());
     r.gFront.s = fr.sMin + r.tRaw*(fr.sMax - fr.sMin);
@@ -4681,7 +4603,7 @@ RingTetCrack ringTetCrack(const TetFrame& T, const RingCrack& rc)
     const bool frontInside = r.tRaw > 0 && r.tRaw < 1;
     if (frontInside)
         for (const Vec3& p : frontVertices(x.cut)) {
-            x.frontErr = std::max(x.frontErr, std::fabs(rc.cutO.u.dot(T.toX(p)) - rc.cutO.s));
+            x.frontErr = std::max(x.frontErr, std::fabs(u.dot(T.toX(p)) - s));
             x.nFront++;
         }
     const Tet ref = referenceTet();
@@ -6057,7 +5979,7 @@ bool runCheck4(Report& out, const GateParams& gp, const std::string& cacheDir, s
     return ok;
 }
 
-} // namespace
+} // namespace gate
 
 bool runCouplingGate(int check, bool quick, const std::string& reportPath, bool tipTrace)
 {
@@ -6317,7 +6239,7 @@ GateView gateView(int check, int config, bool tipTrace)
     return v;
 }
 
-namespace {
+namespace gate {
 RingView gateRingViewFast(const RingViewParams& p, std::atomic<int>* progress);   // RingViewParams::fast (with --ring-bench, below)
 }
 
@@ -6485,7 +6407,7 @@ RingView gateRingView(const RingViewParams& p, std::atomic<int>* progress)
 // cached reference. Prints to stdout only; reads gate_cache/ and never writes it; writes no report section. Every
 // existing mode is untouched (nothing here is called from them).
 // =====================================================================================
-namespace {
+namespace gate {
 
 double medianOf(std::vector<double> v)
 {
@@ -6629,26 +6551,7 @@ RefRun runDirect(const PerfSetup& s, int N, int B, uint64_t seedTag, double shel
 // plane, > 0 on the +g side), theta = atan2(b, a): J1 = theta/pi, J2 = sqrt(r/L) sin(theta/2) (no cap at 1, so J2 is
 // harmonic off the half-plane). Both are xi-harmonic in the tet minus the half-plane behind the front line, which inside O
 // is the crack; so H0 - J_xi has crack data 0 (g = 1) and face data J - J_xi (0 in ring 1, where J_T is a rotation).
-struct XiFront {
-    Vec3 n = Vec3::Zero(), u = Vec3::Zero(), p0 = Vec3::Zero();
-    double dn = 0;
-    double a(const Vec3& xi) const { return u.dot(xi - p0); }
-    double b(const Vec3& xi) const { return n.dot(xi) - dn; }
-    double r(const Vec3& xi) const { return std::hypot(a(xi), b(xi)); }
-    double J1(const Vec3& xi) const { return std::atan2(b(xi), a(xi))/std::numbers::pi; }
-    Vec3 grad1(const Vec3& xi) const
-    {
-        const double A = a(xi), B = b(xi);
-        return (A*n - B*u)/(std::numbers::pi*(A*A + B*B));
-    }
-    double J2(const Vec3& xi) const { return std::sqrt(r(xi)/kSqrt2)*std::sin(0.5*std::atan2(b(xi), a(xi))); }
-    Vec3 grad2(const Vec3& xi) const
-    {
-        const double A = a(xi), B = b(xi), rr = std::hypot(A, B), th = std::atan2(B, A);
-        const double sn = std::sin(0.5*th), cs = std::cos(0.5*th), f = 1.0/(2.0*rr*std::sqrt(kSqrt2*rr));
-        return f*((A*sn - B*cs)*u + (B*sn + A*cs)*n);
-    }
-};
+// (XiFront: gate_parts.h)
 XiFront xiFront(const TetFrame& T, const RingCrack& rc)
 {
     XiFront f;
@@ -6666,19 +6569,7 @@ XiFront xiFront(const TetFrame& T, const RingCrack& rc)
 // One ring tet's control-variate runs: H0 = J_xi + R (R: crack 0 for g = 1, faces J - J_xi), P_k = lambda_k + Q_k (Q_k:
 // crack -lambda_k, faces 0; Q = 0 where the crack misses the tet). single: R and Q on the same walks, plain first ball (R's
 // face data has no known harmonic extension); split: Q alone with the odd mirror ball (extension 0), R alone with the plain
-// ball, each at its own N. No walks for a field known exactly (R in ring 1, Q in an uncut tet).
-struct CvRun {
-    XiFront xf;
-    bool cut = false, walkR = false, ramp = false;
-    double maxJdiff = 0;   // max |J - J_xi| over sampled face points
-    OwnRun runR, runQ;
-    bool hasR = false, hasQ = false;
-    int iR1 = -1, iR2 = -1, iQ0 = -1;   // in runR (single: runQ holds everything)
-    const OwnRun* rRun() const { return hasR ? &runR : (hasQ && iR1 >= 0 ? &runQ : nullptr); }
-    double seconds() const { return (hasR ? runR.stats.seconds : 0.0) + (hasQ ? runQ.stats.seconds : 0.0); }
-    long long walks() const { return (hasR ? runR.stats.walksRequested : 0) + (hasQ ? runQ.stats.walksRequested : 0); }
-    long long steps() const { return (hasR ? runR.stats.totalSteps : 0) + (hasQ ? runQ.stats.totalSteps : 0); }
-};
+// ball, each at its own N. No walks for a field known exactly (R in ring 1, Q in an uncut tet). (CvRun: gate_parts.h)
 CvRun runCv(const PerfSetup& s, int t, bool ramp, bool split, int nQ, int nR, int B, uint64_t seed)
 {
     CvRun c;
@@ -7579,7 +7470,7 @@ void perfCheckXiFront(Report& out, int ring, int crack)
 
 void perfReview(Report& out, int ring, int crack, int N);   // part r / R (defined with the fast path, below)
 
-} // namespace
+} // namespace gate
 
 bool runRingPerf(int ring, int crack, const std::string& parts)
 {
@@ -7626,7 +7517,7 @@ bool runRingPerf(int ring, int crack, const std::string& parts)
 // stay).
 // Opt-in: nothing here is called by check 4, the default ring view or any other existing mode. It reads gate_cache/
 // (never writes it) and writes only into ring_perf/.
-namespace {
+namespace gate {
 
 // ---- A: the fast per-tet path ----
 struct RingFastParams {
@@ -8854,7 +8745,7 @@ RingView gateRingViewFast(const RingViewParams& p, std::atomic<int>* progress)
     return v;
 }
 
-} // namespace
+} // namespace gate
 
 bool runRingBench(const RingBenchParams& bp)
 {
@@ -9164,7 +9055,7 @@ bool runRingBench(const RingBenchParams& bp)
 
 #include "oneapi/tbb/global_control.h"
 
-namespace {
+namespace gate {
 
 constexpr double kPi = std::numbers::pi;
 
@@ -11869,7 +11760,7 @@ bool stressSelftest(Report& out)
     return ok;
 }
 
-} // namespace
+} // namespace gate
 
 bool runRingStress(const RingStressParams& p)
 {
@@ -12219,7 +12110,7 @@ RingView stressRingView(const std::string& id, int pointsPerTet, int nQ, int nR,
 // pass with their own seeds, the same xi cuts and face data, evaluated with the glued c by cvField: H = J_xi + R + sum_k
 // c_k (lambda_k + Q_k). That pass also glues its own points, printed as a diagnostic only. The render data are exact: on
 // O's faces H is its face data J + sum_k c_k lambda_k, on the crack +-1.
-namespace {
+namespace gate {
 
 constexpr double kXfemFrontBand[2] = {0.15, 0.05};   // quadrature leaves within these of O's front: one more level, two
 constexpr int kXfemRenderPerEdge = 24;   // the render's outer triangles (edges sqrt 2) are cut into this many per edge
@@ -12331,28 +12222,20 @@ double leafDiameter(const Leaf& l)
 // more where a leaf comes within kXfemFrontBand[0] of O's front segment and once more within kXfemFrontBand[1] (the leaf's
 // own distance to the segment, xfemLeafSegmentDist: every leaf the front passes through ends at depth level + 2), and the
 // 4-point degree-2 Gauss rule in every leaf. The points lie strictly inside their leaves, so never on the plane, and the
-// weights of the tet sum to its volume.
-struct XfemQuadPoint {
-    Vec3 X = Vec3::Zero();
-    double w = 0;
-    int side = 0;   // the piece: +1 (n.X > d) or -1
-};
-struct XfemTetQuad {
-    std::vector<XfemQuadPoint> pts;
-    int nSub[2] = {0, 0};                // sub-tets of the + and the - piece
-    int nLeaves = 0, nFrontLeaves = 0;   // leaves; of them, refined for the front
-    int nNear = 0, nNearShallow = 0;     // leaves within kXfemFrontBand[1] of the front; of them, not at depth level + 2
-    double nearDiam = 0;                 // the largest diameter among those leaves
-};
-XfemTetQuad xfemTetQuad(const TetFrame& T, const RingCrack& rc, int level, const std::vector<Vec3>& front)
+// weights of the tet sum to its volume. (XfemQuadPoint, XfemTetQuad: gate_parts.h.) The general form: the level set's
+// corner values phi (the ring's n.X_a - d), any front segments (the ring's one, O's front) and the two bands (the ring's
+// kXfemFrontBand); xfem_mesh.cpp splits each mesh tet by its own linear crack level set and refines around the crack's front
+// polyline.
+XfemTetQuad xfemTetQuad(const TetFrame& T, const Eigen::Vector4d& phi, int level, const std::vector<std::array<Vec3, 2>>& front,
+                        const double band[2])
 {
     constexpr double ga = 0.58541019662496845446, gb = 0.13819660112501051518;   // (5 + 3 sqrt 5)/20, (5 - sqrt 5)/20
     XfemTetQuad q;
-    Eigen::Vector4d phi;
-    for (int a = 0; a < 4; a++) phi[a] = rc.n.dot(T.X[a]) - rc.d;
     const double V = std::fabs(T.detJ)/6.0;
-    auto nearFront = [&front](const Leaf& l, double band) {
-        return front.size() == 2 && xfemLeafSegmentDist(l, front[0], front[1]) < band;
+    auto nearFront = [&front](const Leaf& l, double b) {
+        for (const auto& s : front)
+            if (xfemLeafSegmentDist(l, s[0], s[1]) < b) return true;
+        return false;
     };
     for (int s = 0; s < 2; s++) {
         Eigen::Vector4d sub[3][4];
@@ -12377,10 +12260,10 @@ XfemTetQuad xfemTetQuad(const TetFrame& T, const RingCrack& rc, int level, const
         };
         for (int i = 0; i < level; i++) refine([](const Leaf&) { return true; });
         for (int e = 0; e < 2; e++)
-            refine([&](const Leaf& l) { return l.depth == level + e && nearFront(l, kXfemFrontBand[e]); });
+            refine([&](const Leaf& l) { return l.depth == level + e && nearFront(l, band[e]); });
         for (const Leaf& l : leaves) {
             if (l.depth > level) q.nFrontLeaves++;
-            if (nearFront(l, kXfemFrontBand[1])) {
+            if (nearFront(l, band[1])) {
                 q.nNear++;
                 q.nNearShallow += l.depth != level + 2 ? 1 : 0;
                 q.nearDiam = std::max(q.nearDiam, leafDiameter(l));
@@ -12394,29 +12277,13 @@ XfemTetQuad xfemTetQuad(const TetFrame& T, const RingCrack& rc, int level, const
     return q;
 }
 
-// The render data in X: each vertex has its tet, side, group (0: O's boundary, 1 / 2: the crack's + / - sheet) and
-// whether it lies on the plane; each triangle its three vertices and group
-struct XfemRender {
-    std::vector<int> tet, side, group;
-    std::vector<char> onPlane;
-    std::vector<Vec3> X;
-    std::vector<double> h;
-    std::vector<std::array<int, 4>> tris;   // a, b, c, group
-    int add(int t, int s, int g, const Vec3& x, bool plane)
-    {
-        tet.push_back(t);
-        side.push_back(s);
-        group.push_back(g);
-        onPlane.push_back(char(plane));
-        X.push_back(x);
-        return int(X.size()) - 1;
-    }
-};
-
+// The render data in X (XfemRender: gate_parts.h): each vertex has its tet, side, group (0: O's boundary, 1 / 2: the
+// crack's + / - sheet) and whether it lies on the plane; each triangle its three vertices and group.
 // O's boundary triangle of tet t (corners P, wound outwards) cut into n x n small triangles, each clipped by the crack
-// plane into its parts on either side (Sutherland-Hodgman per side; a grid vertex on the plane, and every crossing of a grid
-// edge, is one render vertex per side). Group 0. The vertices are shared within the face, so each side's mesh is connected.
-void xfemRenderFace(XfemRender& r, int t, const std::array<Vec3, 3>& P, const RingCrack& rc, int n)
+// plane nP.X = dP into its parts on either side (Sutherland-Hodgman per side; a grid vertex on the plane, and every crossing
+// of a grid edge, is one render vertex per side). Group 0. The vertices are shared within the face, so each side's mesh is
+// connected.
+void xfemRenderFace(XfemRender& r, int t, const std::array<Vec3, 3>& P, const Vec3& nP, double dP, int n)
 {
     std::vector<Vec3> G(size_t((n + 1)*(n + 1)), Vec3::Zero());
     std::vector<double> f(G.size(), 0.0);
@@ -12424,7 +12291,7 @@ void xfemRenderFace(XfemRender& r, int t, const std::array<Vec3, 3>& P, const Ri
     for (int i = 0; i <= n; i++)
         for (int j = 0; i + j <= n; j++) {
             G[size_t(gid(i, j))] = P[0] + (double(i)/n)*(P[1] - P[0]) + (double(j)/n)*(P[2] - P[0]);
-            f[size_t(gid(i, j))] = rc.n.dot(G[size_t(gid(i, j))]) - rc.d;
+            f[size_t(gid(i, j))] = nP.dot(G[size_t(gid(i, j))]) - dP;
         }
     std::map<std::array<int, 3>, int> ids;   // (grid vertex, -1, side) or (grid edge lo, hi, side) -> render vertex
     auto vertex = [&](int a, int b, int s) {
@@ -12526,7 +12393,7 @@ double xfemQuantile(std::vector<double>& v, double q)
     return v[std::min(v.size() - 1, size_t(q*double(v.size() - 1) + 0.5))];
 }
 
-} // namespace
+} // namespace gate
 
 bool buildXfemRing(const XfemExportParams& p, XfemRingData& xd)
 {
@@ -12569,11 +12436,15 @@ bool buildXfemRing(const XfemExportParams& p, XfemRingData& xd)
     const ConvexDomain O = octahedron();
     std::array<int, kRingNT> cls{};
     std::vector<XfemTetQuad> quad;
+    std::vector<std::array<Vec3, 2>> frontSegs;
+    if (front.size() == 2) frontSegs.push_back({front[0], front[1]});
     for (int t = 0; t < kRingNT; t++) {
         const RingTetCrack& rt = s.rt[size_t(t)];
         cls[size_t(t)] = !rt.cut() ? 0 : rt.tRaw >= 1 ? 1 : 2;
         if (R.T[size_t(t)].global[0] != 0) throw std::logic_error("--export-xfem: a ring tet's local corner 0 is not the node");
-        quad.push_back(xfemTetQuad(R.T[size_t(t)], rc, p.quadLevel, front));
+        Eigen::Vector4d phi;
+        for (int a = 0; a < 4; a++) phi[a] = rc.n.dot(R.T[size_t(t)].X[a]) - rc.d;
+        quad.push_back(xfemTetQuad(R.T[size_t(t)], phi, p.quadLevel, frontSegs, kXfemFrontBand));
     }
     XfemRender rd;
     const double hR = kSqrt2/kXfemRenderPerEdge;
@@ -12584,7 +12455,7 @@ bool buildXfemRing(const XfemExportParams& p, XfemRingData& xd)
         std::array<Vec3, 3> P = {T.X[1], T.X[2], T.X[3]};
         if ((P[1] - P[0]).cross(P[2] - P[0]).dot(P[0] - T.X[0]) < 0) std::swap(P[1], P[2]);
         outer[size_t(t)] = P;
-        xfemRenderFace(rd, t, P, rc, kXfemRenderPerEdge);
+        xfemRenderFace(rd, t, P, rc.n, rc.d, kXfemRenderPerEdge);
     }
     for (int t = 0; t < kRingNT; t++)
         if (cls[size_t(t)] > 0) badFans += xfemRenderCrack(rd, t, s.rt[size_t(t)].phys.polygon, rc.n, hR);

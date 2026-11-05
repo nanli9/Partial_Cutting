@@ -98,9 +98,9 @@ machine). The first Release build takes about 40 s.
 On Windows `tbb12.dll` is copied next to the executable after each build.
 
 The same build makes the XFEM projects of `XFEM/` (folder "XFEM" in the solution): the
-`xfem` library, `xfem_tests` and the `xfem_nodal_ring` example, all in `build\Release\`.
-The experiment's code, everything but `src/main.cpp`, is the library `partial_cut_core`,
-which `partial_cut` and `xfem_nodal_ring` both link. See [`XFEM/README.md`](XFEM/README.md).
+`xfem` library, `xfem_tests` and the `xfem_nodal_ring` and `xfem_beam` examples, all in
+`build\Release\`. The experiment's code, everything but `src/main.cpp`, is the library
+`partial_cut_core`, which `partial_cut` and both examples link. See [`XFEM/README.md`](XFEM/README.md).
 
 From the Visual Studio IDE, open `build\partial_cut.sln`, set the configuration dropdown
 to **Release** and press Run. `partial_cut` is the startup project and runs from the
@@ -133,6 +133,7 @@ solve finishes.
 | `partial_cut --gate coupling --view --check 4 --case ID [--points P] [--walks-tet Q] [--walks-r R] [--walks-ref N]` | The same ring view, opened on one ring stress case (its fields: the GT, our glued H at Q 32 / R 16 by default, their difference and H0 for each face function J, and the basis functions). P defaults to the density of the case's cached GT (2048 points per tet; 1024 for E2 and F3). Complete cuts need no GT, and A1, A2 and A3 use check 4's cache. At a P with no cache, the GT is solved at N walks and not cached. `--ring-bench --view --case ID` runs the same computation without the window and prints the panel lines and field hashes. |
 | `partial_cut --gate coupling --export-xfem --check 4 [--ring 1\|2] [--config 0\|1\|2] [--quad-level L] [--walks-tet Q] [--walks-r R] [--points P] --out FILE` | Writes one nodal ring of check 4 (default ring 2, K1) for an XFEM simulation of it, solved by our fast method only (no GT; `gate_cache/` is not read). The glue is the fast ring view's: P points per tet (default 4096), Q 32 / R 16 walks and the view's seeds, so the glued vertex values are the view's. The export points are then solved in a second pass with the same ξ cuts, face data and glued values, at Q / R walks per point (default 256 / 256). FILE (`runXfemExport` in `src/coupling_gate.h` has the format) holds, in rest space: the ring, the crack plane and front, each tet's class (0: the crack misses it, 1: it cuts it in two, 2: the front is inside), h = (H/g + 1)/2 at the vertices, a quadrature rule with h and ∇h for every tet, and render data. The quadrature splits each tet at the crack plane into the sub-tets of both pieces, refines each `L` times (default 1), refines once more the leaves that come within 0.15 of the front and again those within 0.05 (each leaf's own distance to the front segment, so every leaf the front passes through is refined twice), and puts 4 Gauss points (degree 2) in every leaf. The render data are O's boundary clipped at the plane, carrying its face data, and the crack's two sheets with h = 1 and 0. The run prints its timing and self-checks (weights, sides, h on the sheets and near the faces and vertices, the range of h, the export pass against the view's field at the same points, every leaf near the front refined twice). Ring 2 takes 0.4-1.5 s on 16 threads (K3, K2, K1). `buildXfemRing` is the same without the file, for callers in this solution. |
 | `xfem_nodal_ring [--case K1\|K2\|K3] [--ring 1\|2] [--quad-level L] [--data DIR]` | The XFEM example (`XFEM/`): check 4's ring, its enrichment computed in this process by `buildXfemRing` (or read from export files in DIR), simulated by a CPU XFEM solid (neo-Hookean, backward Euler, Newton) under an external force that opens the crack, in Polyscope. `--no-window --frames N` prints per-frame stats. See [`XFEM/README.md`](XFEM/README.md). |
+| `xfem_beam [--case notch\|through\|curved_front\|curved_surface\|multi\|mixed] [--frames N] [--cut-frame N] [--depth d] [--quad-level L]` | The XFEM on a real mesh (`XFEM/`): the beam of the `cutting` project's GXFEM beam example (the same mesh, wall and gravity), cracked at frame 40 by partial, complete, curved or several cracks whose enrichment `buildXfemMesh` (`src/xfem_mesh.h`) computes in this process. `--no-window`, `--screenshot FILE`, `--record DIR`, `--csv FILE`; `--pull F [--pull-direction x y z]` pulls the free end instead of gravity, as the example's flag does. See [`XFEM/README.md`](XFEM/README.md). |
 | `partial_cut --ring-stress --selftest` | The stress test's own checks: the crack-mesh tree against brute force bit for bit, the flat mesh against check 4's StripCut, every case's geometry, J and control-variate checks, the solid angle, and determinism (4 s measured). |
 | `partial_cut --help` | Prints the usage. |
 
@@ -1984,7 +1985,11 @@ points). The direct solve at N = 256 gave 2.507%; `--ring-bench` gives 2.500%.
 - `src/main.cpp`: the CLI modes, the Polyscope GUI, and the coupling gate's Polyscope view of
   the union (`runGateView`, from the data of `gateView` in `src/coupling_gate.cpp`).
 - `XFEM/`: the XFEM projects (its own `CMakeLists.txt`, added by the top one): the `xfem` library, `xfem_tests`, the
-  `xfem_nodal_ring` example and the export files in `XFEM/data/`. See [`XFEM/README.md`](XFEM/README.md).
+  `xfem_nodal_ring` and `xfem_beam` examples, the export files and the beam's mesh in `XFEM/data/`. See
+  [`XFEM/README.md`](XFEM/README.md).
+- `src/xfem_mesh.{h,cpp}`: `buildXfemMesh`, the XFEM export's enrichment on any tet mesh and set of cracks (level sets
+  phi and psi at the vertices): check 4's fast path per tet, the glue as one sparse system over each crack's region.
+  `src/gate_parts.h`: the pieces of `src/coupling_gate.cpp` it reuses (that file's own code is in `namespace gate`).
 - `ring_perf/`: output of `--ring-bench`, as `<tag>_rows.csv`, `<tag>_summary.csv` and `<tag>_log.txt`. The fast ring
   method (`runRingFast`), the direct ring solve (`runRingDirect`), the benchmark and the ring view's fast option
   (`gateRingViewFast`) are at the end of `src/coupling_gate.cpp`. The lean walks (`solveMultiLean`,

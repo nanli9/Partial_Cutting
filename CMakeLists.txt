@@ -147,7 +147,10 @@ set(PARTIAL_CUT_CORE_SOURCES
     src/validation_xi.h
     src/validation_xi.cpp
     src/coupling_gate.h
-    src/coupling_gate.cpp)
+    src/coupling_gate.cpp
+    src/gate_parts.h
+    src/xfem_mesh.h
+    src/xfem_mesh.cpp)
 add_library(partial_cut_core STATIC ${PARTIAL_CUT_CORE_SOURCES})
 target_include_directories(partial_cut_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(partial_cut_core PUBLIC zombie)

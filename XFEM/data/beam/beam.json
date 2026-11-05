@@ -1,0 +1,30 @@
+{
+  "source": "beam_surface.off",
+  "source_vertices": 8,
+  "source_faces": 12,
+  "placement": {
+    "comment": "output = scale * input + translation",
+    "scale": 1,
+    "translation": [0, 0, 0]
+  },
+  "tetgen_switches": "-pzq1.414/10a0.000397748Q",
+  "nodes": 85,
+  "tets": 203,
+  "surface_faces": 154,
+  "bounds": {
+    "lo": [-0.5, -0.10000000000000001, -0.10000000000000001],
+    "hi": [0.5, 0.10000000000000001, 0.10000000000000001]
+  },
+  "volume": 0.040000000000000008,
+  "tet_volume_min": 8.6782585964927916e-05,
+  "tet_volume_max": 0.0004866644130430288,
+  "dihedral_angle_min_deg": 25.660930328749799,
+  "dihedral_angle_max_deg": 134.45608128816482,
+  "tets_below_10_deg": 0,
+  "files": {
+    "nodes": "beam.node",
+    "tets": "beam.ele",
+    "vtk": "beam.vtk",
+    "surface": "beam_surface.obj"
+  }
+}

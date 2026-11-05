@@ -6,6 +6,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 
 namespace xfem {
 
@@ -70,7 +71,18 @@ std::string xfem_enrichment::summary() const {
 xfem_enrichment build_enrichment(const tet_mesh& mesh, const vec3& n, real d,
                                  const std::vector<int>& classes, const std::vector<real>& node_h,
                                  const enrichment_options& options) {
+  return build_enrichment(mesh, sample_plane(mesh, n, d), classes, node_h, options);
+}
+
+xfem_enrichment build_enrichment(const tet_mesh& mesh, std::vector<real> phi,
+                                 const std::vector<int>& classes, const std::vector<real>& node_h,
+                                 const enrichment_options& options) {
   const index vertices = mesh.vertex_count();
+  if (static_cast<index>(phi.size()) != vertices)
+  {
+    throw std::invalid_argument("xfem: build_enrichment: " + std::to_string(phi.size()) + " phi values for " +
+                                std::to_string(vertices) + " vertices");
+  }
   const index tets = mesh.tet_count();
   if (static_cast<index>(classes.size()) != tets)
   {
@@ -91,7 +103,7 @@ xfem_enrichment build_enrichment(const tet_mesh& mesh, const vec3& n, real d,
   xfem_enrichment out;
 
   // 1. phi, snapped.
-  out.phi = sample_plane(mesh, n, d);
+  out.phi = std::move(phi);
   out.snapped_nodes = snap(out.phi, mesh, options.snap_tolerance);
   out.node_h = node_h;
 

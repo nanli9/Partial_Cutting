@@ -107,6 +107,12 @@ class xfem_system {
   /// sum_q w_q N_a psi_a^2 on the quadrature path.
   const vector_x& mass() const { return mass_; }
 
+  /// The load of a uniform body force of g per unit mass (gravity): rho g int N_i on a node group, its lumped mass
+  /// times g, and rho g int N_a psi_a on an enrichment group -- the far piece's shape integral with psi's sign there
+  /// on the two-piece path, sum_q w_q N_a psi_a on the quadrature path. Not the mass times g on an enrichment: psi
+  /// is signed and the mass reads psi^2. Not in motus. The integrator zeros the fixed dofs.
+  vector_x body_force(const vec3& g) const;
+
   /// Node groups at their rest positions, enrichment groups at zero: the
   /// welded rest state.
   vector_x rest_positions() const;
@@ -203,6 +209,7 @@ class xfem_system {
   std::vector<tet4::rest_state> rest_;
   std::vector<xfem_element> elements_;
   vector_x mass_;
+  vector_x body_weight_;  ///< per group: rho int N_i (a node), rho int N_a psi_a (an enrichment)
   std::vector<index> fixed_;
   std::vector<char> fixed_flag_;
 

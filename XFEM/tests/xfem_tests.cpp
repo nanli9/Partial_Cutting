@@ -12,13 +12,16 @@
 // exporter: a through cut with h the exact Heaviside, and a partial cut with h
 // the 2D front solution. Any real export found is checked as well: the format's
 // promises, the welded and rigid states, the masses, finite differences on its
-// quadrature tets, no seams, mode I and the front's constraint.
+// quadrature tets, no seams, mode I and the front's constraint. Last, the
+// beam's mesh (data/beam/): it loads as meshed, uncut it is plain FEM, and a
+// cut through it moves rigidly under the right gravity load.
 
 #include "xfem/backward_euler.hpp"
 #include "xfem/neo_hookean.hpp"
 #include "xfem/ring_export.hpp"
 #include "xfem/synthetic_ring.hpp"
 #include "xfem/tet4.hpp"
+#include "xfem/tetgen_mesh.hpp"
 #include "xfem/xfem_cutter.hpp"
 #include "xfem/xfem_enrichment.hpp"
 #include "xfem/xfem_system.hpp"
@@ -788,6 +791,107 @@ void test_quadrature_convergence(real load) {
          fmt("opening beyond 0.4 changes by %.2f%% held, %.2f%% free", 100 * held_change, 100 * free_change));
 }
 
+// ---------------------------------------------------------------------------
+// the beam: cutting's gxfem_beam mesh (data/beam/), as the xfem_beam example
+// takes it
+// ---------------------------------------------------------------------------
+
+// (12) The mesh as the beam example meshes it: 85 nodes, 203 tets, every one
+// positively oriented (read_tetgen_mesh refuses any other), volume 0.04 (the
+// box's), 9 nodes on the wall at x = -0.5.
+void test_beam_mesh(const tet_mesh& mesh) {
+  real volume = 0;
+  int wall = 0;
+  for (index e = 0; e < mesh.tet_count(); ++e)
+  {
+    vec3 X[4];
+    mesh.corners(e, X);
+    volume += tet_volume(X[0], X[1], X[2], X[3]);
+  }
+  for (const vec3& X : mesh.vertices) wall += X.x() < -0.5 + 1e-6 ? 1 : 0;
+  report(mesh.vertex_count() == 85 && mesh.tet_count() == 203 && std::abs(volume - 0.04) < 1e-12 && wall == 9,
+         "(12) beam mesh: 85 nodes, 203 tets, volume 0.04",
+         std::to_string(mesh.vertex_count()) + " nodes, " + std::to_string(mesh.tet_count()) + " tets, " +
+             fmt("volume %.15f", volume) + ", " + std::to_string(wall) + " on the wall");
+}
+
+// (13) Uncut, the beam is plain FEM: a per-node phi that cuts no tet enriches
+// nothing, energy, gradient and hessian are the independent plain FEM's, and
+// gravity is the lumped mass times g, rho V g in all.
+void test_beam_uncut(const tet_mesh& mesh, std::mt19937& rng) {
+  xfem_enrichment enrichment = build_enrichment(mesh, std::vector<real>(mesh.vertices.size(), real(1)),
+                                                std::vector<int>(mesh.tets.size(), 0),
+                                                std::vector<real>(mesh.vertices.size(), real(0)));
+  const xfem_system system(mesh, std::move(enrichment), {}, test_material, test_density);
+  const plain_fem fem{mesh, test_material};
+  const vector_x x = random_state(system, rng, 0.01, 0.0);
+  vector_x g, gf;
+  matrix_x Hf;
+  system.potential_gradient(x, g);
+  fem.derivatives(x, gf, Hf, true);
+  Eigen::SparseMatrix<real> H;
+  system.potential_hessian(x, true, 0.0, H);
+  const real e = std::abs(system.potential_energy(x) - fem.energy(x)) / std::abs(fem.energy(x));
+  const real eg = max_abs(vector_x(g - gf)) / max_abs(gf);
+  const real eh = max_abs(matrix_x(matrix_x(H) - Hf)) / max_abs(Hf);
+
+  const vec3 gravity(0, -9.81, 0);
+  const vector_x f = system.body_force(gravity);
+  real lumped = 0, total = 0;
+  for (index v = 0; v < mesh.vertex_count(); ++v)
+  {
+    lumped = std::max(lumped, (f.segment<3>(3 * v) - system.mass()[3 * v] * gravity).norm());
+    total += f[3 * v + 1];
+  }
+  const real weight = std::abs(total - test_density * 0.04 * gravity.y()) / (test_density * 0.04 * 9.81);
+  report(system.dofs() == 3 * mesh.vertex_count() && e < 1e-13 && eg < 1e-12 && eh < 1e-12 && lumped < 1e-12 &&
+             weight < 1e-13,
+         "(13) uncut beam: plain FEM, gravity = lumped mass x g",
+         fmt("energy %.1e, gradient %.1e, hessian %.1e (relative); ", e, eg, eh) +
+             fmt("gravity: %.1e off M g, %.1e off rho V g", lumped, weight));
+}
+
+// (14) A cut through the beam at x = 0.2 (two-piece tets only). The per-node
+// phi gives the plane's enrichment. Moving the + part rigidly by t (its nodes'
+// u_i and every jump a_i by t) costs no elastic energy, and gravity does
+// rho V_+ g.t of work on it (body_force: the signs of psi on the far pieces),
+// V_+ = 0.3 x 0.04.
+void test_beam_through_cut(const tet_mesh& mesh) {
+  const vec3 n = vec3::UnitX();
+  const real d = 0.2;
+  const std::vector<real> phi = sample_plane(mesh, n, d);
+  std::vector<int> classes(mesh.tets.size(), 0);
+  for (index e = 0; e < mesh.tet_count(); ++e)
+  {
+    int positive = 0;
+    for (int a = 0; a < 4; ++a) positive += phi[static_cast<std::size_t>(mesh.corner(e, a))] > 0 ? 1 : 0;
+    classes[static_cast<std::size_t>(e)] = positive > 0 && positive < 4 ? 1 : 0;
+  }
+  const std::vector<real> h(mesh.vertices.size(), real(0));
+  const xfem_enrichment by_plane = build_enrichment(mesh, n, d, classes, h);
+  xfem_enrichment by_phi = build_enrichment(mesh, phi, classes, h);
+  const bool same = by_plane.phi == by_phi.phi && by_plane.type == by_phi.type && by_plane.path == by_phi.path &&
+                    by_plane.cut_volume == by_phi.cut_volume && by_plane.cut_shape_integral == by_phi.cut_shape_integral;
+  const xfem_system system(mesh, std::move(by_phi), {}, test_material, test_density);
+
+  const vec3 t(0.01, -0.02, 0.005), gravity(0, -9.81, 0);
+  vector_x move = vector_x::Zero(system.dofs());
+  for (index v = 0; v < mesh.vertex_count(); ++v)
+  {
+    if (phi[static_cast<std::size_t>(v)] > 0) move.segment<3>(3 * v) = t;
+  }
+  for (index g = mesh.vertex_count(); g < system.enrichment().group_count(); ++g) move.segment<3>(3 * g) = t;
+  const real energy = system.potential_energy(system.rest_positions() + move);
+  const real expected = test_density * 0.3 * 0.04 * gravity.dot(t);
+  const real work = std::abs(system.body_force(gravity).dot(move) - expected) / std::abs(expected);
+  index two_piece = 0;
+  for (const xfem_element& el : system.elements()) two_piece += el.path == element_path::two_piece ? 1 : 0;
+  report(same && two_piece > 0 && energy < 1e-12 && work < 1e-12, "(14) beam cut through at x = 0.2: rigid + part, gravity",
+         std::string(same ? "per-node phi = the plane's; " : "per-node phi DIFFERS from the plane's; ") +
+             std::to_string(two_piece) + " two-piece tets; " +
+             fmt("energy %.1e J; gravity's work %.1e off rho V_+ g.t", energy, work));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -897,6 +1001,23 @@ int main(int argc, char** argv) {
     catch (const std::exception& error)
     {
       report(false, name, error.what());
+    }
+  }
+
+  // The beam's mesh (data/beam/, the xfem_beam example's).
+  {
+    const fs::path prefix = fs::path(data_dir) / "beam" / "beam";
+    std::printf("\n%s.node / .ele:\n", prefix.string().c_str());
+    try
+    {
+      const tet_mesh beam = read_tetgen_mesh(prefix.string());
+      test_beam_mesh(beam);
+      test_beam_uncut(beam, rng);
+      test_beam_through_cut(beam);
+    }
+    catch (const std::exception& error)
+    {
+      report(false, "(12) beam mesh", error.what());
     }
   }
 

@@ -231,4 +231,14 @@ xfem_enrichment build_enrichment(const tet_mesh& mesh, const vec3& n, real d,
                                  const std::vector<int>& classes, const std::vector<real>& node_h,
                                  const enrichment_options& options = {});
 
+/// The same from phi at the vertices instead of a plane: a crack that is flat
+/// in each tet but not one plane (a level set interpolated by the N_i, so a
+/// curved crack becomes piecewise flat), or several cracks, each vertex taking
+/// the phi of the one crack its support meets. Every per-tet rule above reads
+/// phi only at the corners of a class-1 or class-2 tet, so the classes and h
+/// must come from the same piecewise linear phi.
+xfem_enrichment build_enrichment(const tet_mesh& mesh, std::vector<real> phi,
+                                 const std::vector<int>& classes, const std::vector<real>& node_h,
+                                 const enrichment_options& options = {});
+
 }  // namespace xfem

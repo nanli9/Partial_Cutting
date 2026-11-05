@@ -263,6 +263,7 @@ void xfem_system::build_elements(const std::vector<quadrature_point>& quadrature
 // what a_i carries is positive.
 void xfem_system::build_lumped_mass(const std::vector<quadrature_point>& quadrature) {
   mass_ = vector_x::Zero(dofs());
+  body_weight_ = vector_x::Zero(enrichment_.group_count());
 
   for (index e = 0; e < mesh_.tet_count(); ++e)
   {
@@ -271,6 +272,7 @@ void xfem_system::build_lumped_mass(const std::vector<quadrature_point>& quadrat
     {
       const index node = mesh_.corner(e, a);
       for (int k = 0; k < 3; ++k) mass_[3 * node + k] += share;
+      body_weight_[node] += share;
     }
   }
 
@@ -287,10 +289,15 @@ void xfem_system::build_lumped_mass(const std::vector<quadrature_point>& quadrat
       const index node = mesh_.corner(e, a);
       const index group = element.groups[static_cast<std::size_t>(j)];
 
+      // integral: of N_a psi_a^2 (the mass); signed: of N_a psi_a (the body force).
       real integral = real(0);
+      real signed_integral = real(0);
       if (element.path == element_path::two_piece)
       {
         integral = enrichment_.far_shape_integral(enrichment_.cut_of[static_cast<std::size_t>(e)], a, node);
+        // psi on the far piece: -1 for a node on the + side, +1 for one on the - side.
+        signed_integral = xfem_psi(enrichment_.phi[static_cast<std::size_t>(node)],
+                                   !(enrichment_.phi[static_cast<std::size_t>(node)] > real(0))) * integral;
       }
       else
       {
@@ -298,10 +305,13 @@ void xfem_system::build_lumped_mass(const std::vector<quadrature_point>& quadrat
         for (const quadrature_point* q : points_of[static_cast<std::size_t>(e)])
         {
           const real psi = enrichment_.psi(node, c, q->side, q->h);
-          integral += q->weight * tet4::shape_values(rest, q->X)[a] * psi * psi;
+          const real wN = q->weight * tet4::shape_values(rest, q->X)[a];
+          integral += wN * psi * psi;
+          signed_integral += wN * psi;
         }
       }
       for (int k = 0; k < 3; ++k) mass_[3 * group + k] += density_ * integral;
+      body_weight_[group] += density_ * signed_integral;
     }
   }
 
@@ -315,6 +325,12 @@ void xfem_system::build_lumped_mass(const std::vector<quadrature_point>& quadrat
                                     g - enrichment_.vertex_count())]) +
                                 " ended with zero mass; its psi vanishes over its support");
   }
+}
+
+vector_x xfem_system::body_force(const vec3& g) const {
+  vector_x f = vector_x::Zero(dofs());
+  for (index group = 0; group < enrichment_.group_count(); ++group) f.segment<3>(3 * group) = body_weight_[group] * g;
+  return f;
 }
 
 vector_x xfem_system::rest_positions() const {
