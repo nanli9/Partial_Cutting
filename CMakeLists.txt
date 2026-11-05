@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 project(partial_cut LANGUAGES C CXX)
 
+# Visual Studio: group the XFEM projects (XFEM/) in a solution folder of their own.
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
 # ------------------------------------------------------------------------------
 # Build type (single-config generators only; Visual Studio/Xcode pick per build)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -130,9 +133,9 @@ if(MSVC)
 endif()
 
 # ------------------------------------------------------------------------------
-# Experiment executable
-add_executable(partial_cut
-    src/main.cpp
+# The experiment's code as a library (everything but main.cpp), so that other projects of this solution (XFEM/) can call
+# it directly, and the experiment executable on top of it.
+set(PARTIAL_CUT_CORE_SOURCES
     src/cut_problem.h
     src/cut_problem.cpp
     src/validation.h
@@ -145,22 +148,29 @@ add_executable(partial_cut
     src/validation_xi.cpp
     src/coupling_gate.h
     src/coupling_gate.cpp)
-target_link_libraries(partial_cut PRIVATE zombie polyscope)
-set_target_properties(partial_cut PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF)
+add_library(partial_cut_core STATIC ${PARTIAL_CUT_CORE_SOURCES})
+target_include_directories(partial_cut_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_link_libraries(partial_cut_core PUBLIC zombie)
+
+add_executable(partial_cut src/main.cpp)
+target_link_libraries(partial_cut PRIVATE partial_cut_core polyscope)
+
+foreach(t partial_cut_core partial_cut)
+    set_target_properties(${t} PROPERTIES
+        CXX_STANDARD 20
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF)
+    if(MSVC)
+        target_compile_options(${t} PRIVATE /W3 /utf-8 /Zc:__cplusplus)
+    else()
+        target_compile_options(${t} PRIVATE -Wall)
+    endif()
+endforeach()
 
 # Visual Studio: make "Run" launch partial_cut (not ALL_BUILD), from the project folder
 # so results.txt lands next to README.md.
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT partial_cut)
 set_target_properties(partial_cut PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-if(MSVC)
-    target_compile_options(partial_cut PRIVATE /W3 /utf-8 /Zc:__cplusplus)
-else()
-    target_compile_options(partial_cut PRIVATE -Wall)
-endif()
 
 # Put the oneTBB shared library next to the executable on Windows (no rpath there).
 if(WIN32)
@@ -169,3 +179,8 @@ if(WIN32)
                 $<TARGET_RUNTIME_DLLS:partial_cut> $<TARGET_FILE_DIR:partial_cut>
         COMMAND_EXPAND_LISTS)
 endif()
+
+# ------------------------------------------------------------------------------
+# XFEM: a plain cpu XFEM solid (backward euler, newton) on check 4's nodal ring with the glued H of partial_cut_core as
+# the partial-cut enrichment; its library, self-tests and the nodal_ring example (XFEM/README.md).
+add_subdirectory(XFEM)

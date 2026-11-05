@@ -28,6 +28,10 @@
 //                                                 check 4's nodal ring with a panel: ring, crack, sample points per
 //                                                 tet and walk counts, recomputed in the background; a "fast method"
 //                                                 checkbox (off unless --fast) switches to the fast per-tet path
+//   partial_cut --gate coupling --export-xfem --check 4 [--ring 1|2] [--config 0|1|2] [--quad-level L] [--walks-tet Q]
+//               [--walks-r R] [--points P] --out FILE
+//                                                 one nodal ring's glued H (fast path) for an XFEM simulation: tet
+//                                                 classes, node values, quadrature and render data, with self-checks
 //   partial_cut --ring-bench [...] / --ring-bench --selftest / --ring-bench --view [--fast]
 //                                                 the fast ring method vs the direct ring solve (writes ring_perf/)
 //   partial_cut --screenshot out.png [--t 0.6] [--t-start 0.2 --steps 8] [--rewalked] [--with-ui]
@@ -1243,6 +1247,15 @@ void printUsage()
                 "    (add --fast: start with the panel's 'fast method' checkbox on, Q 32 / R 16 walks per point)\n"
                 "    (add --case ID [--points P] [--walks-tet Q] [--walks-r R] [--walks-ref N]: start on that --ring-stress\n"
                 "     case, at its cached GT's density; without a cache at P the GT is solved at N walks, not cached)\n"
+                "  partial_cut --gate coupling --export-xfem --check 4 [--ring 1|2] [--config 0|1|2] [--quad-level L]\n"
+                "              [--walks-tet Q] [--walks-r R] [--points P] --out FILE\n"
+                "                                               one nodal ring's glued H by our fast method (no GT) for an XFEM\n"
+                "                                               simulation (default ring 2, K1): the glue as the ring view's\n"
+                "                                               --fast (P points per tet, default 4096; Q 32 / R 16), then the\n"
+                "                                               export points at Q / R walks (default 256 / 256); writes the\n"
+                "                                               tet classes, node values h, a quadrature rule with h and grad h\n"
+                "                                               (the tet split at the crack plane, each piece refined L times,\n"
+                "                                               default 1, more near the front) and render data to FILE\n"
                 "  partial_cut --ring-bench [--ring 1|2] [--config 0|1|2] [--ours LIST] [--direct LIST] [--current LIST]\n"
                 "              [--shell S] [--repeat R] [--seeds S] [--no-lean] [--no-fuse] [--tag NAME] [--quick]\n"
                 "                                               check 4's ring: the fast per-tet method vs the direct ring\n"
@@ -1293,6 +1306,9 @@ int main(int argc, char** argv)
     bool ringStress = false, seedsGiven = false, pointsGiven = false, walksTetGiven = false, walksRGiven = false, walksRefGiven = false;
     RingStressParams stressP;
     RingViewParams ringView;
+    // --export-xfem (coupling_gate.h runXfemExport); it shares --ring, --config, --points, --walks-tet and --walks-r
+    bool exportXfem = false;
+    XfemExportParams xfemP;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "--validate") == 0) validate = true;
         else if (std::strcmp(argv[i], "--bench") == 0) bench = true;
@@ -1344,6 +1360,9 @@ int main(int argc, char** argv)
         else if (std::strcmp(argv[i], "--no-lean") == 0) benchP.lean = false;
         else if (std::strcmp(argv[i], "--no-fuse") == 0) benchP.fuse = false;
         else if (std::strcmp(argv[i], "--fast") == 0) ringFast = true;
+        else if (std::strcmp(argv[i], "--export-xfem") == 0) exportXfem = true;
+        else if (std::strcmp(argv[i], "--quad-level") == 0 && i + 1 < argc) xfemP.quadLevel = std::atoi(argv[++i]);
+        else if (std::strcmp(argv[i], "--out") == 0 && i + 1 < argc) xfemP.out = argv[++i];
         else if (std::strcmp(argv[i], "--points") == 0 && i + 1 < argc) {
             ringView.pointsPerTet = std::max(64, std::atoi(argv[++i]));
             pointsGiven = true;
@@ -1422,6 +1441,19 @@ int main(int argc, char** argv)
                                      "       --gate coupling --view [--check 2|3] [--config i] [--screenshot out.png [--with-ui]]\n"
                                      "       --gate coupling --view --check 4 [--ring 1|2] [--config 0|1|2]\n");
                 return 2;
+            }
+            if (exportXfem) {   // one ring's glued H for the XFEM project: ring 2, K1 unless told otherwise
+                if (gateCheck != 4 || xfemP.out.empty()) {
+                    std::fprintf(stderr, "usage: --gate coupling --export-xfem --check 4 [--ring 1|2] [--config 0|1|2] [--quad-level L]\n"
+                                         "       [--walks-tet Q] [--walks-r R] [--points P] --out FILE\n");
+                    return 2;
+                }
+                if (gateRing == 1 || gateRing == 2) xfemP.ring = gateRing;
+                if (gateConfig >= 0 && gateConfig <= 2) xfemP.crack = gateConfig;
+                if (pointsGiven) xfemP.gluePoints = ringView.pointsPerTet;
+                if (walksTetGiven) xfemP.walksQ = ringView.walksTet;
+                if (walksRGiven) xfemP.walksR = ringView.walksR;
+                return runXfemExport(xfemP) ? 0 : 1;
             }
             if (gateViewMode && gateCheck == 4) {   // ring 2 (real mesh), K1 unless told otherwise; the panel changes both
                 RingViewParams rp;

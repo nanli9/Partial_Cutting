@@ -12209,3 +12209,803 @@ RingView stressRingView(const std::string& id, int pointsPerTet, int nQ, int nR,
     v.report.push_back(buf);
     return v;
 }
+
+// =====================================================================================
+// --gate coupling --export-xfem --check 4: one nodal ring's glued H for an XFEM simulation (coupling_gate.h runXfemExport)
+// =====================================================================================
+// Our method only (the fast path), no GT: nothing is read from or written to gate_cache/, gate_report.md, ring_perf/ or
+// ring_stress/, and no other mode calls this. The glue is gateRingViewFast's (its point sets, walks and seeds: the same
+// c, bit for bit). The export points (the quadrature, then the self-checks' points at weight 0) are a second runRingFast
+// pass with their own seeds, the same xi cuts and face data, evaluated with the glued c by cvField: H = J_xi + R + sum_k
+// c_k (lambda_k + Q_k). That pass also glues its own points, printed as a diagnostic only. The render data are exact: on
+// O's faces H is its face data J + sum_k c_k lambda_k, on the crack +-1.
+namespace {
+
+constexpr double kXfemFrontBand[2] = {0.15, 0.05};   // quadrature leaves within these of O's front: one more level, two
+constexpr int kXfemRenderPerEdge = 24;   // the render's outer triangles (edges sqrt 2) are cut into this many per edge
+constexpr int kXfemViewStride = 64;      // self-check: every 64th glue point is also an export point
+constexpr double kXfemFaceOff = 1e-3;    // self-check: points this far inside O's faces (h against the face data)
+constexpr double kXfemFaceCrack = 0.05;  // ... at least this far from the crack
+constexpr double kXfemCornerOff = 1e-4;  // self-check: points this far from a tet's corners (h against the node value)
+
+// motus topology/cutting/xfem_cutter.cpp positive_piece, ported: the part of a tet where a linear level set with corner
+// values phi is positive, as 0, 1 or 3 sub-tets with corners in barycentric coordinates of the tet (4 positive: the tet;
+// 3-1: the little tet at a lone positive corner, or the wedge under a lone negative one; 2-2: a wedge). The negative part
+// is the positive part of -phi, so the two pieces are motus's +3/-1 or 2+/2- split.
+int xfemPositivePiece(const Eigen::Vector4d& phi, Eigen::Vector4d (&tets)[3][4])
+{
+    const Eigen::Matrix4d I = Eigen::Matrix4d::Identity();
+    auto crossing = [&phi, &I](int i, int j) -> Eigen::Vector4d {   // the zero of phi on edge (i, j)
+        const double t = phi[i]/(phi[i] - phi[j]);
+        return (1.0 - t)*I.col(i) + t*I.col(j);
+    };
+    auto set = [&tets](int k, const Eigen::Vector4d& a, const Eigen::Vector4d& b, const Eigen::Vector4d& c,
+                       const Eigen::Vector4d& d) {
+        tets[k][0] = a;
+        tets[k][1] = b;
+        tets[k][2] = c;
+        tets[k][3] = d;
+    };
+    int positive = 0;
+    for (int a = 0; a < 4; a++) positive += phi[a] > 0 ? 1 : 0;
+    if (positive == 0) return 0;
+    if (positive == 4) {
+        set(0, I.col(0), I.col(1), I.col(2), I.col(3));
+        return 1;
+    }
+    if (positive == 1 || positive == 3) {   // 3-1: L is the corner whose sign the other three do not share
+        const bool lonePositive = positive == 1;
+        int L = 0;
+        for (int a = 0; a < 4; a++)
+            if ((phi[a] > 0) == lonePositive) L = a;
+        const int i = (L + 1)%4, j = (L + 2)%4, k = (L + 3)%4;
+        const Eigen::Vector4d ci = crossing(L, i), cj = crossing(L, j), ck = crossing(L, k);
+        if (lonePositive) {   // the corner chopped off at L
+            set(0, I.col(L), ci, cj, ck);
+            return 1;
+        }
+        set(0, I.col(i), I.col(j), I.col(k), ci);   // the wedge (ci, cj, ck) over (e_i, e_j, e_k)
+        set(1, I.col(j), I.col(k), ci, cj);
+        set(2, I.col(k), ci, cj, ck);
+        return 3;
+    }
+    int p[2] = {0, 0}, n[2] = {0, 0}, np = 0, nn = 0;   // 2-2: c_ab is the crossing on edge (p_a, n_b)
+    for (int a = 0; a < 4; a++) {
+        if (phi[a] > 0) p[np++] = a;
+        else n[nn++] = a;
+    }
+    const Eigen::Vector4d c00 = crossing(p[0], n[0]), c01 = crossing(p[0], n[1]), c10 = crossing(p[1], n[0]),
+                          c11 = crossing(p[1], n[1]);
+    set(0, I.col(p[0]), c00, c01, I.col(p[1]));   // the wedge (p0, c00, c01) to (p1, c10, c11)
+    set(1, c00, c01, I.col(p[1]), c10);
+    set(2, c01, I.col(p[1]), c10, c11);
+    return 3;
+}
+
+// The distance from the segment [a, b] to the leaf l, 0 where the segment meets it. A point's distance to a convex set is
+// convex along a segment, so a golden-section search over the segment's parameter finds its minimum (to ~1e-9 of |b - a|).
+// A leaf's centroid is no proxy: the sub-tets next to the plane are slivers whose centroid can lie far from a front that
+// passes through them.
+double xfemLeafSegmentDist(const Leaf& l, const Vec3& a, const Vec3& b)
+{
+    Eigen::Matrix3d E;
+    E << l.v[1] - l.v[0], l.v[2] - l.v[0], l.v[3] - l.v[0];
+    const Eigen::Matrix3d Einv = E.inverse();
+    auto toLeaf = [&](double t) {   // 0 inside, else the nearest face
+        const Vec3 p = a + t*(b - a);
+        const Vec3 lam = Einv*(p - l.v[0]);
+        if (lam.minCoeff() >= 0 && lam.sum() <= 1) return 0.0;
+        return std::min({pointTriangleDist(p, l.v[1], l.v[2], l.v[3]), pointTriangleDist(p, l.v[0], l.v[2], l.v[3]),
+                         pointTriangleDist(p, l.v[0], l.v[1], l.v[3]), pointTriangleDist(p, l.v[0], l.v[1], l.v[2])});
+    };
+    constexpr double r = 0.61803398874989484820;
+    double lo = 0, hi = 1, x1 = hi - r*(hi - lo), x2 = lo + r*(hi - lo), f1 = toLeaf(x1), f2 = toLeaf(x2);
+    for (int it = 0; it < 44 && f1 > 0 && f2 > 0; it++) {
+        if (f1 <= f2) {
+            hi = x2;
+            x2 = x1;
+            f2 = f1;
+            x1 = hi - r*(hi - lo);
+            f1 = toLeaf(x1);
+        } else {
+            lo = x1;
+            x1 = x2;
+            f1 = f2;
+            x2 = lo + r*(hi - lo);
+            f2 = toLeaf(x2);
+        }
+    }
+    return std::min({f1, f2, toLeaf(0.0), toLeaf(1.0)});
+}
+
+double leafDiameter(const Leaf& l)
+{
+    double d = 0;
+    for (int i = 0; i < 4; i++)
+        for (int j = i + 1; j < 4; j++) d = std::max(d, (l.v[size_t(i)] - l.v[size_t(j)]).norm());
+    return d;
+}
+
+// One ring tet's quadrature rule in X: the tet split by the crack plane into the sub-tets of its + and - pieces
+// (xfemPositivePiece; a tet the plane misses is one piece), every sub-tet refined level times (Bey's 8 children), then once
+// more where a leaf comes within kXfemFrontBand[0] of O's front segment and once more within kXfemFrontBand[1] (the leaf's
+// own distance to the segment, xfemLeafSegmentDist: every leaf the front passes through ends at depth level + 2), and the
+// 4-point degree-2 Gauss rule in every leaf. The points lie strictly inside their leaves, so never on the plane, and the
+// weights of the tet sum to its volume.
+struct XfemQuadPoint {
+    Vec3 X = Vec3::Zero();
+    double w = 0;
+    int side = 0;   // the piece: +1 (n.X > d) or -1
+};
+struct XfemTetQuad {
+    std::vector<XfemQuadPoint> pts;
+    int nSub[2] = {0, 0};                // sub-tets of the + and the - piece
+    int nLeaves = 0, nFrontLeaves = 0;   // leaves; of them, refined for the front
+    int nNear = 0, nNearShallow = 0;     // leaves within kXfemFrontBand[1] of the front; of them, not at depth level + 2
+    double nearDiam = 0;                 // the largest diameter among those leaves
+};
+XfemTetQuad xfemTetQuad(const TetFrame& T, const RingCrack& rc, int level, const std::vector<Vec3>& front)
+{
+    constexpr double ga = 0.58541019662496845446, gb = 0.13819660112501051518;   // (5 + 3 sqrt 5)/20, (5 - sqrt 5)/20
+    XfemTetQuad q;
+    Eigen::Vector4d phi;
+    for (int a = 0; a < 4; a++) phi[a] = rc.n.dot(T.X[a]) - rc.d;
+    const double V = std::fabs(T.detJ)/6.0;
+    auto nearFront = [&front](const Leaf& l, double band) {
+        return front.size() == 2 && xfemLeafSegmentDist(l, front[0], front[1]) < band;
+    };
+    for (int s = 0; s < 2; s++) {
+        Eigen::Vector4d sub[3][4];
+        q.nSub[s] = xfemPositivePiece(s == 0 ? phi : Eigen::Vector4d(-phi), sub);
+        std::vector<Leaf> leaves;
+        for (int k = 0; k < q.nSub[s]; k++) {
+            Leaf l;
+            for (int c = 0; c < 4; c++)
+                l.v[c] = sub[k][c][0]*T.X[0] + sub[k][c][1]*T.X[1] + sub[k][c][2]*T.X[2] + sub[k][c][3]*T.X[3];
+            if (leafVolume(l) > 1e-15*V) leaves.push_back(l);   // a zero-volume sub-tet (a corner on the plane) carries nothing
+        }
+        auto refine = [&leaves](auto pred) {
+            std::vector<Leaf> o;
+            for (const Leaf& l : leaves) {
+                if (!pred(l)) {
+                    o.push_back(l);
+                    continue;
+                }
+                for (const Leaf& ch : beyChildren(l)) o.push_back(ch);
+            }
+            leaves.swap(o);
+        };
+        for (int i = 0; i < level; i++) refine([](const Leaf&) { return true; });
+        for (int e = 0; e < 2; e++)
+            refine([&](const Leaf& l) { return l.depth == level + e && nearFront(l, kXfemFrontBand[e]); });
+        for (const Leaf& l : leaves) {
+            if (l.depth > level) q.nFrontLeaves++;
+            if (nearFront(l, kXfemFrontBand[1])) {
+                q.nNear++;
+                q.nNearShallow += l.depth != level + 2 ? 1 : 0;
+                q.nearDiam = std::max(q.nearDiam, leafDiameter(l));
+            }
+            const double w = 0.25*leafVolume(l);
+            const Vec3 sum = l.v[0] + l.v[1] + l.v[2] + l.v[3];
+            for (int c = 0; c < 4; c++) q.pts.push_back(XfemQuadPoint{(ga - gb)*l.v[c] + gb*sum, w, s == 0 ? 1 : -1});
+        }
+        q.nLeaves += int(leaves.size());
+    }
+    return q;
+}
+
+// The render data in X: each vertex has its tet, side, group (0: O's boundary, 1 / 2: the crack's + / - sheet) and
+// whether it lies on the plane; each triangle its three vertices and group
+struct XfemRender {
+    std::vector<int> tet, side, group;
+    std::vector<char> onPlane;
+    std::vector<Vec3> X;
+    std::vector<double> h;
+    std::vector<std::array<int, 4>> tris;   // a, b, c, group
+    int add(int t, int s, int g, const Vec3& x, bool plane)
+    {
+        tet.push_back(t);
+        side.push_back(s);
+        group.push_back(g);
+        onPlane.push_back(char(plane));
+        X.push_back(x);
+        return int(X.size()) - 1;
+    }
+};
+
+// O's boundary triangle of tet t (corners P, wound outwards) cut into n x n small triangles, each clipped by the crack
+// plane into its parts on either side (Sutherland-Hodgman per side; a grid vertex on the plane, and every crossing of a grid
+// edge, is one render vertex per side). Group 0. The vertices are shared within the face, so each side's mesh is connected.
+void xfemRenderFace(XfemRender& r, int t, const std::array<Vec3, 3>& P, const RingCrack& rc, int n)
+{
+    std::vector<Vec3> G(size_t((n + 1)*(n + 1)), Vec3::Zero());
+    std::vector<double> f(G.size(), 0.0);
+    auto gid = [n](int i, int j) { return i*(n + 1) + j; };
+    for (int i = 0; i <= n; i++)
+        for (int j = 0; i + j <= n; j++) {
+            G[size_t(gid(i, j))] = P[0] + (double(i)/n)*(P[1] - P[0]) + (double(j)/n)*(P[2] - P[0]);
+            f[size_t(gid(i, j))] = rc.n.dot(G[size_t(gid(i, j))]) - rc.d;
+        }
+    std::map<std::array<int, 3>, int> ids;   // (grid vertex, -1, side) or (grid edge lo, hi, side) -> render vertex
+    auto vertex = [&](int a, int b, int s) {
+        const std::array<int, 3> key = b < 0 ? std::array<int, 3>{a, -1, s} : std::array<int, 3>{std::min(a, b), std::max(a, b), s};
+        const auto it = ids.find(key);
+        if (it != ids.end()) return it->second;
+        const size_t lo = size_t(key[0]), hi = size_t(key[1] < 0 ? key[0] : key[1]);
+        const int id = b < 0 ? r.add(t, s, 0, G[lo], f[lo] == 0) : r.add(t, s, 0, G[lo] + (f[lo]/(f[lo] - f[hi]))*(G[hi] - G[lo]), true);
+        ids.emplace(key, id);
+        return id;
+    };
+    auto clip = [&](int a, int b, int c) {
+        const int v[3] = {a, b, c};
+        for (int s = 1; s >= -1; s -= 2) {
+            std::vector<int> poly;
+            for (int e = 0; e < 3; e++) {
+                const double fp = s*f[size_t(v[e])], fq = s*f[size_t(v[(e + 1)%3])];
+                if (fp >= 0) poly.push_back(vertex(v[e], -1, s));
+                if ((fp > 0 && fq < 0) || (fp < 0 && fq > 0)) poly.push_back(vertex(v[e], v[(e + 1)%3], s));
+            }
+            for (size_t k = 1; k + 1 < poly.size(); k++) {
+                const Vec3 &x0 = r.X[size_t(poly[0])], &x1 = r.X[size_t(poly[k])], &x2 = r.X[size_t(poly[k + 1])];
+                if ((x1 - x0).cross(x2 - x0).norm() > 1e-14) r.tris.push_back({poly[0], poly[k], poly[k + 1], 0});
+            }
+        }
+    };
+    for (int i = 0; i < n; i++)
+        for (int j = 0; i + j < n; j++) {
+            clip(gid(i, j), gid(i + 1, j), gid(i, j + 1));
+            if (i + j < n - 1) clip(gid(i + 1, j), gid(i + 1, j + 1), gid(i, j + 1));
+        }
+}
+
+// The crack inside tet t (its polygon P in X, CCW about n), fanned about its centroid, every fan triangle cut into m x m
+// (m from the longest fan edge over the render spacing hR, one m for the whole polygon so that the fans' shared edges
+// match), written twice: group 1 (side +1, wound with normal -n: outwards from the + piece) and group 2 (side -1, normal
+// +n). Returns the fan triangles whose winding disagreed with n (0 expected).
+int xfemRenderCrack(XfemRender& r, int t, const std::vector<Vec3>& P, const Vec3& nrm, double hR)
+{
+    const int N = int(P.size());
+    if (N < 3) return 0;
+    Vec3 ctr = Vec3::Zero();
+    for (const Vec3& p : P) ctr += p/double(N);
+    double len = 0;
+    int bad = 0;
+    for (int i = 0; i < N; i++) {
+        len = std::max({len, (P[size_t(i)] - ctr).norm(), (P[size_t((i + 1)%N)] - P[size_t(i)]).norm()});
+        if ((P[size_t(i)] - ctr).cross(P[size_t((i + 1)%N)] - ctr).dot(nrm) <= 0) bad++;
+    }
+    const int m = std::max(1, int(std::ceil(len/hR)));
+    for (int s = 1; s >= -1; s -= 2) {
+        const int g = s > 0 ? 1 : 2;
+        std::map<std::array<int, 3>, int> ids;   // (spoke e, k, -1): on the segment centroid-P_e; (N + fan i, a, b): inside fan i
+        auto vertex = [&](int i, int a, int b) {
+            const int j = (i + 1)%N;
+            std::array<int, 3> key{N + i, a, b};
+            if (b == 0) key = {a == 0 ? 0 : i, a, -1};
+            else if (a == 0) key = {j, b, -1};
+            const auto it = ids.find(key);
+            if (it != ids.end()) return it->second;
+            const Vec3 x = key[2] < 0 ? Vec3(ctr + (double(key[1])/m)*(P[size_t(key[0])] - ctr))
+                                      : Vec3(ctr + (double(a)/m)*(P[size_t(i)] - ctr) + (double(b)/m)*(P[size_t(j)] - ctr));
+            const int id = r.add(t, s, g, x, true);
+            ids.emplace(key, id);
+            return id;
+        };
+        auto tri = [&](int a, int b, int c) {
+            const Vec3 &x0 = r.X[size_t(a)], &x1 = r.X[size_t(b)], &x2 = r.X[size_t(c)];
+            if ((x1 - x0).cross(x2 - x0).norm() <= 1e-14) return;
+            if (s > 0) r.tris.push_back({a, c, b, g});
+            else r.tris.push_back({a, b, c, g});
+        };
+        for (int i = 0; i < N; i++)
+            for (int a = 0; a < m; a++)
+                for (int b = 0; a + b < m; b++) {
+                    tri(vertex(i, a, b), vertex(i, a + 1, b), vertex(i, a, b + 1));
+                    if (a + b < m - 1) tri(vertex(i, a + 1, b), vertex(i, a + 1, b + 1), vertex(i, a, b + 1));
+                }
+    }
+    return bad;
+}
+
+// printf appended to a string (the export file is built in memory, then written in one go)
+void appendf(std::string& s, const char* fmt, ...)
+{
+    char buf[2048];
+    va_list ap;
+    va_start(ap, fmt);
+    std::vsnprintf(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    s += buf;
+}
+
+// quantiles of v (q in [0, 1]; v is sorted here)
+double xfemQuantile(std::vector<double>& v, double q)
+{
+    if (v.empty()) return 0.0;
+    std::sort(v.begin(), v.end());
+    return v[std::min(v.size() - 1, size_t(q*double(v.size() - 1) + 0.5))];
+}
+
+} // namespace
+
+bool buildXfemRing(const XfemExportParams& p, XfemRingData& xd)
+{
+    using clk = std::chrono::steady_clock;
+    const auto tStart = clk::now();
+    if (p.ring != 1 && p.ring != 2) throw std::invalid_argument("--export-xfem: --ring 1 or 2");
+    if (p.crack < 0 || p.crack > 2) throw std::invalid_argument("--export-xfem: --config 0, 1 or 2 (K1, K2, K3)");
+    if (p.quadLevel < 0 || p.quadLevel > 4) throw std::invalid_argument("--export-xfem: --quad-level 0 to 4");
+    Report out(false);
+    const GateParams gp = gateParams(false);
+    out("--gate coupling --export-xfem --check 4: %u hardware threads (TBB default arena)\n", std::thread::hardware_concurrency());
+
+    // 1. the glue, as the fast ring view runs it (gateRingViewFast at its --fast default: Q 32 / R 16, 8 batches, its seeds)
+    auto t0 = clk::now();
+    const int nPts = std::max(64, p.gluePoints);
+    const int Bg = defaultBatches(32);
+    PerfSetup s;
+    perfSetup(s, p.ring, p.crack, nPts);
+    const Ring& R = s.R;
+    const RingCrack& rc = s.rc;
+    const int nModes = R.id == 1 && !rc.through ? 2 : 1;   // as the view (its ramp run also changes R's walks in ring 1)
+    RingFastParams fg;
+    fg.nQ = 32;
+    fg.nR = 16;
+    fg.nBatches = Bg;
+    fg.ramp = nModes == 2;
+    const RingFast glue = runRingFast(R, rc, s.ps, s.J, fg, gp.seed, 21000 + 1000*uint64_t(s.ri) + 100*uint64_t(s.ki), false);
+    const Vec7 c = glue.gl[0].c;
+    const double secGlue = secondsSince(t0);
+    out("check 4, %s, crack %s: %s\n", R.name.c_str(), rc.name.c_str(), rc.desc.c_str());
+    out("glue (our fast method, as the ring view: %d points per tet asked, %zu in all; Q %d / R %d walks per point, %d batches): "
+        "%.3f s (Q walks %.3f s, R walks %.3f s; setup and point sets %.3f s)\n", nPts, totalPoints(s), fg.nQ, fg.nR, Bg, secGlue,
+        glue.secQ, glue.secR, s.secGeometry);
+
+    // 2. the geometry: the tet classes, O's front, the quadrature rules and the render data
+    t0 = clk::now();
+    std::vector<Vec3> front;   // O's front segment: its two ends on O's boundary (none when the crack is cut through)
+    if (!rc.through) front = frontVertices(rc.cutO);
+    if (!rc.through && front.size() != 2) throw std::runtime_error("--export-xfem: O's crack has no front segment");
+    const ConvexDomain O = octahedron();
+    std::array<int, kRingNT> cls{};
+    std::vector<XfemTetQuad> quad;
+    for (int t = 0; t < kRingNT; t++) {
+        const RingTetCrack& rt = s.rt[size_t(t)];
+        cls[size_t(t)] = !rt.cut() ? 0 : rt.tRaw >= 1 ? 1 : 2;
+        if (R.T[size_t(t)].global[0] != 0) throw std::logic_error("--export-xfem: a ring tet's local corner 0 is not the node");
+        quad.push_back(xfemTetQuad(R.T[size_t(t)], rc, p.quadLevel, front));
+    }
+    XfemRender rd;
+    const double hR = kSqrt2/kXfemRenderPerEdge;
+    std::array<std::array<Vec3, 3>, kRingNT> outer{};   // each tet's face on O, wound outwards
+    int badFans = 0;
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        std::array<Vec3, 3> P = {T.X[1], T.X[2], T.X[3]};
+        if ((P[1] - P[0]).cross(P[2] - P[0]).dot(P[0] - T.X[0]) < 0) std::swap(P[1], P[2]);
+        outer[size_t(t)] = P;
+        xfemRenderFace(rd, t, P, rc, kXfemRenderPerEdge);
+    }
+    for (int t = 0; t < kRingNT; t++)
+        if (cls[size_t(t)] > 0) badFans += xfemRenderCrack(rd, t, s.rt[size_t(t)].phys.polygon, rc.n, hR);
+    const double secGeom = secondsSince(t0);
+
+    // 3. the export pass: per tet the quadrature points, then (weight 0) every kXfemViewStride-th glue point, points
+    // kXfemFaceOff inside O's face (away from the crack) and points kXfemCornerOff from each corner
+    t0 = clk::now();
+    std::vector<PointSet> pe(kRingNT);
+    std::vector<size_t> nQuad(kRingNT), nView(kRingNT), nFace(kRingNT);
+    std::vector<std::vector<size_t>> viewIdx(kRingNT);
+    std::vector<std::vector<Vec3>> faceFoot(kRingNT);
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        PointSet& e = pe[size_t(t)];
+        auto add = [&](const Vec3& X, const Vec3& xi, double w) {
+            e.X.push_back(X);
+            e.xi.push_back(xi);
+            e.w.push_back(w);
+        };
+        for (const XfemQuadPoint& q : quad[size_t(t)].pts) add(q.X, T.toXi(q.X), q.w);
+        nQuad[size_t(t)] = e.size();
+        const PointSet& g = s.ps[size_t(t)];
+        for (size_t i = 0; i < g.size(); i += kXfemViewStride) {
+            viewIdx[size_t(t)].push_back(i);
+            add(g.X[i], g.xi[i], 0.0);
+        }
+        nView[size_t(t)] = e.size();
+        const std::array<Vec3, 3>& P = outer[size_t(t)];
+        const Vec3 nOut = (P[1] - P[0]).cross(P[2] - P[0]).normalized();
+        for (int i = 1; i < 8; i++)
+            for (int j = 1; i + j < 8; j++) {
+                const Vec3 foot = P[0] + (i/8.0)*(P[1] - P[0]) + (j/8.0)*(P[2] - P[0]);
+                if (rc.cutO.distToCut(foot) < kXfemFaceCrack) continue;
+                faceFoot[size_t(t)].push_back(foot);
+                add(foot - kXfemFaceOff*nOut, T.toXi(foot - kXfemFaceOff*nOut), 0.0);
+            }
+        nFace[size_t(t)] = e.size();
+        const Vec3 ctr = 0.25*(T.X[0] + T.X[1] + T.X[2] + T.X[3]);
+        for (int k = 0; k < 4; k++) {
+            const Vec3 X = T.X[size_t(k)] + kXfemCornerOff*(ctr - T.X[size_t(k)]).normalized();
+            add(X, T.toXi(X), 0.0);
+        }
+    }
+    const int Be = defaultBatches(p.walksQ);
+    auto whole = [](int n, int b) { return std::max(2*b, (n + b/2)/b*b); };
+    RingFastParams fe;
+    fe.nQ = whole(p.walksQ, Be);
+    fe.nR = whole(p.walksR, Be);
+    fe.nBatches = Be;
+    const RingFast ex = runRingFast(R, rc, pe, s.J, fe, gp.seed, 31000 + 1000*uint64_t(s.ri) + 100*uint64_t(s.ki), false);
+    const double secExWalks = secondsSince(t0);
+    t0 = clk::now();
+    std::vector<FieldAt> FE, FV;   // the export pass and the glue's own field (at the glue points), both with the glued c
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        FE.push_back(cvField(ex.cv[size_t(t)], pe[size_t(t)], T, 0, localValues(T, c), {}, Be));
+        FV.push_back(cvField(glue.cv[size_t(t)], s.ps[size_t(t)], T, 0, localValues(T, c), {}, Bg));
+    }
+    const double secFields = secondsSince(t0);
+    size_t nQuadAll = 0, nCheckAll = 0;
+    for (int t = 0; t < kRingNT; t++) {
+        nQuadAll += nQuad[size_t(t)];
+        nCheckAll += pe[size_t(t)].size() - nQuad[size_t(t)];
+    }
+    out("export points (the same xi cuts, face data and glued c; Q %d / R %d walks per point, %d batches): %zu quadrature + %zu "
+        "check points, walks %.3f s (Q %.3f s in %d tets, R %.3f s in %d tets), fields %.3f s; geometry %.3f s\n", fe.nQ, fe.nR, Be,
+        nQuadAll, nCheckAll, secExWalks, ex.secQ, ex.nQtets, ex.secR, ex.nRtets, secFields, secGeom);
+
+    // 4. the values: h = (H/g + 1)/2 and g = grad_X h at the quadrature points, the node values, the render vertices
+    auto faceH = [&](int t, const Vec3& X, int side, bool plane) {   // H's face data at X in tet t (side: on the plane)
+        const TetFrame& T = R.T[size_t(t)];
+        const Vec3 xi = T.toXi(X);
+        const double lam[4] = {1.0 - xi.sum(), xi[0], xi[1], xi[2]};
+        double H = plane ? (rc.cutO.u.dot(X) - rc.sJ < 0 ? double(side) : 0.0) : s.J[0](X);   // J = theta/pi; on the plane +-1 or 0
+        for (int k = 0; k < 4; k++) H += c[T.global[size_t(k)]]*lam[k];
+        return H;
+    };
+    std::array<double, kRingNV> Hv{}, hv{}, Jv{}, phiV{};
+    for (int v = 0; v < kRingNV; v++) {
+        Jv[size_t(v)] = s.J[0](R.V[size_t(v)]);
+        Hv[size_t(v)] = Jv[size_t(v)] + c[v];
+        hv[size_t(v)] = 0.5*(Hv[size_t(v)] + 1.0);
+        phiV[size_t(v)] = rc.n.dot(R.V[size_t(v)]) - rc.d;
+    }
+    rd.h.resize(rd.X.size());
+    for (size_t i = 0; i < rd.X.size(); i++)
+        rd.h[i] = rd.group[i] == 1 ? 1.0 : rd.group[i] == 2 ? 0.0 : 0.5*(faceH(rd.tet[i], rd.X[i], rd.side[i], rd.onPlane[i]) + 1.0);
+
+    // 5. the self-checks
+    out("\nself-checks\n");
+    bool ok = true;
+    double wErr = 0;
+    for (int t = 0; t < kRingNT; t++) {
+        double sw = 0;
+        for (const XfemQuadPoint& q : quad[size_t(t)].pts) sw += q.w;
+        const double V = std::fabs(R.T[size_t(t)].detJ)/6.0;
+        wErr = std::max(wErr, std::fabs(sw - V)/V);
+    }
+    ok = ok && wErr <= 1e-12;
+    out("  weights: max over the tets of |sum w - V| / V = %.2e (limit 1e-12) %s\n", wErr, wErr <= 1e-12 ? "ok" : "FAILED");
+    if (front.size() == 2) {   // every leaf near the front refined twice, whatever its shape
+        int nNear = 0, nShallow = 0;
+        double diam = 0;
+        for (const XfemTetQuad& q : quad) {
+            nNear += q.nNear;
+            nShallow += q.nNearShallow;
+            diam = std::max(diam, q.nearDiam);
+        }
+        ok = ok && nShallow == 0;
+        out("  front refinement: %d leaves within %.2f of the front (each leaf's own distance to the segment), %d of them not at "
+            "depth %d; the largest is %.3f across %s\n", nNear, kXfemFrontBand[1], nShallow, p.quadLevel + 2, diam,
+            nShallow == 0 ? "ok" : "FAILED");
+    }
+    int badClass = 0;   // class 2 iff the tet's crack polygon has an edge on O's front
+    for (int t = 0; t < kRingNT; t++) badClass += (cls[size_t(t)] == 2) != !s.rt[size_t(t)].front.empty() ? 1 : 0;
+    ok = ok && badClass == 0;
+    out("  classes: %d tets where class 2 and 'the tet's crack has an edge on the front' disagree %s\n", badClass,
+        badClass == 0 ? "ok" : "FAILED");
+    long long badSide = 0, badRender = 0;
+    double minPhi = kInf, maxPlane = 0;
+    for (int t = 0; t < kRingNT; t++)
+        for (const XfemQuadPoint& q : quad[size_t(t)].pts) {
+            const double ph = rc.n.dot(q.X) - rc.d;
+            minPhi = std::min(minPhi, std::fabs(ph));
+            if ((ph > 0 ? 1 : -1) != q.side) badSide++;
+        }
+    for (size_t i = 0; i < rd.X.size(); i++) {
+        const double ph = rc.n.dot(rd.X[i]) - rc.d;
+        if (rd.onPlane[i]) maxPlane = std::max(maxPlane, std::fabs(ph));
+        else if ((ph > 0 ? 1 : -1) != rd.side[i]) badRender++;
+    }
+    ok = ok && badSide == 0 && badRender == 0 && maxPlane <= 1e-12;
+    out("  sides: quadrature points with side != sign(n.X - d): %lld of %zu (closest to the plane: %.2e); render vertices off the "
+        "plane with the wrong side: %lld, on it: |n.X - d| <= %.1e %s\n", badSide, nQuadAll, minPhi, badRender, maxPlane,
+        badSide == 0 && badRender == 0 && maxPlane <= 1e-12 ? "ok" : "FAILED");
+    long long badSheet = 0, nSheet = 0;
+    for (size_t i = 0; i < rd.X.size(); i++)
+        if (rd.group[i] > 0) {
+            nSheet++;
+            if (rd.h[i] != (rd.group[i] == 1 ? 1.0 : 0.0) || rd.side[i] != (rd.group[i] == 1 ? 1 : -1)) badSheet++;
+        }
+    ok = ok && badSheet == 0 && badFans == 0;
+    out("  crack sheets: %lld vertices, %lld with h != 1 (+ sheet) / 0 (- sheet) or the wrong side; fan triangles wound against "
+        "n: %d %s\n", nSheet, badSheet, badFans, badSheet == 0 && badFans == 0 ? "ok" : "FAILED");
+    // h at the render vertices on O's faces is the face data itself; check it against the export pass kXfemFaceOff inside,
+    // carried to the face to first order with its own gradient (h + off grad h . n_out)
+    {
+        double s2 = 0, mx = 0, z2 = 0, r2 = 0;
+        long long n = 0;
+        for (int t = 0; t < kRingNT; t++) {
+            const std::array<Vec3, 3>& P = outer[size_t(t)];
+            const Vec3 nOut = (P[1] - P[0]).cross(P[2] - P[0]).normalized();
+            for (size_t k = 0; k < faceFoot[size_t(t)].size(); k++) {
+                const size_t i = nView[size_t(t)] + k;
+                const FieldAt& F = FE[size_t(t)];
+                const double hW = 0.5*(F.H[i] + 1.0), hF = 0.5*(faceH(t, faceFoot[size_t(t)][k], 0, false) + 1.0);
+                const double d = hW + kXfemFaceOff*0.5*F.G[i].dot(nOut) - hF;
+                const double v = 0.25*(F.vH[i] + kXfemFaceOff*kXfemFaceOff*F.vG[i].dot(nOut.cwiseAbs2()));
+                r2 += (hW - hF)*(hW - hF);
+                s2 += d*d;
+                mx = std::max(mx, std::fabs(d));
+                z2 += v > 0 ? d*d/v : 0.0;
+                n++;
+            }
+        }
+        const double nn = double(std::max(1LL, n));
+        out("  render h on O's faces = the face data (J + sum c lambda + 1)/2; the export pass %.0e inside the faces (%lld points "
+            "at least %.2f from the crack), carried to the face with its gradient, against it: difference RMS %.2e, max %.2e, z "
+            "RMS %.2f (without the gradient term: RMS %.2e)\n", kXfemFaceOff, n, kXfemFaceCrack, std::sqrt(s2/nn), mx,
+            std::sqrt(z2/nn), std::sqrt(r2/nn));
+        // where the crack meets O's faces behind the front, the face data (side + sum c lambda) is not the crack data (side)
+        double gap = 0;
+        long long ng = 0;
+        for (size_t i = 0; i < rd.X.size(); i++)
+            if (rd.group[i] == 0 && rd.onPlane[i] && rc.cutO.u.dot(rd.X[i]) - rc.sJ < 0) {
+                gap = std::max(gap, std::fabs(rd.h[i] - (rd.side[i] > 0 ? 1.0 : 0.0)));
+                ng++;
+            }
+        out("  render h on O's faces where the crack meets them (%lld vertices on the plane behind the front): max |h - h of the "
+            "crack sheet| = %.4f (the face data's sum c lambda / 2: the per-tet problem's face/crack data mismatch, so the boundary "
+            "and the sheets do not meet exactly in h there)\n", ng, gap);
+    }
+    // the node values, and the export pass kXfemCornerOff from each corner (averaged over the tets around the vertex)
+    out("  node values h_v = (H(X_v) + 1)/2, H(X_v) = J(X_v) + c_v (H's face data at the vertex, every tet around it alike):\n"
+        "    vertex      n.X-d    c_v       J(X_v)    H(X_v)    h_v       h %.0e from it (export pass, mean of its tets)\n",
+        kXfemCornerOff);
+    double jMax = 0, cornerMax = 0;
+    for (int v = 0; v < kRingNV; v++) {
+        double hs = 0;
+        int nt = 0;
+        for (int t = 0; t < kRingNT; t++) {
+            const int k = R.T[size_t(t)].localOf(v);
+            if (k < 0) continue;
+            hs += 0.5*(FE[size_t(t)].H[nFace[size_t(t)] + size_t(k)] + 1.0);
+            nt++;
+        }
+        hs /= double(std::max(1, nt));
+        jMax = std::max(jMax, std::fabs(Jv[size_t(v)]));
+        cornerMax = std::max(cornerMax, std::fabs(hs - hv[size_t(v)]));
+        out("    %-10s %+.4f  %+.5f  %+.5f  %+.5f  %.5f   %.5f (%d tets)\n", kRingVertName[v], phiV[size_t(v)], c[v], Jv[size_t(v)],
+            Hv[size_t(v)], hv[size_t(v)], hs, nt);
+    }
+    out("    J at the vertices is not 0 (max |J(X_v)| = %.3f), so h_v is not (c_v + 1)/2; the export pass next to the corners "
+        "differs from h_v by at most %.4f\n", jMax, cornerMax);
+    // the range of h, and the size and noise of g
+    {
+        std::vector<double> hq, gq, seH, seG;
+        double hMin = kInf, hMax = -kInf, wOut = 0, wAll = 0;
+        long long nOut = 0;
+        for (int t = 0; t < kRingNT; t++)
+            for (size_t i = 0; i < nQuad[size_t(t)]; i++) {
+                const double h = 0.5*(FE[size_t(t)].H[i] + 1.0), w = quad[size_t(t)].pts[i].w;
+                hMin = std::min(hMin, h);
+                hMax = std::max(hMax, h);
+                wAll += w;
+                if (h < -0.05 || h > 1.05) {
+                    nOut++;
+                    wOut += w;
+                }
+                gq.push_back(0.5*FE[size_t(t)].G[i].norm());
+                seH.push_back(0.5*std::sqrt(FE[size_t(t)].vH[i]));
+                seG.push_back(0.5*std::sqrt(FE[size_t(t)].vG[i].sum()));
+            }
+        double rMin = kInf, rMax = -kInf;
+        for (double h : rd.h) {
+            rMin = std::min(rMin, h);
+            rMax = std::max(rMax, h);
+        }
+        out("  h at the quadrature points: [%.4f, %.4f]; outside [-0.05, 1.05]: %lld points (%.3f%% of the volume); at the render "
+            "vertices: [%.4f, %.4f]\n", hMin, hMax, nOut, 100*wOut/wAll, rMin, rMax);
+        std::vector<double> g2 = gq, sh = seH, sg = seG;
+        out("  |grad h| at the quadrature points: median %.3f, 90%% %.3f, 99%% %.3f, max %.3f; its s.e. (export pass): median %.4f, "
+            "99%% %.4f, max %.4f; s.e. of h: median %.5f, max %.5f\n", xfemQuantile(g2, 0.5), xfemQuantile(g2, 0.9),
+            xfemQuantile(g2, 0.99), xfemQuantile(g2, 1.0), xfemQuantile(sg, 0.5), xfemQuantile(sg, 0.99), xfemQuantile(sg, 1.0),
+            xfemQuantile(sh, 0.5), xfemQuantile(sh, 1.0));
+        if (front.size() == 2) {   // h ~ theta/(2 pi) about the front: |grad h| ~ 1/(2 pi r)
+            double rMin = kInf, gAt = 0;
+            std::vector<double> ratio;
+            size_t m = 0;
+            for (int t = 0; t < kRingNT; t++)
+                for (size_t i = 0; i < nQuad[size_t(t)]; i++, m++) {
+                    const double r = pointSegmentDist(quad[size_t(t)].pts[i].X, front[0], front[1]);
+                    if (r < rMin) {
+                        rMin = r;
+                        gAt = gq[m];
+                    }
+                    if (r < 0.05) ratio.push_back(gq[m]*2.0*std::numbers::pi*r);
+                }
+            out("  near the front: the closest quadrature point is %.2e from it (|grad h| %.1f there); |grad h| 2 pi r within 0.05 of "
+                "it: median %.3f (h ~ theta/(2 pi) + const: 1)\n", rMin, gAt, xfemQuantile(ratio, 0.5));
+        }
+        if (rc.through) {   // a crack cut through O: the exact ring solution is +-1, h the side indicator
+            double e2 = 0, eMax = 0, sw = 0;
+            for (int t = 0; t < kRingNT; t++)
+                for (size_t i = 0; i < nQuad[size_t(t)]; i++) {
+                    const XfemQuadPoint& q = quad[size_t(t)].pts[i];
+                    const double e = 0.5*(FE[size_t(t)].H[i] + 1.0) - (q.side > 0 ? 1.0 : 0.0);
+                    e2 += q.w*e*e;
+                    sw += q.w;
+                    eMax = std::max(eMax, std::fabs(e));
+                }
+            out("  cut through: h against the exact solution (the side indicator) at the quadrature points: RMS %.4f, max %.4f\n",
+                std::sqrt(e2/sw), eMax);
+        }
+    }
+    // the export pass against the glue's own field (what the ring view shows) at the same points, with the same c
+    {
+        double dh2 = 0, dhMax = 0, zh2 = 0, zhMax = 0, dg2 = 0, gg2 = 0, zg2 = 0, vh2 = 0, vg2 = 0;
+        long long n = 0;
+        std::vector<double> zAbs;
+        for (int t = 0; t < kRingNT; t++)
+            for (size_t k = 0; k < viewIdx[size_t(t)].size(); k++) {
+                const size_t i = nQuad[size_t(t)] + k, j = viewIdx[size_t(t)][k];
+                const FieldAt &a = FE[size_t(t)], &b = FV[size_t(t)];
+                const double dh = 0.5*(a.H[i] - b.H[j]), vh = 0.25*(a.vH[i] + b.vH[j]);
+                dh2 += dh*dh;
+                vh2 += vh;
+                dhMax = std::max(dhMax, std::fabs(dh));
+                const double z = vh > 0 ? dh/std::sqrt(vh) : 0.0;
+                zh2 += z*z;
+                zhMax = std::max(zhMax, std::fabs(z));
+                zAbs.push_back(std::fabs(z));
+                const Vec3 dg = 0.5*(a.G[i] - b.G[j]), vg = 0.25*(a.vG[i] + b.vG[j]);
+                dg2 += dg.squaredNorm();
+                vg2 += vg.sum();
+                gg2 += 0.25*b.G[j].squaredNorm();
+                for (int q = 0; q < 3; q++) zg2 += vg[q] > 0 ? dg[q]*dg[q]/vg[q]/3.0 : 0.0;
+                n++;
+            }
+        const double nn = double(std::max(1LL, n));
+        long long z3 = 0;
+        for (double z : zAbs) z3 += z > 3 ? 1 : 0;
+        // with 4 Q walks per batch a point far from the crack can see no crack hit in any batch: its jackknife variance is then
+        // about 0 and its z meaningless, so the pooled ratio sqrt(sum diff^2 / sum var) is the test (about 1: noise only)
+        out("  the export pass against the ring view's glued H (the glue's own walks, Q %d / R %d) at %lld of its points (every "
+            "%dth), the same c: h difference RMS %.2e, max %.2e, pooled sqrt(sum d^2 / sum var) %.2f; per point z RMS %.2f, median "
+            "|z| %.2f, |z| > 3 at %lld, max |z| %.2f; grad h difference RMS / grad h RMS %.3f, pooled %.2f, z RMS %.2f (the "
+            "variances: %d-batch jackknives)\n", fg.nQ, fg.nR, n, kXfemViewStride, std::sqrt(dh2/nn), dhMax,
+            std::sqrt(dh2/std::max(1e-300, vh2)), std::sqrt(zh2/nn), xfemQuantile(zAbs, 0.5), z3, zhMax,
+            std::sqrt(dg2/std::max(1e-300, gg2)), std::sqrt(dg2/std::max(1e-300, vg2)), std::sqrt(zg2/nn), Bg);
+    }
+    {
+        std::string a, b;
+        for (int v = 0; v < kRingNV; v++) {
+            a += fmtd(" %+.4f", c[v]);
+            b += fmtd(" %+.4f", ex.gl[0].c[v]);
+        }
+        out("  diagnostic only: the glued c (the glue's points, Q %d / R %d):%s\n                  the export points' own glue "
+            "(their rule, Q %d / R %d):%s\n                  (not used: the export rule keeps no eps-tube about the crack, and "
+            "|grad P_k|^2 ~ 1/r^2 at the lines where the crack meets the faces)\n", fg.nQ, fg.nR, a.c_str(), fe.nQ, fe.nR,
+            b.c_str());
+    }
+
+    // 6. the tets and nodes, then the file
+    out("\ntets (local corners = global vertex ids, det J > 0):\n");
+    for (int t = 0; t < kRingNT; t++) {
+        const TetFrame& T = R.T[size_t(t)];
+        const XfemTetQuad& q = quad[size_t(t)];
+        out("  %s [%d %d %d %d]: class %d (%s), %d + %d sub-tets, %d leaves (%d refined at the front), %zu quadrature points, "
+            "%zu check points\n", T.name, T.global[0], T.global[1], T.global[2], T.global[3], cls[size_t(t)],
+            cls[size_t(t)] == 0 ? s.rt[size_t(t)].plane ? "plane beyond the front" : "plane misses it" :
+            cls[size_t(t)] == 1 ? "cut in two" : "front inside", q.nSub[0], q.nSub[1], q.nLeaves, q.nFrontLeaves,
+            nQuad[size_t(t)], pe[size_t(t)].size() - nQuad[size_t(t)]);
+    }
+    out("node types by the per-node rule (harmonic: a class-2 tet around it; heaviside: else a class-1 tet; else none):");
+    for (int v = 0; v < kRingNV; v++) {
+        int best = 0;
+        for (int t = 0; t < kRingNT; t++)
+            if (R.T[size_t(t)].localOf(v) >= 0) best = std::max(best, cls[size_t(t)]);
+        out(" v%d %s", v, best == 2 ? "harmonic" : best == 1 ? "heaviside" : "none");
+    }
+    double areaO = 0, areaS[3] = {0, 0, 0};
+    for (const auto& tr : rd.tris)
+        areaS[tr[3]] += 0.5*(rd.X[size_t(tr[1])] - rd.X[size_t(tr[0])]).cross(rd.X[size_t(tr[2])] - rd.X[size_t(tr[0])]).norm();
+    for (const auto& f : O.tris) areaO += 0.5*(O.v[size_t(f[1])] - O.v[size_t(f[0])]).cross(O.v[size_t(f[2])] - O.v[size_t(f[0])]).norm();
+    out("\nrender: %zu vertices, %zu triangles (O's boundary %d per edge, crack spacing %.4f); areas: boundary %.9f (O: %.9f), "
+        "crack sheets %.9f and %.9f (O's crack polygon: %.9f)\n", rd.X.size(), rd.tris.size(), kXfemRenderPerEdge, hR, areaS[0],
+        areaO, areaS[1], areaS[2], rc.cutO.area());
+    if (!front.empty()) {
+        double on = 0;
+        for (const Vec3& f : front)
+            for (size_t k = 0; k < O.n.size(); k++) on = std::max(on, O.n[k].dot(f) - O.c[k]);
+        out("front on O: %s to %s (largest n_k.X - c_k of O's planes at its ends: %.1e, on O's boundary)\n", fmt3(front[0]).c_str(),
+            fmt3(front[1]).c_str(), on);
+    }
+
+    const double secBeforeWrite = secondsSince(tStart);
+    char settings[1024];
+    std::snprintf(settings, sizeof settings, "our fast method (no GT); glue: %d points per tet asked (%zu), Q %d / R %d walks, %d "
+                  "batches, the ring view's seeds; export points: Q %d / R %d walks, %d batches; quadrature: level %d, +1 level "
+                  "for leaves within %.2f and +2 within %.3f of the front (leaf to segment), 4-point degree-2 Gauss per leaf, %zu "
+                  "points; render: %d per edge; "
+                  "time: glue %.2f s, export walks %.2f s, total %.2f s", nPts, totalPoints(s), fg.nQ, fg.nR, Bg, fe.nQ, fe.nR, Be,
+                  p.quadLevel, kXfemFrontBand[0], kXfemFrontBand[1], nQuadAll, kXfemRenderPerEdge, secGlue, secExWalks, secBeforeWrite);
+    xd = XfemRingData{};
+    xd.caseName = rc.name;
+    xd.ring = R.id;
+    xd.g = 1;
+    xd.settings = settings;
+    xd.verts.assign(R.V.begin(), R.V.end());
+    for (const TetFrame& T : R.T) xd.tets.push_back({T.global[0], T.global[1], T.global[2], T.global[3]});
+    xd.n = rc.n;
+    xd.d = rc.d;
+    xd.front = front;
+    xd.tetClass.assign(cls.begin(), cls.end());
+    xd.nodeValue.assign(hv.begin(), hv.end());
+    for (int t = 0; t < kRingNT; t++)
+        for (size_t i = 0; i < nQuad[size_t(t)]; i++) {
+            const XfemQuadPoint& q = quad[size_t(t)].pts[i];
+            xd.quad.push_back({t, q.side, q.w, q.X, 0.5*(FE[size_t(t)].H[i] + 1.0), 0.5*FE[size_t(t)].G[i]});
+        }
+    for (size_t i = 0; i < rd.X.size(); i++) xd.renderV.push_back({rd.tet[i], rd.side[i], rd.X[i], rd.h[i]});
+    xd.renderT = rd.tris;
+    out("\n%zu quadrature points, %zu render vertices, %zu render triangles\n", xd.quad.size(), xd.renderV.size(),
+        xd.renderT.size());
+    out("time: glue %.3f s, geometry %.3f s, export walks %.3f s, fields %.3f s, total %.3f s\n", secGlue, secGeom, secExWalks,
+        secFields, secondsSince(tStart));
+    out("self-checks: %s\n", ok ? "PASS" : "FAILED");
+    xd.selfChecks = ok;
+    return ok;
+}
+
+bool runXfemExport(const XfemExportParams& p)
+{
+    if (p.out.empty()) throw std::invalid_argument("--export-xfem: --out FILE is required");
+    Report out(false);
+    XfemRingData xd;
+    const bool ok = buildXfemRing(p, xd);
+    std::string txt;
+    appendf(txt, "xfem_ring_export 1\ncase %s\nring %d\ng 1\nsettings %s\n", xd.caseName.c_str(), xd.ring, xd.settings.c_str());
+    appendf(txt, "vertices %zu\n", xd.verts.size());
+    for (const Vec3& v : xd.verts) appendf(txt, "%.17g %.17g %.17g\n", v.x(), v.y(), v.z());
+    appendf(txt, "tets %zu\n", xd.tets.size());
+    for (const auto& t : xd.tets) appendf(txt, "%d %d %d %d\n", t[0], t[1], t[2], t[3]);
+    appendf(txt, "plane %.17g %.17g %.17g %.17g\n", xd.n.x(), xd.n.y(), xd.n.z(), xd.d);
+    appendf(txt, "front %zu\n", xd.front.size());
+    for (const Vec3& v : xd.front) appendf(txt, "%.17g %.17g %.17g\n", v.x(), v.y(), v.z());
+    appendf(txt, "tet_class %zu\n", xd.tetClass.size());
+    for (const int c : xd.tetClass) appendf(txt, "%d\n", c);
+    appendf(txt, "node_value %zu\n", xd.nodeValue.size());
+    for (const double h : xd.nodeValue) appendf(txt, "%.17g\n", h);
+    appendf(txt, "quad %zu\n", xd.quad.size());
+    for (const XfemRingData::Quad& q : xd.quad)
+        appendf(txt, "%d %d %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g\n", q.tet, q.side, q.w, q.X.x(), q.X.y(), q.X.z(), q.h,
+                q.g.x(), q.g.y(), q.g.z());
+    appendf(txt, "render_vertices %zu\n", xd.renderV.size());
+    for (const XfemRingData::RenderVertex& r : xd.renderV)
+        appendf(txt, "%d %d %.17g %.17g %.17g %.17g\n", r.tet, r.side, r.X.x(), r.X.y(), r.X.z(), r.h);
+    appendf(txt, "render_triangles %zu\n", xd.renderT.size());
+    for (const auto& tr : xd.renderT) appendf(txt, "%d %d %d %d\n", tr[0], tr[1], tr[2], tr[3]);
+    appendf(txt, "end\n");
+    std::error_code ec;
+    const std::filesystem::path path(p.out);
+    if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), ec);
+    bool written = false;
+    {
+        std::ofstream f(path, std::ios::binary);
+        f << txt;
+        written = bool(f);
+    }
+    out("%s %s\n", written ? "wrote" : "COULD NOT WRITE", p.out.c_str());
+    return ok && written;
+}

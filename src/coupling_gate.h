@@ -130,6 +130,59 @@ RingView stressRingView(const std::string& id, int pointsPerTet, int nQ, int nR,
 // -1 if it needs none (complete cuts: exact; A1, A2, A3: check 4's cache). Throws on an unknown id.
 int stressCachedPoints(const std::string& id);
 
+// --gate coupling --export-xfem --check 4: one nodal ring of check 4 (ring 1 or 2, crack K1, K2 or K3) solved by our method
+// (the fast path; no GT) and written for an XFEM simulation of the ring. The glue is the fast ring view's (gateRingViewFast
+// at gluePoints per tet, Q 32 / R 16, its seeds: the same c); the export points are then solved in a second pass with the
+// same xi cuts, face data and glued c at walksQ / walksR walks per point. h = (H/g + 1)/2 (g = 1): 1 on the crack's + side,
+// 0 on its - side. Prints the setting, the timings, the tet classes, the node values and self-checks (weights, sides, h on
+// the crack sheets and the faces, h near the vertices, the range of h, the export pass against the glue's own field at the
+// same points). The file, in the ring's rest space X, whitespace separated, 0-based, counts first:
+//   xfem_ring_export 1
+//   case K1|K2|K3 / ring 1|2 / g 1 / settings <free text to the end of the line>
+//   vertices 7, then x y z (v0 = the node); tets 8, then i j k l (det J > 0)
+//   plane nx ny nz d (n.X = d, |n| = 1, n towards h = 1); front F (0: cut through, or 2), then x y z of its ends on O
+//   tet_class 8, then 0 (the crack misses the tet) | 1 (it cuts the tet in two) | 2 (the front is inside the tet)
+//   node_value 7, then h at the vertex: (J(X_v) + c_v + 1)/2, the glued H's face data there
+//   quad Q, then tet side w x y z h gx gy gz: every tet's rule (the tet split by the plane into the sub-tets of both
+//     pieces, each refined L times, once more where a leaf comes within 0.15 of the front and again within 0.05, by the
+//     leaf's own distance to the front segment, 4 Gauss points per leaf); side = sign(n.X - d);
+//     the weights of a tet sum to its volume; g = grad_X h = J^-T grad_xi H/(2g)
+//   render_vertices R, then tet side x y z h; render_triangles T, then a b c group (0: O's boundary, h = the face data,
+//     clipped at the plane with the plane's vertices once per side; 1, 2: the crack's + and - sheets, h = 1 and 0)
+//   end
+struct XfemExportParams {
+    int ring = 2, crack = 0;      // ring 1 | 2; crack 0, 1, 2 = K1, K2, K3
+    int quadLevel = 1;            // uniform refinements of every sub-tet (8 children each)
+    int walksQ = 256, walksR = 256;   // the export points' walks per point (Q in the cut tets, R where J - J_xi is not 0);
+                                      // 2560 costs 10x and moves K1's XFEM run by 0.1% (opening at frame 140, level 0)
+    int gluePoints = 4096;        // the glue's points per tet (the ring view's default)
+    std::string out;              // the file (its folder is created if missing; runXfemExport only)
+};
+// What the file holds, in memory, with the file's conventions (h, side, g = grad_X h, render groups): buildXfemRing fills
+// it, runXfemExport writes it, and a caller in this solution (XFEM/'s nodal_ring example) takes it directly.
+struct XfemRingData {
+    std::string caseName;                       // K1 | K2 | K3
+    int ring = 0;
+    double g = 1;
+    std::string settings;                       // the file's settings line
+    std::vector<Vec3> verts;                    // 7, v0 = the node
+    std::vector<std::array<int, 4>> tets;       // 8, det J > 0
+    Vec3 n = Vec3::Zero();                      // the crack plane n.X = d, n towards h = 1
+    double d = 0;
+    std::vector<Vec3> front;                    // none (cut through) or the front segment's two ends on O
+    std::vector<int> tetClass;                  // 0 | 1 | 2
+    std::vector<double> nodeValue;              // h at each vertex
+    struct Quad { int tet, side; double w; Vec3 X; double h; Vec3 g; };
+    std::vector<Quad> quad;
+    struct RenderVertex { int tet, side; Vec3 X; double h; };
+    std::vector<RenderVertex> renderV;
+    std::vector<std::array<int, 4>> renderT;    // a, b, c, group (0: O's boundary, 1, 2: the crack's + and - sheets)
+    bool selfChecks = false;                    // the printed self-checks passed
+};
+// The solve and the self-checks of --export-xfem without the file (prints the same lines); true if the self-checks pass.
+bool buildXfemRing(const XfemExportParams& p, XfemRingData& data);
+bool runXfemExport(const XfemExportParams& p);
+
 // Rewrites one marked section of gate_report.md at path (the view's, id "view_..."), keeping the others, and rebuilds
 // the report's summary. False if the file does not exist or cannot be written.
 bool writeGateReportSection(const std::string& path, const std::string& id, const std::string& body);
